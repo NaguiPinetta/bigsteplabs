@@ -1,0 +1,122 @@
+📏 Cursor Rules: BigStepLabs 2.0
+Purpose: Ensure consistency, alignment with business goals, and focus on core functionality.
+
+🚨 General Principles
+Focus on modular, maintainable code.
+
+Prioritize clarity, clean UI, and developer efficiency.
+
+Follow the specifications outlined in the Project Docs.
+
+Avoid assumptions outside the provided specs.
+
+🛑 What NOT to do:
+Do not introduce new libraries or frameworks unless explicitly asked.
+
+Do not improvise new features (stick to the current roadmap).
+
+Do not prioritize aesthetics over clarity and functionality.
+
+Do not use any legacy code from previous projects.
+
+✅ What to Always Do:
+Maintain consistency in naming conventions: camelCase for variables, PascalCase for components, snake_case for database fields.
+
+Follow SvelteKit and Supabase best practices.
+
+Use TailwindCSS and SHADCN UI exclusively for components.
+
+Keep UI in line with the defined design system (dark mode, dashboard style).
+
+Enforce Role-Based Access Control (RBAC) for views and actions.
+
+📐 Architecture Guidelines
+Structure:
+css
+Copy
+Edit
+src/
+ ├─ lib/
+ ├─ routes/
+ ├─ components/
+ ├─ stores/
+ ├─ types/
+ └─ utils/
+Tech Stack:
+SvelteKit (Pages + API routes)
+
+Supabase (Auth, Storage, Database)
+
+TailwindCSS
+
+SHADCN UI
+
+🗂️ Core Modules You Should Respect
+These modules must remain cleanly separated and respect their scopes:
+
+Module	Scope	Audience
+Auth	Login / RBAC	All Users
+Dashboard	Stats / Summary	Admin, Student
+Content	Modules / Units	Admin, Student
+Agents	Personas / Datasets	Admin
+Chat	Sessions / Messages	All Users
+Workbench	Agent Testing	Admin, Collaborators
+
+🛠️ Interaction Patterns
+Forms: Always validate inputs.
+
+API Calls: Always handle errors gracefully.
+
+Data: Always retrieve via Supabase queries scoped to the user.
+
+Chat: Stream responses when possible.
+
+Files: Use Supabase Storage buckets for uploads.
+
+🧑‍🏫 Role-Based Permissions
+Role	Permissions
+Admin	Full CRUD
+Collaborator	Content & Agent Management
+Student	View Lessons, Use Chat Agents
+
+🔄 Iteration Flow (when unsure):
+Reference this Rules file.
+
+Re-read the latest Project Documentation.
+
+Ask for clarification (don’t guess).
+
+Propose iterations with clear reasoning.
+
+📢 Prompt Tags (to use in Cursor):
+You can tag your prompts like this for clarity:
+
+arduino
+Copy
+Edit
+#cursor-rules: bigsteplabs-2.0
+#role: Admin / Collaborator / Student
+#task: CRUD / UI / API / Auth / Chat / RAG / Storage
+Example:
+
+less
+Copy
+Edit
+#cursor-rules: bigsteplabs-2.0  
+#role: Admin  
+#task: CRUD  
+
+Please scaffold a SvelteKit form for creating a new Dataset entity, following Supabase integration best practices.
+🚀 Cursor Behavior Expectations
+When you tag this file:
+
+Focus only on solving the specified task.
+
+Ensure consistency with previously defined structures.
+
+Provide clean, maintainable code.
+
+Explain decisions where appropriate.
+
+Flag unclear requirements for clarification.
+
