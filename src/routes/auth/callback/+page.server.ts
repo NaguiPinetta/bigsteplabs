@@ -3,7 +3,7 @@ import { createServerClient } from "@supabase/ssr";
 import {
   PUBLIC_SUPABASE_URL,
   PUBLIC_SUPABASE_PUBLISHABLE_KEY,
-} from "$env/static/public";
+} from "$lib/supabase";
 import type { PageServerLoad } from "./$types";
 
 export const load: PageServerLoad = async ({ url, cookies }) => {

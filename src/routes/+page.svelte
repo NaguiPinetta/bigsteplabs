@@ -2,7 +2,7 @@
   import { onMount } from "svelte";
   import { goto } from "$app/navigation";
   import { authStore } from "$lib/stores/auth";
-  import { PUBLIC_SUPABASE_URL } from "$env/static/public";
+  import { PUBLIC_SUPABASE_URL } from "$lib/supabase";
 
   let loading = true;
   let error = "";
