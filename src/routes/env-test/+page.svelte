@@ -2,7 +2,7 @@
   import {
     PUBLIC_SUPABASE_URL,
     PUBLIC_SUPABASE_PUBLISHABLE_KEY,
-  } from "$env/static/public";
+  } from "$lib/supabase";
 
   let envStatus = {
     supabaseUrl: PUBLIC_SUPABASE_URL || "NOT SET",
