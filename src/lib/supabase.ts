@@ -3,12 +3,12 @@ import { createBrowserClient } from "@supabase/ssr";
 import { browser } from "$app/environment";
 import type { Database } from "./types/database";
 
-export const PUBLIC_SUPABASE_URL = import.meta.env.PUBLIC_SUPABASE_URL;
+export const PUBLIC_SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 export const PUBLIC_SUPABASE_PUBLISHABLE_KEY = import.meta.env
-  .PUBLIC_SUPABASE_PUBLISHABLE_KEY;
+  .VITE_SUPABASE_PUBLISHABLE_KEY;
 export const SUPABASE_SERVICE_ROLE_KEY = import.meta.env
-  .SUPABASE_SERVICE_ROLE_KEY;
-export const OPENAI_API_KEY = import.meta.env.OPENAI_API_KEY;
+  .VITE_SUPABASE_SERVICE_ROLE_KEY;
+export const OPENAI_API_KEY = import.meta.env.VITE_OPENAI_API_KEY;
 
 const supabaseUrl = PUBLIC_SUPABASE_URL || "https://placeholder.supabase.co";
 const supabaseKey = PUBLIC_SUPABASE_PUBLISHABLE_KEY || "placeholder-key";
