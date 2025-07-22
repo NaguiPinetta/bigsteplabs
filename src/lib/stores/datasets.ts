@@ -1,5 +1,5 @@
 import { writable } from "svelte/store";
-// import { supabase } from "$lib/supabase";  // Commented out for mock data
+import { supabase } from "$lib/supabase";
 import type { Dataset, ContentChunk } from "$lib/types/database";
 
 interface DatasetsState {
@@ -47,27 +47,31 @@ function saveDatasetsToStorage(datasets: Dataset[]) {
 }
 
 /**
- * Load all datasets (mock implementation)
+ * Load all datasets from Supabase
  */
 export async function loadDatasets() {
   datasetsStore.update((state) => ({ ...state, loading: true, error: null }));
 
-  // Simulate API delay
-  await new Promise((resolve) => setTimeout(resolve, 300));
-
   try {
-    const currentDatasets = getInitialDatasets();
+    const { data, error } = await supabase
+      .from("datasets")
+      .select("*")
+      .order("name", { ascending: true });
+
+    if (error) throw error;
 
     datasetsStore.update((state) => ({
       ...state,
-      datasets: currentDatasets,
+      datasets: data || [],
       loading: false,
     }));
 
-    return { data: currentDatasets, error: null };
+    console.log("✅ Datasets loaded from database:", data?.length || 0);
+    return { data: data || [], error: null };
   } catch (error) {
     const errorMessage =
       error instanceof Error ? error.message : "Failed to load datasets";
+    console.error("❌ Error loading datasets:", errorMessage);
     datasetsStore.update((state) => ({
       ...state,
       loading: false,
@@ -78,13 +82,14 @@ export async function loadDatasets() {
 }
 
 /**
- * Create a new dataset (mock implementation)
+ * Create a new dataset in Supabase
  * Supports both file upload and direct text input
  */
 export async function createDataset(dataset: {
   name: string;
   description?: string;
   content_type: "file" | "text";
+  user_id: string;
   // For file uploads
   file?: File;
   // For direct text input
@@ -93,49 +98,44 @@ export async function createDataset(dataset: {
 }) {
   datasetsStore.update((state) => ({ ...state, loading: true, error: null }));
 
-  // Simulate API delay
-  await new Promise((resolve) => setTimeout(resolve, 500));
-
   try {
-    const currentDatasets = getInitialDatasets();
+    const { data, error } = await supabase
+      .from("datasets")
+      .insert({
+        name: dataset.name,
+        description: dataset.description || null,
+        user_id: dataset.user_id,
+        file_url: null, // Would be set after file upload
+        file_name: dataset.file?.name || null,
+        file_size:
+          dataset.content_type === "file"
+            ? dataset.file?.size || 0
+            : dataset.text_content?.length || 0,
+        file_type:
+          dataset.file?.type ||
+          (dataset.content_type === "text" ? "text/plain" : null),
+        total_chunks: 0,
+        processing_status: "ready",
+        metadata: {
+          content_type: dataset.content_type,
+          text_format: dataset.text_format || null,
+          text_content: dataset.text_content || null,
+        },
+      })
+      .select()
+      .single();
 
-    const newDataset: Dataset = {
-      id: `dataset-${Date.now()}`,
-      name: dataset.name,
-      description: dataset.description || null,
-      user_id: "admin-mock-id", // Mock user ID
-      file_url: null, // Would be set after file upload
-      file_name: dataset.file?.name || null,
-      file_size:
-        dataset.content_type === "file"
-          ? dataset.file?.size || 0
-          : dataset.text_content?.length || 0,
-      file_type:
-        dataset.file?.type ||
-        (dataset.content_type === "text" ? "text/plain" : null),
-      total_chunks: 0,
-      processing_status: "ready",
-      metadata: {
-        content_type: dataset.content_type,
-        text_format: dataset.text_format || null,
-        text_content: dataset.text_content || null,
-      },
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    };
+    if (error) throw error;
 
-    const updatedDatasets = [...currentDatasets, newDataset];
-    saveDatasetsToStorage(updatedDatasets);
-
-    // Update store
+    // Update local store
     datasetsStore.update((state) => ({
       ...state,
-      datasets: updatedDatasets,
+      datasets: [...state.datasets, data],
       loading: false,
     }));
 
-    console.log("✅ Dataset created successfully:", newDataset.name);
-    return { data: newDataset, error: null };
+    console.log("✅ Dataset created successfully:", data.name);
+    return { data, error: null };
   } catch (error) {
     const errorMessage =
       error instanceof Error ? error.message : "Failed to create dataset";

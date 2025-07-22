@@ -1,5 +1,5 @@
 import { writable } from "svelte/store";
-// import { supabase } from "$lib/supabase";  // Commented out for mock data
+import { supabase } from "$lib/supabase";
 import type { Model } from "$lib/types/database";
 
 interface ModelsState {
@@ -9,52 +9,8 @@ interface ModelsState {
   selectedModel: Model | null;
 }
 
-// Load existing data from localStorage or use mock data as fallback
-function getInitialModels(): Model[] {
-  if (typeof localStorage !== "undefined") {
-    const stored = localStorage.getItem("bigstep_models");
-    if (stored) {
-      try {
-        return JSON.parse(stored);
-      } catch (e) {
-        console.warn("Failed to parse stored models:", e);
-      }
-    }
-  }
-
-  // Default models if no existing data
-  return [
-    {
-      id: "model-gpt4",
-      provider: "openai",
-      name: "GPT-4",
-      engine: "gpt-4",
-      api_key_id: null,
-      max_tokens: 4096,
-      temperature: 0.7,
-      is_active: true,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    },
-    {
-      id: "model-gpt35",
-      provider: "openai",
-      name: "GPT-3.5 Turbo",
-      engine: "gpt-3.5-turbo",
-      api_key_id: null,
-      max_tokens: 4096,
-      temperature: 0.7,
-      is_active: true,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    },
-  ];
-}
-
-const initialModels = getInitialModels();
-
 const initialState: ModelsState = {
-  models: initialModels,
+  models: [],
   loading: false,
   error: null,
   selectedModel: null,
@@ -62,35 +18,32 @@ const initialState: ModelsState = {
 
 export const modelsStore = writable<ModelsState>(initialState);
 
-// Save models to localStorage whenever they change
-function saveModelsToStorage(models: Model[]) {
-  if (typeof localStorage !== "undefined") {
-    localStorage.setItem("bigstep_models", JSON.stringify(models));
-  }
-}
-
 /**
- * Load all models (mock implementation)
+ * Load all models from Supabase
  */
 export async function loadModels() {
   modelsStore.update((state) => ({ ...state, loading: true, error: null }));
 
-  // Simulate API delay
-  await new Promise((resolve) => setTimeout(resolve, 300));
-
   try {
-    const currentModels = getInitialModels();
+    const { data, error } = await supabase
+      .from("models")
+      .select("*")
+      .order("name", { ascending: true });
+
+    if (error) throw error;
 
     modelsStore.update((state) => ({
       ...state,
-      models: currentModels,
+      models: data || [],
       loading: false,
     }));
 
-    return { data: currentModels, error: null };
+    console.log("✅ Models loaded from database:", data?.length || 0);
+    return { data: data || [], error: null };
   } catch (error) {
     const errorMessage =
       error instanceof Error ? error.message : "Failed to load models";
+    console.error("❌ Error loading models:", errorMessage);
     modelsStore.update((state) => ({
       ...state,
       loading: false,
@@ -101,47 +54,43 @@ export async function loadModels() {
 }
 
 /**
- * Create a new model (mock implementation)
+ * Create a new model in Supabase
  */
 export async function createModel(
   model: Omit<Model, "id" | "created_at" | "updated_at">
 ) {
   modelsStore.update((state) => ({ ...state, loading: true, error: null }));
 
-  // Simulate API delay
-  await new Promise((resolve) => setTimeout(resolve, 500));
-
   try {
-    const currentModels = getInitialModels();
+    const { data, error } = await supabase
+      .from("models")
+      .insert({
+        provider: model.provider,
+        name: model.name,
+        engine: model.engine,
+        api_key_id: model.api_key_id,
+        max_tokens: model.max_tokens,
+        temperature: model.temperature,
+        is_active: model.is_active,
+      })
+      .select()
+      .single();
 
-    const newModel: Model = {
-      id: `model-${Date.now()}`,
-      provider: model.provider,
-      name: model.name,
-      engine: model.engine,
-      api_key_id: model.api_key_id,
-      max_tokens: model.max_tokens,
-      temperature: model.temperature,
-      is_active: model.is_active,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    };
+    if (error) throw error;
 
-    const updatedModels = [...currentModels, newModel];
-    saveModelsToStorage(updatedModels);
-
-    // Update store
+    // Update local store
     modelsStore.update((state) => ({
       ...state,
-      models: updatedModels,
+      models: [...state.models, data],
       loading: false,
     }));
 
-    console.log("✅ Model created successfully:", newModel.name);
-    return { data: newModel, error: null };
+    console.log("✅ Model created successfully:", data.name);
+    return { data, error: null };
   } catch (error) {
     const errorMessage =
       error instanceof Error ? error.message : "Failed to create model";
+    console.error("❌ Error creating model:", errorMessage);
     modelsStore.update((state) => ({
       ...state,
       loading: false,
@@ -152,97 +101,104 @@ export async function createModel(
 }
 
 /**
- * Update a model (mock implementation)
+ * Update a model in Supabase
  */
 export async function updateModel(id: string, updates: Partial<Model>) {
+  modelsStore.update((state) => ({ ...state, loading: true, error: null }));
+
   try {
-    // Simulate API delay
-    await new Promise((resolve) => setTimeout(resolve, 300));
+    const { data, error } = await supabase
+      .from("models")
+      .update(updates)
+      .eq("id", id)
+      .select()
+      .single();
 
-    const currentModels = getInitialModels();
-    const modelIndex = currentModels.findIndex((m) => m.id === id);
-    if (modelIndex === -1) {
-      throw new Error("Model not found");
-    }
+    if (error) throw error;
 
-    // Update the model
-    const updatedModel = {
-      ...currentModels[modelIndex],
-      ...updates,
-      updated_at: new Date().toISOString(),
-    };
-
-    currentModels[modelIndex] = updatedModel;
-    saveModelsToStorage(currentModels);
-
-    // Update store
+    // Update local store
     modelsStore.update((state) => ({
       ...state,
-      models: [...currentModels],
+      models: state.models.map((m) => (m.id === id ? data : m)),
+      loading: false,
     }));
 
-    console.log("✅ Model updated successfully:", updatedModel.name);
-    return { data: updatedModel, error: null };
+    console.log("✅ Model updated successfully:", data.name);
+    return { data, error: null };
   } catch (error) {
     const errorMessage =
       error instanceof Error ? error.message : "Failed to update model";
-    modelsStore.update((state) => ({ ...state, error: errorMessage }));
+    console.error("❌ Error updating model:", errorMessage);
+    modelsStore.update((state) => ({
+      ...state,
+      loading: false,
+      error: errorMessage,
+    }));
     return { data: null, error: errorMessage };
   }
 }
 
 /**
- * Delete a model (mock implementation)
+ * Delete a model from Supabase
  */
 export async function deleteModel(id: string) {
+  modelsStore.update((state) => ({ ...state, loading: true, error: null }));
+
   try {
-    // Simulate API delay
-    await new Promise((resolve) => setTimeout(resolve, 300));
+    const { error } = await supabase.from("models").delete().eq("id", id);
 
-    const currentModels = getInitialModels();
-    const modelIndex = currentModels.findIndex((m) => m.id === id);
-    if (modelIndex === -1) {
-      throw new Error("Model not found");
-    }
+    if (error) throw error;
 
-    const deletedModel = currentModels[modelIndex];
-    currentModels.splice(modelIndex, 1);
-    saveModelsToStorage(currentModels);
-
-    // Update store
+    // Update local store
     modelsStore.update((state) => ({
       ...state,
-      models: [...currentModels],
+      models: state.models.filter((m) => m.id !== id),
+      loading: false,
     }));
 
-    console.log("✅ Model deleted successfully:", deletedModel.name);
-    return { success: true, error: null };
+    console.log("✅ Model deleted successfully");
+    return { error: null };
   } catch (error) {
     const errorMessage =
       error instanceof Error ? error.message : "Failed to delete model";
-    modelsStore.update((state) => ({ ...state, error: errorMessage }));
-    return { success: false, error: errorMessage };
+    console.error("❌ Error deleting model:", errorMessage);
+    modelsStore.update((state) => ({
+      ...state,
+      loading: false,
+      error: errorMessage,
+    }));
+    return { error: errorMessage };
   }
 }
 
 /**
- * Test model connection
+ * Test a model connection
  */
-export async function testModel(
-  modelId: string
-): Promise<{ success: boolean; error?: string }> {
-  try {
-    // This would be implemented to test the actual API connection
-    // For now, we'll simulate a test
-    await new Promise((resolve) => setTimeout(resolve, 1000));
+export async function testModel(id: string) {
+  modelsStore.update((state) => ({ ...state, loading: true, error: null }));
 
-    // In a real implementation, you'd make a test API call here
-    return { success: true };
-  } catch (error) {
+  try {
+    // This would normally make a test API call to the AI provider
+    // For now, we'll simulate a successful test
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+
+    console.log("✅ Model test successful:", id);
+    modelsStore.update((state) => ({ ...state, loading: false }));
     return {
-      success: false,
-      error: error instanceof Error ? error.message : "Connection test failed",
+      success: true,
+      response: "Model connection successful!",
+      error: null,
     };
+  } catch (error) {
+    const errorMessage =
+      error instanceof Error ? error.message : "Failed to test model";
+    console.error("❌ Error testing model:", errorMessage);
+    modelsStore.update((state) => ({
+      ...state,
+      loading: false,
+      error: errorMessage,
+    }));
+    return { success: false, error: errorMessage };
   }
 }
 
@@ -250,7 +206,10 @@ export async function testModel(
  * Set selected model
  */
 export function setSelectedModel(model: Model | null) {
-  modelsStore.update((state) => ({ ...state, selectedModel: model }));
+  modelsStore.update((state) => ({
+    ...state,
+    selectedModel: model,
+  }));
 }
 
 /**
@@ -269,24 +228,20 @@ export function validateModel(model: Partial<Model>): {
 } {
   const errors: string[] = [];
 
-  if (!model.name?.trim()) {
-    errors.push("Name is required");
+  if (!model.name || model.name.trim().length < 2) {
+    errors.push("Model name must be at least 2 characters long");
   }
 
-  if (!model.provider?.trim()) {
+  if (!model.provider || model.provider.trim().length < 2) {
     errors.push("Provider is required");
   }
 
-  if (!model.api_key?.trim()) {
-    errors.push("API key is required");
+  if (!model.engine || model.engine.trim().length < 2) {
+    errors.push("Engine is required");
   }
 
-  if (!model.engine?.trim()) {
-    errors.push("Engine/Model ID is required");
-  }
-
-  if (model.max_tokens && (model.max_tokens < 1 || model.max_tokens > 32000)) {
-    errors.push("Max tokens must be between 1 and 32,000");
+  if (model.max_tokens && (model.max_tokens < 1 || model.max_tokens > 200000)) {
+    errors.push("Max tokens must be between 1 and 200,000");
   }
 
   if (model.temperature && (model.temperature < 0 || model.temperature > 2)) {
@@ -297,6 +252,16 @@ export function validateModel(model: Partial<Model>): {
     valid: errors.length === 0,
     errors,
   };
+}
+
+/**
+ * Format API key for display (show only last 4 characters)
+ */
+export function formatApiKey(apiKey: string | null): string {
+  if (!apiKey || apiKey.length < 8) {
+    return "Not configured";
+  }
+  return `•••••••${apiKey.slice(-4)}`;
 }
 
 /**

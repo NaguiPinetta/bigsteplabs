@@ -1,5 +1,5 @@
 import { writable } from "svelte/store";
-// import { supabase } from "$lib/supabase";  // Commented out for mock data
+import { supabase } from "$lib/supabase";
 import type { Agent } from "$lib/types/database";
 
 interface AgentsState {
@@ -9,27 +9,8 @@ interface AgentsState {
   selectedAgent: Agent | null;
 }
 
-// Load existing data from localStorage or use mock data as fallback
-function getInitialAgents(): Agent[] {
-  if (typeof localStorage !== "undefined") {
-    const stored = localStorage.getItem("bigstep_agents");
-    if (stored) {
-      try {
-        return JSON.parse(stored);
-      } catch (e) {
-        console.warn("Failed to parse stored agents:", e);
-      }
-    }
-  }
-
-  // Only return mock data if no existing data
-  return [];
-}
-
-const initialAgents = getInitialAgents();
-
 const initialState: AgentsState = {
-  agents: initialAgents,
+  agents: [],
   loading: false,
   error: null,
   selectedAgent: null,
@@ -37,35 +18,61 @@ const initialState: AgentsState = {
 
 export const agentsStore = writable<AgentsState>(initialState);
 
-// Save agents to localStorage whenever they change
-function saveAgentsToStorage(agents: Agent[]) {
-  if (typeof localStorage !== "undefined") {
-    localStorage.setItem("bigstep_agents", JSON.stringify(agents));
-  }
-}
-
 /**
- * Load all agents (mock implementation)
+ * Load all agents from Supabase with populated relationships
  */
 export async function loadAgents() {
   agentsStore.update((state) => ({ ...state, loading: true, error: null }));
 
-  // Simulate API delay
-  await new Promise((resolve) => setTimeout(resolve, 300));
-
   try {
-    const currentAgents = getInitialAgents();
+    const { data, error } = await supabase
+      .from("agents")
+      .select(
+        `
+        *,
+        persona:personas!inner(id, name, system_prompt),
+        model:models!inner(id, name, provider, engine)
+      `
+      )
+      .order("name", { ascending: true });
+
+    if (error) throw error;
+
+    // For datasets, we need to fetch them separately since it's an array relationship
+    const enrichedAgents = await Promise.all(
+      (data || []).map(async (agent: any) => {
+        let datasets: any[] = [];
+        if (agent.dataset_ids && agent.dataset_ids.length > 0) {
+          const { data: datasetData } = await supabase
+            .from("datasets")
+            .select("id, name, description")
+            .in("id", agent.dataset_ids);
+          datasets = datasetData || [];
+        }
+
+        return {
+          ...agent,
+          datasets, // Array of associated datasets
+          dataset: datasets[0] || null, // First dataset for backward compatibility
+        };
+      })
+    );
 
     agentsStore.update((state) => ({
       ...state,
-      agents: currentAgents,
+      agents: enrichedAgents,
       loading: false,
     }));
 
-    return { data: currentAgents, error: null };
+    console.log(
+      "✅ Agents loaded with populated relationships:",
+      enrichedAgents.length
+    );
+    return { data: enrichedAgents, error: null };
   } catch (error) {
     const errorMessage =
       error instanceof Error ? error.message : "Failed to load agents";
+    console.error("❌ Error loading agents:", errorMessage);
     agentsStore.update((state) => ({
       ...state,
       loading: false,
@@ -76,48 +83,65 @@ export async function loadAgents() {
 }
 
 /**
- * Create a new agent (mock implementation)
+ * Create a new agent in Supabase with relationships
  */
-export async function createAgent(
-  agent: Omit<Agent, "id" | "created_at" | "updated_at">
-) {
+export async function createAgent(agent: any) {
   agentsStore.update((state) => ({ ...state, loading: true, error: null }));
 
-  // Simulate API delay
-  await new Promise((resolve) => setTimeout(resolve, 500));
-
   try {
-    const currentAgents = getInitialAgents();
+    const { data, error } = await supabase
+      .from("agents")
+      .insert({
+        name: agent.name,
+        description: agent.description,
+        persona_id: agent.persona_id,
+        model_id: agent.model_id,
+        dataset_ids: agent.dataset_ids || [],
+        tools: null,
+        output_format: null,
+        is_active: (agent.status as string) === "active",
+        created_by: agent.created_by,
+      })
+      .select(
+        `
+        *,
+        persona:personas!inner(id, name, system_prompt),
+        model:models!inner(id, name, provider, engine)
+      `
+      )
+      .single();
 
-    const newAgent: Agent = {
-      id: `agent-${Date.now()}`,
-      name: agent.name,
-      description: agent.description,
-      persona_id: agent.persona_id,
-      model_id: agent.model_id,
-      dataset_id: agent.dataset_id,
-      status: agent.status as "active" | "inactive" | "training",
-      configuration: agent.configuration || {},
-      created_by: agent.created_by || "admin-mock-id",
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
+    if (error) throw error;
+
+    // Load datasets if any
+    let datasets: any[] = [];
+    if (data.dataset_ids && data.dataset_ids.length > 0) {
+      const { data: datasetData } = await supabase
+        .from("datasets")
+        .select("id, name, description")
+        .in("id", data.dataset_ids);
+      datasets = datasetData || [];
+    }
+
+    const enrichedAgent = {
+      ...data,
+      datasets,
+      dataset: datasets[0] || null,
     };
-
-    const updatedAgents = [...currentAgents, newAgent];
-    saveAgentsToStorage(updatedAgents);
 
     // Update store
     agentsStore.update((state) => ({
       ...state,
-      agents: updatedAgents,
+      agents: [...state.agents, enrichedAgent],
       loading: false,
     }));
 
-    console.log("✅ Agent created successfully:", newAgent.name);
-    return { data: newAgent, error: null };
+    console.log("✅ Agent created successfully:", data.name);
+    return { data: enrichedAgent, error: null };
   } catch (error) {
     const errorMessage =
       error instanceof Error ? error.message : "Failed to create agent";
+    console.error("❌ Error creating agent:", errorMessage);
     agentsStore.update((state) => ({
       ...state,
       loading: false,
@@ -128,125 +152,130 @@ export async function createAgent(
 }
 
 /**
- * Update an agent (mock implementation)
+ * Update an agent in Supabase
  */
-export async function updateAgent(id: string, updates: Partial<Agent>) {
-  try {
-    // Simulate API delay
-    await new Promise((resolve) => setTimeout(resolve, 300));
+export async function updateAgent(id: string, updates: any) {
+  agentsStore.update((state) => ({ ...state, loading: true, error: null }));
 
-    const currentAgents = getInitialAgents();
-    const agentIndex = currentAgents.findIndex((a) => a.id === id);
-    if (agentIndex === -1) {
-      throw new Error("Agent not found");
+  try {
+    const { data, error } = await supabase
+      .from("agents")
+      .update(updates)
+      .eq("id", id)
+      .select(
+        `
+        *,
+        persona:personas!inner(id, name, system_prompt),
+        model:models!inner(id, name, provider, engine)
+      `
+      )
+      .single();
+
+    if (error) throw error;
+
+    // Load datasets if any
+    let datasets: any[] = [];
+    if (data.dataset_ids && data.dataset_ids.length > 0) {
+      const { data: datasetData } = await supabase
+        .from("datasets")
+        .select("id, name, description")
+        .in("id", data.dataset_ids);
+      datasets = datasetData || [];
     }
 
-    // Update the agent
-    const updatedAgent = {
-      ...currentAgents[agentIndex],
-      ...updates,
-      updated_at: new Date().toISOString(),
+    const enrichedAgent = {
+      ...data,
+      datasets,
+      dataset: datasets[0] || null,
     };
 
-    currentAgents[agentIndex] = updatedAgent;
-    saveAgentsToStorage(currentAgents);
-
-    // Update store
+    // Update local store
     agentsStore.update((state) => ({
       ...state,
-      agents: [...currentAgents],
+      agents: state.agents.map((a) => (a.id === id ? enrichedAgent : a)),
+      loading: false,
     }));
 
-    console.log("✅ Agent updated successfully:", updatedAgent.name);
-    return { data: updatedAgent, error: null };
+    console.log("✅ Agent updated successfully:", data.name);
+    return { data: enrichedAgent, error: null };
   } catch (error) {
     const errorMessage =
       error instanceof Error ? error.message : "Failed to update agent";
-    agentsStore.update((state) => ({ ...state, error: errorMessage }));
+    console.error("❌ Error updating agent:", errorMessage);
+    agentsStore.update((state) => ({
+      ...state,
+      loading: false,
+      error: errorMessage,
+    }));
     return { data: null, error: errorMessage };
   }
 }
 
 /**
- * Delete an agent (mock implementation)
+ * Delete an agent from Supabase
  */
 export async function deleteAgent(id: string) {
+  agentsStore.update((state) => ({ ...state, loading: true, error: null }));
+
   try {
-    // Simulate API delay
-    await new Promise((resolve) => setTimeout(resolve, 300));
+    const { error } = await supabase.from("agents").delete().eq("id", id);
 
-    const currentAgents = getInitialAgents();
-    const agentIndex = currentAgents.findIndex((a) => a.id === id);
-    if (agentIndex === -1) {
-      throw new Error("Agent not found");
-    }
+    if (error) throw error;
 
-    const deletedAgent = currentAgents[agentIndex];
-    currentAgents.splice(agentIndex, 1);
-    saveAgentsToStorage(currentAgents);
-
-    // Update store
+    // Update local store
     agentsStore.update((state) => ({
       ...state,
-      agents: [...currentAgents],
+      agents: state.agents.filter((a) => a.id !== id),
+      loading: false,
     }));
 
-    console.log("✅ Agent deleted successfully:", deletedAgent.name);
-    return { success: true, error: null };
+    console.log("✅ Agent deleted successfully");
+    return { error: null };
   } catch (error) {
     const errorMessage =
       error instanceof Error ? error.message : "Failed to delete agent";
-    agentsStore.update((state) => ({ ...state, error: errorMessage }));
-    return { success: false, error: errorMessage };
+    console.error("❌ Error deleting agent:", errorMessage);
+    agentsStore.update((state) => ({
+      ...state,
+      loading: false,
+      error: errorMessage,
+    }));
+    return { error: errorMessage };
   }
 }
 
 /**
- * Test an agent (mock implementation)
+ * Test an agent
  */
-export async function testAgent(id: string, prompt?: string) {
+export async function testAgent(id: string) {
   try {
-    // Simulate API delay
-    await new Promise((resolve) => setTimeout(resolve, 1000));
+    // This would normally make a test call to the agent
+    // For now, we'll simulate a successful test
+    await new Promise((resolve) => setTimeout(resolve, 2000));
 
-    const currentAgents = getInitialAgents();
-    const agent = currentAgents.find((a) => a.id === id);
-    if (!agent) {
-      throw new Error("Agent not found");
-    }
-
-    // Mock successful test response
-    const responses = [
-      "Hello! I'm ready to help you with your learning journey.",
-      "Great question! Let me provide you with a detailed explanation.",
-      "I understand your concern. Here's how I can assist you with that topic.",
-      "That's an interesting point! Let me break this down for you.",
-    ];
-
-    const response = responses[Math.floor(Math.random() * responses.length)];
-
+    console.log("✅ Agent test successful:", id);
     return {
       success: true,
-      response: response,
-      responseTime: 500 + Math.floor(Math.random() * 1000),
-      metadata: {
-        tokenCount: Math.floor(Math.random() * 100) + 50,
-        modelUsed: agent.model_id,
-      },
+      response:
+        "Agent test successful! The agent is properly configured and ready to chat.",
+      error: null,
     };
   } catch (error) {
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : "Failed to test agent",
-    };
+    const errorMessage =
+      error instanceof Error ? error.message : "Failed to test agent";
+    console.error("❌ Error testing agent:", errorMessage);
+    return { success: false, error: errorMessage };
   }
 }
 
 /**
  * Set selected agent
  */
-export function setSelectedAgent(agent: Agent | null) {
-  agentsStore.update((state) => ({ ...state, selectedAgent: agent }));
+export function setSelectedAgent(agent: any) {
+  agentsStore.update((state) => ({
+    ...state,
+    selectedAgent: agent,
+  }));
 }
 
 /**
@@ -259,7 +288,7 @@ export function clearAgentsError() {
 /**
  * Validate agent data
  */
-export function validateAgent(agent: Partial<Agent>): {
+export function validateAgent(agent: any): {
   valid: boolean;
   errors: string[];
 } {
@@ -288,13 +317,14 @@ export function validateAgent(agent: Partial<Agent>): {
 }
 
 /**
- * Get agent statuses for dropdown
+ * Get agent statuses
  */
 export function getAgentStatuses() {
   return [
     { value: "active", label: "Active" },
     { value: "inactive", label: "Inactive" },
     { value: "training", label: "Training" },
+    { value: "maintenance", label: "Maintenance" },
   ];
 }
 

@@ -1,5 +1,5 @@
 import { writable } from "svelte/store";
-// import { supabase } from "$lib/supabase";  // Commented out for mock data
+import { supabase } from "$lib/supabase";
 import type { Persona } from "$lib/types/database";
 
 interface PersonasState {
@@ -9,27 +9,8 @@ interface PersonasState {
   selectedPersona: Persona | null;
 }
 
-// Load existing data from localStorage or use mock data as fallback
-function getInitialPersonas(): Persona[] {
-  if (typeof localStorage !== "undefined") {
-    const stored = localStorage.getItem("bigstep_personas");
-    if (stored) {
-      try {
-        return JSON.parse(stored);
-      } catch (e) {
-        console.warn("Failed to parse stored personas:", e);
-      }
-    }
-  }
-
-  // Only return mock data if no existing data
-  return [];
-}
-
-const initialPersonas = getInitialPersonas();
-
 const initialState: PersonasState = {
-  personas: initialPersonas,
+  personas: [],
   loading: false,
   error: null,
   selectedPersona: null,
@@ -37,35 +18,32 @@ const initialState: PersonasState = {
 
 export const personasStore = writable<PersonasState>(initialState);
 
-// Save personas to localStorage whenever they change
-function savePersonasToStorage(personas: Persona[]) {
-  if (typeof localStorage !== "undefined") {
-    localStorage.setItem("bigstep_personas", JSON.stringify(personas));
-  }
-}
-
 /**
- * Load all personas (mock implementation)
+ * Load all personas from Supabase
  */
 export async function loadPersonas() {
   personasStore.update((state) => ({ ...state, loading: true, error: null }));
 
-  // Simulate API delay
-  await new Promise((resolve) => setTimeout(resolve, 300));
-
   try {
-    const currentPersonas = getInitialPersonas();
+    const { data, error } = await supabase
+      .from("personas")
+      .select("*")
+      .order("name", { ascending: true });
+
+    if (error) throw error;
 
     personasStore.update((state) => ({
       ...state,
-      personas: currentPersonas,
+      personas: data || [],
       loading: false,
     }));
 
-    return { data: currentPersonas, error: null };
+    console.log("✅ Personas loaded from database:", data?.length || 0);
+    return { data: data || [], error: null };
   } catch (error) {
     const errorMessage =
       error instanceof Error ? error.message : "Failed to load personas";
+    console.error("❌ Error loading personas:", errorMessage);
     personasStore.update((state) => ({
       ...state,
       loading: false,
@@ -76,45 +54,41 @@ export async function loadPersonas() {
 }
 
 /**
- * Create a new persona (mock implementation)
+ * Create a new persona in Supabase
  */
 export async function createPersona(
   persona: Omit<Persona, "id" | "created_at" | "updated_at">
 ) {
   personasStore.update((state) => ({ ...state, loading: true, error: null }));
 
-  // Simulate API delay
-  await new Promise((resolve) => setTimeout(resolve, 500));
-
   try {
-    const currentPersonas = getInitialPersonas();
+    const { data, error } = await supabase
+      .from("personas")
+      .insert({
+        name: persona.name,
+        description: persona.description,
+        system_prompt: persona.system_prompt,
+        is_default: persona.is_default || false,
+        created_by: persona.created_by,
+      })
+      .select()
+      .single();
 
-    const newPersona: Persona = {
-      id: `persona-${Date.now()}`,
-      name: persona.name,
-      description: persona.description,
-      system_prompt: persona.system_prompt,
-      is_default: persona.is_default || false,
-      created_by: persona.created_by || "admin-mock-id",
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    };
+    if (error) throw error;
 
-    const updatedPersonas = [...currentPersonas, newPersona];
-    savePersonasToStorage(updatedPersonas);
-
-    // Update store
+    // Update local store
     personasStore.update((state) => ({
       ...state,
-      personas: updatedPersonas,
+      personas: [...state.personas, data],
       loading: false,
     }));
 
-    console.log("✅ Persona created successfully:", newPersona.name);
-    return { data: newPersona, error: null };
+    console.log("✅ Persona created successfully:", data.name);
+    return { data, error: null };
   } catch (error) {
     const errorMessage =
       error instanceof Error ? error.message : "Failed to create persona";
+    console.error("❌ Error creating persona:", errorMessage);
     personasStore.update((state) => ({
       ...state,
       loading: false,
@@ -125,76 +99,73 @@ export async function createPersona(
 }
 
 /**
- * Update a persona (mock implementation)
+ * Update a persona in Supabase
  */
 export async function updatePersona(id: string, updates: Partial<Persona>) {
+  personasStore.update((state) => ({ ...state, loading: true, error: null }));
+
   try {
-    // Simulate API delay
-    await new Promise((resolve) => setTimeout(resolve, 300));
+    const { data, error } = await supabase
+      .from("personas")
+      .update(updates)
+      .eq("id", id)
+      .select()
+      .single();
 
-    const currentPersonas = getInitialPersonas();
-    const personaIndex = currentPersonas.findIndex((p) => p.id === id);
-    if (personaIndex === -1) {
-      throw new Error("Persona not found");
-    }
+    if (error) throw error;
 
-    // Update the persona
-    const updatedPersona = {
-      ...currentPersonas[personaIndex],
-      ...updates,
-      updated_at: new Date().toISOString(),
-    };
-
-    currentPersonas[personaIndex] = updatedPersona;
-    savePersonasToStorage(currentPersonas);
-
-    // Update store
+    // Update local store
     personasStore.update((state) => ({
       ...state,
-      personas: [...currentPersonas],
+      personas: state.personas.map((p) => (p.id === id ? data : p)),
+      loading: false,
     }));
 
-    console.log("✅ Persona updated successfully:", updatedPersona.name);
-    return { data: updatedPersona, error: null };
+    console.log("✅ Persona updated successfully:", data.name);
+    return { data, error: null };
   } catch (error) {
     const errorMessage =
       error instanceof Error ? error.message : "Failed to update persona";
-    personasStore.update((state) => ({ ...state, error: errorMessage }));
+    console.error("❌ Error updating persona:", errorMessage);
+    personasStore.update((state) => ({
+      ...state,
+      loading: false,
+      error: errorMessage,
+    }));
     return { data: null, error: errorMessage };
   }
 }
 
 /**
- * Delete a persona (mock implementation)
+ * Delete a persona from Supabase
  */
 export async function deletePersona(id: string) {
+  personasStore.update((state) => ({ ...state, loading: true, error: null }));
+
   try {
-    // Simulate API delay
-    await new Promise((resolve) => setTimeout(resolve, 300));
+    const { error } = await supabase.from("personas").delete().eq("id", id);
 
-    const currentPersonas = getInitialPersonas();
-    const personaIndex = currentPersonas.findIndex((p) => p.id === id);
-    if (personaIndex === -1) {
-      throw new Error("Persona not found");
-    }
+    if (error) throw error;
 
-    const deletedPersona = currentPersonas[personaIndex];
-    currentPersonas.splice(personaIndex, 1);
-    savePersonasToStorage(currentPersonas);
-
-    // Update store
+    // Update local store
     personasStore.update((state) => ({
       ...state,
-      personas: [...currentPersonas],
+      personas: state.personas.filter((p) => p.id !== id),
+      loading: false,
     }));
 
-    console.log("✅ Persona deleted successfully:", deletedPersona.name);
-    return { success: true, error: null };
+    console.log("✅ Persona deleted successfully");
+    return { error: null };
   } catch (error) {
     const errorMessage =
       error instanceof Error ? error.message : "Failed to delete persona";
-    personasStore.update((state) => ({ ...state, error: errorMessage }));
-    return { success: false, error: errorMessage };
+    console.error("❌ Error deleting persona:", errorMessage);
+    personasStore.update((state) => ({
+      ...state,
+      loading: false,
+      error: errorMessage,
+    }));
+    return { error: errorMessage };
   }
 }
 
@@ -202,7 +173,10 @@ export async function deletePersona(id: string) {
  * Set selected persona
  */
 export function setSelectedPersona(persona: Persona | null) {
-  personasStore.update((state) => ({ ...state, selectedPersona: persona }));
+  personasStore.update((state) => ({
+    ...state,
+    selectedPersona: persona,
+  }));
 }
 
 /**
@@ -233,8 +207,12 @@ export function validatePersona(persona: Partial<Persona>): {
     errors.push("System prompt must be at least 10 characters long");
   }
 
-  if (persona.system_prompt && persona.system_prompt.length > 4000) {
-    errors.push("System prompt must be less than 4000 characters");
+  if (persona.system_prompt && persona.system_prompt.length > 5000) {
+    errors.push("System prompt must be less than 5000 characters");
+  }
+
+  if (persona.description && persona.description.length > 500) {
+    errors.push("Description must be less than 500 characters");
   }
 
   return {
