@@ -1,74 +1,84 @@
 <script lang="ts">
-  import { onMount } from "svelte";
+  import { onMount, afterUpdate } from "svelte";
+  import Button from "$lib/components/ui/button.svelte";
+  import Input from "$lib/components/ui/input.svelte";
+  import Dialog from "$lib/components/ui/dialog.svelte";
+  import Card from "$lib/components/ui/card.svelte";
+  import {
+    Bot,
+    MessageSquare,
+    Plus,
+    Loader2,
+    Send,
+    Users,
+    Cpu,
+    Trash2,
+    MoreHorizontal,
+  } from "lucide-svelte";
+
   import { authStore } from "$lib/stores/auth";
   import {
     chatStore,
     loadChatSessions,
     loadAvailableAgents,
     createChatSession,
-    setCurrentSession,
     sendMessage,
     deleteChatSession,
     endChatSession,
-    clearCurrentSession,
     clearChatError,
+    setCurrentSession,
   } from "$lib/stores/chat";
 
-  import Button from "$lib/components/ui/button.svelte";
-  import Card from "$lib/components/ui/card.svelte";
-  import Dialog from "$lib/components/ui/dialog.svelte";
-  import Input from "$lib/components/ui/input.svelte";
-  import {
-    MessageSquare,
-    Plus,
-    Send,
-    Trash2,
-    StopCircle,
-    Bot,
-    Loader2,
-    AlertCircle,
-    Users,
-    Cpu,
-    MoreVertical,
-  } from "lucide-svelte";
+  // Reactive state
+  $: ({ user } = $authStore);
+  $: ({
+    sessions,
+    currentSession,
+    messages,
+    agents,
+    loading,
+    sendingMessage,
+    typingIndicator,
+    error: state,
+  } = $chatStore);
 
-  let newChatDialogOpen = false;
-  let selectedAgentId = "";
+  // Local state
   let messageInput = "";
   let messagesContainer: HTMLElement;
+  let newChatDialogOpen = false;
+  let selectedAgentId = "";
 
-  $: user = $authStore.user;
-  $: state = $chatStore;
-  $: sessions = state.sessions;
-  $: currentSession = state.currentSession;
-  $: messages = state.messages;
-  $: agents = state.agents;
-  $: loading = state.loading;
-  $: sendingMessage = state.sendingMessage;
-  $: typingIndicator = state.typingIndicator;
-
+  // Load data on mount
   onMount(async () => {
-    if (user) {
-      await Promise.all([loadChatSessions(), loadAvailableAgents()]);
+    console.log("🔄 Loading chat data...");
+    await loadChatSessions();
+    await loadAvailableAgents();
+
+    // Check for agent in URL params
+    const urlParams = new URLSearchParams(window.location.search);
+    const agentFromUrl = urlParams.get("agent");
+    if (agentFromUrl && agents.length > 0) {
+      const agent = agents.find((a) => a.id === agentFromUrl);
+      if (agent) {
+        console.log("🎯 Found agent from URL, creating session:", agent.name);
+        await handleCreateSession(agentFromUrl);
+      }
     }
   });
 
-  // Auto-scroll messages to bottom
-  $: if (messages && messagesContainer) {
-    setTimeout(() => {
+  // Auto-scroll messages
+  afterUpdate(() => {
+    if (messagesContainer) {
       messagesContainer.scrollTop = messagesContainer.scrollHeight;
-    }, 100);
-  }
-
-  async function handleCreateChat() {
-    if (!user || !selectedAgentId) return;
-
-    const result = await createChatSession(selectedAgentId, user.id);
-
-    if (result.data) {
-      selectedAgentId = "";
-      newChatDialogOpen = false;
     }
+  });
+
+  async function handleCreateSession(agentId: string) {
+    if (!user || !agentId) return;
+
+    console.log("🚀 Creating new chat session for agent:", agentId);
+    newChatDialogOpen = false;
+    await createChatSession(agentId, user.id);
   }
 
   async function handleSendMessage() {
@@ -77,7 +87,19 @@
     const content = messageInput.trim();
     messageInput = "";
 
+    // Clear any previous errors
+    await clearChatError();
     await sendMessage(content, currentSession.id);
+
+    // Re-focus the input after sending
+    setTimeout(() => {
+      const textarea = document.querySelector(
+        'textarea[placeholder*="Type your message"]'
+      ) as HTMLTextAreaElement;
+      if (textarea) {
+        textarea.focus();
+      }
+    }, 100);
   }
 
   function handleKeyPress(event: KeyboardEvent) {
@@ -85,6 +107,7 @@
       event.preventDefault();
       handleSendMessage();
     }
+    // Shift+Enter should create new line (default behavior)
   }
 
   async function handleDeleteSession(session: any) {
@@ -132,8 +155,13 @@
     });
   }
 
+  function clearCurrentSession() {
+    setCurrentSession(null);
+  }
+
   function getAgentIcon(agent: any): string {
-    const style = agent.persona?.response_style;
+    if (!agent) return "🤖";
+    const style = agent.persona?.response_style || "friendly";
     const icons = {
       friendly: "😊",
       professional: "💼",
@@ -175,84 +203,61 @@
         <div class="p-4 text-center">
           <MessageSquare class="w-12 h-12 text-muted-foreground mx-auto mb-3" />
           <p class="text-muted-foreground mb-3">No conversations yet</p>
-          <Button size="sm" on:click={() => (newChatDialogOpen = true)}>
+          <Button variant="outline" on:click={() => (newChatDialogOpen = true)}>
             <Plus class="w-4 h-4 mr-2" />
-            Start First Chat
+            Start Chat
           </Button>
         </div>
       {:else}
-        <div class="p-2">
+        <div class="p-2 space-y-2">
           {#each sessions as session (session.id)}
-            <div
-              class={`w-full text-left p-3 rounded-lg mb-2 transition-colors group cursor-pointer ${
-                currentSession?.id === session.id
-                  ? "bg-primary/10 border border-primary/20"
-                  : "hover:bg-accent"
-              }`}
+            <Card
+              class="p-3 cursor-pointer hover:bg-accent transition-colors {currentSession?.id ===
+              session.id
+                ? 'ring-2 ring-primary'
+                : ''}"
               on:click={() => setCurrentSession(session)}
-              on:keydown={(e) =>
-                e.key === "Enter" && setCurrentSession(session)}
-              tabindex="0"
-              role="button"
             >
               <div class="flex items-start justify-between">
-                <div class="flex items-center space-x-3 flex-1 min-w-0">
+                <div class="flex items-start space-x-3 flex-1 min-w-0">
                   <div
-                    class="w-8 h-8 bg-primary/10 rounded-full flex items-center justify-center text-sm"
+                    class="w-8 h-8 bg-primary/10 rounded-full flex items-center justify-center text-sm flex-shrink-0"
                   >
                     {getAgentIcon(session.agent)}
                   </div>
                   <div class="flex-1 min-w-0">
-                    <h4 class="font-medium text-foreground truncate">
-                      {session.agent?.name || "Unknown Agent"}
-                    </h4>
-                    <p class="text-sm text-muted-foreground truncate">
-                      {session.agent?.persona?.response_style || "AI Assistant"}
+                    <p class="font-medium text-sm truncate">
+                      {session.agent?.name || "AI Assistant"}
                     </p>
+                    <p class="text-xs text-muted-foreground">
+                      {session.status}
+                    </p>
+                    {#if session.updated_at}
+                      <p class="text-xs text-muted-foreground">
+                        {formatTime(session.updated_at)}
+                      </p>
+                    {/if}
                   </div>
                 </div>
-                <div
-                  class="flex items-center space-x-1 opacity-0 group-hover:opacity-100"
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  on:click={(e) => {
+                    e.stopPropagation();
+                    handleDeleteSession(session);
+                  }}
                 >
-                  <button
-                    on:click|stopPropagation={() => handleEndSession(session)}
-                    class="p-1 hover:bg-accent rounded"
-                    title="End conversation"
-                  >
-                    <StopCircle class="w-4 h-4" />
-                  </button>
-                  <button
-                    on:click|stopPropagation={() =>
-                      handleDeleteSession(session)}
-                    class="p-1 hover:bg-destructive/20 rounded text-destructive"
-                    title="Delete conversation"
-                  >
-                    <Trash2 class="w-4 h-4" />
-                  </button>
-                </div>
+                  <Trash2 class="w-4 h-4" />
+                </Button>
               </div>
-              <div class="flex items-center justify-between mt-2">
-                <span
-                  class={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                    session.status === "active"
-                      ? "bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-300"
-                      : "bg-gray-100 text-gray-800 dark:bg-gray-900/20 dark:text-gray-300"
-                  }`}
-                >
-                  {session.status}
-                </span>
-                <span class="text-xs text-muted-foreground">
-                  {formatTime(session.updated_at)}
-                </span>
-              </div>
-            </div>
+            </Card>
           {/each}
         </div>
       {/if}
     </div>
   </div>
 
-  <!-- Chat Area -->
+  <!-- Main Chat Area -->
   <div class="flex-1 flex flex-col">
     {#if !currentSession}
       <!-- Welcome Screen -->
@@ -290,10 +295,11 @@
                 class="flex items-center space-x-2 text-sm text-muted-foreground"
               >
                 <Users class="w-3 h-3" />
-                <span>{currentSession.agent?.persona?.name}</span>
+                <span>{currentSession.agent?.persona?.name || "Assistant"}</span
+                >
                 <span>•</span>
                 <Cpu class="w-3 h-3" />
-                <span>{currentSession.agent?.model?.name}</span>
+                <span>{currentSession.agent?.model?.name || "AI Model"}</span>
               </div>
             </div>
           </div>
@@ -306,108 +312,105 @@
       <!-- Messages -->
       <div
         bind:this={messagesContainer}
-        class="flex-1 overflow-y-auto p-4 space-y-4"
+        class="flex-1 flex flex-col p-4 min-h-0"
       >
         {#if loading}
           <div class="flex items-center justify-center py-8">
             <Loader2 class="w-6 h-6 animate-spin text-primary" />
             <span class="ml-2 text-muted-foreground">Loading messages...</span>
           </div>
-        {:else if messages.length === 0}
-          <div class="text-center py-8">
-            <MessageSquare
-              class="w-12 h-12 text-muted-foreground mx-auto mb-3"
-            />
-            <p class="text-muted-foreground">
-              Start the conversation! Send a message to {currentSession.agent
-                ?.name}.
-            </p>
-          </div>
         {:else}
-          {#each messages as message (message.id)}
-            <div
-              class={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}
-            >
-              <div
-                class={`max-w-[70%] ${
-                  message.role === "user"
-                    ? "bg-primary text-primary-foreground"
-                    : "bg-muted text-muted-foreground"
-                } rounded-lg px-4 py-2`}
-              >
-                <p class="whitespace-pre-wrap">{message.content}</p>
-                <p
-                  class={`text-xs mt-1 ${
-                    message.role === "user"
-                      ? "text-primary-foreground/70"
-                      : "text-muted-foreground/70"
-                  }`}
-                >
-                  {formatMessageTime(message.created_at)}
-                </p>
-              </div>
-            </div>
-          {/each}
-        {/if}
-
-        <!-- Typing Indicator -->
-        {#if typingIndicator}
-          <div class="flex justify-start">
-            <div class="bg-muted text-muted-foreground rounded-lg px-4 py-2">
-              <div class="flex items-center space-x-1">
-                <div class="flex space-x-1">
-                  <div
-                    class="w-2 h-2 bg-current rounded-full animate-pulse"
-                  ></div>
-                  <div
-                    class="w-2 h-2 bg-current rounded-full animate-pulse"
-                    style="animation-delay: 0.2s"
-                  ></div>
-                  <div
-                    class="w-2 h-2 bg-current rounded-full animate-pulse"
-                    style="animation-delay: 0.4s"
-                  ></div>
+          <!-- Messages Container with proper responsive height -->
+          <div
+            class="flex-1 space-y-4 overflow-y-auto min-h-0 scrollbar-thin scrollbar-track-transparent scrollbar-thumb-border"
+          >
+            {#if messages.length === 0}
+              <div class="flex items-center justify-center h-full">
+                <div class="text-center">
+                  <MessageSquare
+                    class="w-12 h-12 text-muted-foreground mx-auto mb-3"
+                  />
+                  <p class="text-muted-foreground">
+                    Start the conversation! Send a message to {currentSession
+                      .agent?.name || "your assistant"}.
+                  </p>
                 </div>
-                <span class="text-xs ml-2">
-                  {currentSession.agent?.name} is typing...
-                </span>
               </div>
-            </div>
+            {:else}
+              {#each messages as message (message.id)}
+                <div
+                  class={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}
+                >
+                  <div
+                    class={`${message.role === "user" ? "max-w-[70%]" : "max-w-[85%]"} ${
+                      message.role === "user"
+                        ? "bg-primary text-primary-foreground"
+                        : "bg-muted text-muted-foreground"
+                    } rounded-lg px-4 py-2`}
+                  >
+                    <p class="whitespace-pre-wrap">{message.content}</p>
+                    <p
+                      class={`text-xs mt-1 ${
+                        message.role === "user"
+                          ? "text-primary-foreground/70"
+                          : "text-muted-foreground/70"
+                      }`}
+                    >
+                      {formatMessageTime(message.created_at)}
+                    </p>
+                  </div>
+                </div>
+              {/each}
+            {/if}
+
+            <!-- Typing Indicator -->
+            {#if typingIndicator}
+              <div class="flex justify-start">
+                <div
+                  class="bg-muted text-muted-foreground rounded-lg px-4 py-2"
+                >
+                  <div class="flex items-center space-x-1">
+                    <div class="flex space-x-1">
+                      <div
+                        class="w-2 h-2 bg-current rounded-full animate-pulse"
+                      ></div>
+                      <div
+                        class="w-2 h-2 bg-current rounded-full animate-pulse"
+                        style="animation-delay: 0.2s"
+                      ></div>
+                      <div
+                        class="w-2 h-2 bg-current rounded-full animate-pulse"
+                        style="animation-delay: 0.4s"
+                      ></div>
+                    </div>
+                    <span class="text-xs ml-2">
+                      {currentSession.agent?.name || "Assistant"} is typing...
+                    </span>
+                  </div>
+                </div>
+              </div>
+            {/if}
           </div>
         {/if}
       </div>
 
       <!-- Message Input -->
-      <div class="p-4 border-t border-border bg-card">
-        {#if state.error}
-          <div
-            class="mb-4 bg-destructive/15 border border-destructive/20 rounded-md p-3"
-          >
-            <div class="flex items-center justify-between">
-              <div class="flex items-center">
-                <AlertCircle class="w-4 h-4 text-destructive mr-2" />
-                <span class="text-sm text-destructive">{state.error}</span>
-              </div>
-              <Button variant="ghost" size="sm" on:click={clearChatError}>
-                Dismiss
-              </Button>
-            </div>
-          </div>
-        {/if}
-
+      <div class="p-4 border-t border-border bg-background flex-shrink-0">
         <div class="flex space-x-2">
-          <Input
+          <textarea
             bind:value={messageInput}
-            placeholder="Type your message..."
+            placeholder="Type your message... (Enter to send, Shift+Enter for new line)"
             disabled={sendingMessage || currentSession.status !== "active"}
             on:keydown={handleKeyPress}
-            class="flex-1"
-          />
+            class="flex-1 min-h-[40px] max-h-32 resize-none border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 rounded-md"
+            rows="1"
+          ></textarea>
           <Button
             on:click={handleSendMessage}
             disabled={!messageInput.trim() ||
               sendingMessage ||
               currentSession.status !== "active"}
+            class="self-end"
           >
             {#if sendingMessage}
               <Loader2 class="w-4 h-4 animate-spin" />
@@ -449,38 +452,38 @@
           <label class="relative block">
             <input
               type="radio"
-              bind:group={selectedAgentId}
+              name="selectedAgent"
               value={agent.id}
-              class="sr-only"
+              bind:group={selectedAgentId}
+              class="sr-only peer"
             />
             <div
-              class={`p-4 border rounded-lg cursor-pointer transition-all ${
-                selectedAgentId === agent.id
-                  ? "border-primary bg-primary/5 ring-2 ring-primary/20"
-                  : "border-border hover:border-primary/50"
-              }`}
+              class="border border-input rounded-lg p-4 cursor-pointer transition-colors peer-checked:border-primary peer-checked:bg-primary/5 hover:bg-accent"
             >
               <div class="flex items-start space-x-3">
                 <div
-                  class="w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center text-lg"
+                  class="w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center text-lg flex-shrink-0"
                 >
                   {getAgentIcon(agent)}
                 </div>
                 <div class="flex-1">
                   <h4 class="font-medium text-foreground">{agent.name}</h4>
-                  <p class="text-sm text-primary mb-2">
-                    {agent.persona?.name} • {agent.persona?.response_style}
-                  </p>
                   {#if agent.description}
-                    <p class="text-sm text-muted-foreground">
+                    <p class="text-sm text-muted-foreground mt-1">
                       {agent.description}
                     </p>
                   {/if}
                   <div
-                    class="flex items-center space-x-2 mt-2 text-xs text-muted-foreground"
+                    class="flex items-center space-x-4 mt-2 text-xs text-muted-foreground"
                   >
-                    <Cpu class="w-3 h-3" />
-                    <span>{agent.model?.name} ({agent.model?.provider})</span>
+                    <span class="flex items-center">
+                      <Users class="w-3 h-3 mr-1" />
+                      Assistant
+                    </span>
+                    <span class="flex items-center">
+                      <Cpu class="w-3 h-3 mr-1" />
+                      AI Model
+                    </span>
                   </div>
                 </div>
               </div>
@@ -488,18 +491,18 @@
           </label>
         {/each}
       </div>
-    {/if}
-  </div>
 
-  <div slot="footer" class="flex justify-end space-x-2">
-    <Button variant="outline" on:click={() => (newChatDialogOpen = false)}>
-      Cancel
-    </Button>
-    <Button
-      on:click={handleCreateChat}
-      disabled={!selectedAgentId || agents.length === 0}
-    >
-      Start Conversation
-    </Button>
+      <div class="flex justify-end space-x-3">
+        <Button variant="outline" on:click={() => (newChatDialogOpen = false)}>
+          Cancel
+        </Button>
+        <Button
+          disabled={!selectedAgentId}
+          on:click={() => handleCreateSession(selectedAgentId)}
+        >
+          Start Chat
+        </Button>
+      </div>
+    {/if}
   </div>
 </Dialog>

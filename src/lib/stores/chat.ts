@@ -69,33 +69,44 @@ export async function loadChatSessions() {
 }
 
 /**
- * Load available agents for chat
+ * Load available agents for chat (mock implementation)
  */
 export async function loadAvailableAgents() {
   try {
-    const { data, error } = await supabase
-      .from("agents")
-      .select(
-        `
-				*,
-				persona:personas(name, response_style),
-				model:models(name, provider, engine)
-			`
-      )
-      .eq("status", "active")
-      .order("name");
+    // Load agents from localStorage (mock data)
+    let availableAgents = [];
 
-    if (error) throw error;
+    if (typeof localStorage !== "undefined") {
+      const storedAgents = localStorage.getItem("bigstep_agents");
+      console.log("🔍 Raw stored agents:", storedAgents);
+
+      if (storedAgents) {
+        const allAgents = JSON.parse(storedAgents);
+        console.log("🔍 All agents:", allAgents);
+
+        // Filter for active agents only - check both is_active and status fields
+        availableAgents = allAgents.filter((agent: any) => {
+          const isActive =
+            agent.is_active === true || agent.status === "active";
+          console.log(
+            `🔍 Agent ${agent.name}: is_active=${agent.is_active}, status=${agent.status}, filtered=${isActive}`
+          );
+          return isActive;
+        });
+      }
+    }
 
     chatStore.update((state) => ({
       ...state,
-      agents: data || [],
+      agents: availableAgents,
     }));
 
-    return { data, error: null };
+    console.log("📝 Loaded available agents for chat:", availableAgents);
+    return { data: availableAgents, error: null };
   } catch (error) {
     const errorMessage =
       error instanceof Error ? error.message : "Failed to load agents";
+    console.error("❌ Error loading agents for chat:", errorMessage);
     return { data: null, error: errorMessage };
   }
 }
@@ -105,41 +116,85 @@ export async function loadAvailableAgents() {
  */
 export async function createChatSession(agentId: string, userId: string) {
   try {
-    const { data, error } = await supabase
-      .from("chat_sessions")
-      .insert([
-        {
-          agent_id: agentId,
-          user_id: userId,
-          status: "active",
-        },
-      ])
-      .select(
-        `
-				*,
-				agent:agents(
-					id, name, status,
-					persona:personas(name, response_style),
-					model:models(name, provider, engine)
-				)
-			`
-      )
-      .single();
+    console.log("🚀 Creating chat session for agent:", agentId);
 
-    if (error) throw error;
+    // Simulate API delay
+    await new Promise((resolve) => setTimeout(resolve, 300));
+
+    // Get the agent from localStorage
+    let selectedAgent = null;
+    if (typeof localStorage !== "undefined") {
+      const storedAgents = localStorage.getItem("bigstep_agents");
+      if (storedAgents) {
+        const agents = JSON.parse(storedAgents);
+        selectedAgent = agents.find((agent: any) => agent.id === agentId);
+      }
+    }
+
+    if (!selectedAgent) {
+      throw new Error("Agent not found");
+    }
+
+    // Create mock chat session
+    const newSession = {
+      id: `session-${Date.now()}`,
+      user_id: userId,
+      agent_id: agentId,
+      unit_id: null,
+      status: "active" as const,
+      title: `Chat with ${selectedAgent.name}`,
+      started_at: new Date().toISOString(),
+      ended_at: null,
+      message_count: 0,
+      metadata: {},
+      agent: {
+        id: selectedAgent.id,
+        name: selectedAgent.name,
+        status: selectedAgent.status,
+        persona: {
+          name: "Assistant", // Mock persona data
+          response_style: "helpful",
+        },
+        model: {
+          name: "GPT-4", // Mock model data
+          provider: "openai",
+          engine: "gpt-4",
+        },
+      },
+    };
+
+    // Load existing sessions
+    let existingSessions = [];
+    if (typeof localStorage !== "undefined") {
+      const stored = localStorage.getItem("bigstep_chat_sessions");
+      if (stored) {
+        existingSessions = JSON.parse(stored);
+      }
+    }
+
+    // Save new session
+    const updatedSessions = [newSession, ...existingSessions];
+    if (typeof localStorage !== "undefined") {
+      localStorage.setItem(
+        "bigstep_chat_sessions",
+        JSON.stringify(updatedSessions)
+      );
+    }
 
     // Add to sessions list and set as current
     chatStore.update((state) => ({
       ...state,
-      sessions: [data, ...state.sessions],
-      currentSession: data,
+      sessions: updatedSessions,
+      currentSession: newSession,
       messages: [],
     }));
 
-    return { data, error: null };
+    console.log("✅ Chat session created:", newSession);
+    return { data: newSession, error: null };
   } catch (error) {
     const errorMessage =
       error instanceof Error ? error.message : "Failed to create chat session";
+    console.error("❌ Error creating chat session:", errorMessage);
     chatStore.update((state) => ({ ...state, error: errorMessage }));
     return { data: null, error: errorMessage };
   }
@@ -188,6 +243,8 @@ export async function setCurrentSession(session: ChatSession) {
  * Send a message in the current session
  */
 export async function sendMessage(content: string, sessionId: string) {
+  console.log("💬 Sending message:", content);
+
   chatStore.update((state) => ({
     ...state,
     sendingMessage: true,
@@ -195,63 +252,84 @@ export async function sendMessage(content: string, sessionId: string) {
   }));
 
   try {
-    // Add user message
-    const { data: userMessage, error: userError } = await supabase
-      .from("messages")
-      .insert([
-        {
-          session_id: sessionId,
-          role: "user",
-          content: content.trim(),
-          metadata: {},
-        },
-      ])
-      .select()
-      .single();
+    const timestamp = new Date().toISOString();
 
-    if (userError) throw userError;
+    // Create user message
+    const userMessage = {
+      id: `msg-${Date.now()}-user`,
+      session_id: sessionId,
+      role: "user" as const,
+      content: content.trim(),
+      created_at: timestamp,
+      metadata: {},
+      token_count: null,
+    };
 
-    // Update local state with user message
+    // Update local state with user message immediately
     chatStore.update((state) => ({
       ...state,
       messages: [...state.messages, userMessage],
+      typingIndicator: true,
     }));
 
-    // Show typing indicator
-    chatStore.update((state) => ({ ...state, typingIndicator: true }));
+    // Simulate thinking time
+    await new Promise((resolve) =>
+      setTimeout(resolve, 1000 + Math.random() * 2000)
+    );
 
-    // Simulate AI response (in a real implementation, this would call your AI service)
+    // Generate AI response
     const aiResponse = await simulateAIResponse(content, sessionId);
 
-    // Add AI message
-    const { data: aiMessage, error: aiError } = await supabase
-      .from("messages")
-      .insert([
-        {
-          session_id: sessionId,
-          role: "assistant",
-          content: aiResponse,
-          metadata: {
-            model_used: "simulated",
-            response_time_ms: 1500,
-          },
-        },
-      ])
-      .select()
-      .single();
+    // Create AI message
+    const aiMessage = {
+      id: `msg-${Date.now()}-ai`,
+      session_id: sessionId,
+      role: "assistant" as const,
+      content: aiResponse,
+      created_at: new Date().toISOString(),
+      metadata: {
+        model_used: "mock-ai",
+        response_time_ms: 1500,
+      },
+      token_count: null,
+    };
 
-    if (aiError) throw aiError;
+    // Load existing messages
+    let allMessages = [];
+    if (typeof localStorage !== "undefined") {
+      const stored = localStorage.getItem("bigstep_chat_messages");
+      if (stored) {
+        allMessages = JSON.parse(stored);
+      }
+    }
 
-    // Update session's updated_at timestamp
-    await supabase
-      .from("chat_sessions")
-      .update({
-        updated_at: new Date().toISOString(),
-        message_count: await getMessageCount(sessionId),
-      })
-      .eq("id", sessionId);
+    // Save messages to localStorage
+    const updatedMessages = [...allMessages, userMessage, aiMessage];
+    if (typeof localStorage !== "undefined") {
+      localStorage.setItem(
+        "bigstep_chat_messages",
+        JSON.stringify(updatedMessages)
+      );
+    }
 
-    // Update local state
+    // Update session's message count and timestamp
+    if (typeof localStorage !== "undefined") {
+      const sessionsData = localStorage.getItem("bigstep_chat_sessions");
+      if (sessionsData) {
+        const sessions = JSON.parse(sessionsData);
+        const sessionIndex = sessions.findIndex((s: any) => s.id === sessionId);
+        if (sessionIndex !== -1) {
+          sessions[sessionIndex].updated_at = timestamp;
+          sessions[sessionIndex].message_count += 2; // user + AI message
+          localStorage.setItem(
+            "bigstep_chat_sessions",
+            JSON.stringify(sessions)
+          );
+        }
+      }
+    }
+
+    // Update local state with AI response
     chatStore.update((state) => ({
       ...state,
       messages: [...state.messages, aiMessage],
@@ -259,10 +337,13 @@ export async function sendMessage(content: string, sessionId: string) {
       typingIndicator: false,
     }));
 
+    console.log("✅ Messages sent and received successfully");
     return { data: { userMessage, aiMessage }, error: null };
   } catch (error) {
     const errorMessage =
       error instanceof Error ? error.message : "Failed to send message";
+    console.error("❌ Error sending message:", errorMessage);
+
     chatStore.update((state) => ({
       ...state,
       sendingMessage: false,
@@ -375,64 +456,197 @@ async function simulateAIResponse(
   userMessage: string,
   sessionId: string
 ): Promise<string> {
-  // Add some realistic delay
+  // Get the current session to access agent info
+  let currentAgent: any = null;
+  let currentSession: any = null;
+
+  if (typeof localStorage !== "undefined") {
+    const sessionsData = localStorage.getItem("bigstep_chat_sessions");
+    if (sessionsData) {
+      const sessions = JSON.parse(sessionsData);
+      currentSession = sessions.find((s: any) => s.id === sessionId);
+
+      if (currentSession) {
+        const agentsData = localStorage.getItem("bigstep_agents");
+        if (agentsData) {
+          const agents = JSON.parse(agentsData);
+          currentAgent = agents.find(
+            (a: any) => a.id === currentSession.agent_id
+          );
+        }
+      }
+    }
+  }
+
+  // Simulate processing time
   await new Promise((resolve) =>
     setTimeout(resolve, 1000 + Math.random() * 2000)
   );
 
-  // Get session info for more context
-  const { data: session } = await supabase
-    .from("chat_sessions")
-    .select(
-      `
-			*,
-			agent:agents(
-				*,
-				persona:personas(*),
-				model:models(*)
-			)
-		`
-    )
-    .eq("id", sessionId)
-    .single();
+  // Generate response based on agent and user message
+  if (currentAgent && currentSession) {
+    const agentName = currentAgent.name || "AI Assistant";
+    const agentDescription = currentAgent.description || "";
+    const userText = userMessage.toLowerCase();
 
-  // Simple response generation based on persona style
-  const persona = session?.agent?.persona;
-  const responses = getResponseTemplates(persona?.response_style || "friendly");
+    // Get persona system prompt if available
+    let personaSystemPrompt = "";
+    if (currentAgent.persona_id && typeof localStorage !== "undefined") {
+      const personasData = localStorage.getItem("bigstep_personas");
+      if (personasData) {
+        const allPersonas = JSON.parse(personasData);
+        const agentPersona = allPersonas.find(
+          (p: any) => p.id === currentAgent.persona_id
+        );
+        if (agentPersona && agentPersona.system_prompt) {
+          personaSystemPrompt = agentPersona.system_prompt;
+          console.log(
+            "🎭 Using persona system prompt for",
+            agentName,
+            ":",
+            agentPersona.name
+          );
+        }
+      }
+    }
 
-  // Simple keyword-based response selection
-  const lowerMessage = userMessage.toLowerCase();
+    // Use both persona system prompt and agent description as behavioral guide
+    const hasPersonaInstructions =
+      personaSystemPrompt && personaSystemPrompt.trim() !== "";
+    const hasAgentInstructions =
+      agentDescription &&
+      agentDescription.trim() !== "" &&
+      agentDescription.toLowerCase() !== agentName.toLowerCase();
 
-  if (
-    lowerMessage.includes("hello") ||
-    lowerMessage.includes("hi") ||
-    lowerMessage.includes("hey")
-  ) {
-    return responses.greeting[
-      Math.floor(Math.random() * responses.greeting.length)
-    ];
+    // Context-aware responses based on user input
+    if (
+      userText.includes("hello") ||
+      userText.includes("hi") ||
+      userText.includes("hey")
+    ) {
+      return `Hello! I'm ${agentName}, your AI assistant. How can I help you today?`;
+    } else if (userText.includes("help") || userText.includes("assist")) {
+      return `I'm here to help! As ${agentName}, I can assist you with various tasks. What specifically would you like help with?`;
+    } else if (userText.includes("what") && userText.includes("name")) {
+      return `My name is ${agentName}. I'm an AI assistant designed to help you with your learning and questions.`;
+    } else if (userText.includes("thank")) {
+      return `You're very welcome! I'm glad I could help. Is there anything else you'd like to know?`;
+    } else if (userText.includes("learn") || userText.includes("study")) {
+      return `I'd be happy to help you learn! As ${agentName}, I can explain concepts, answer questions, and guide you through topics. What would you like to explore?`;
+    } else if (userText.includes("explain") || userText.includes("how")) {
+      return `Great question! Let me break that down for you. As ${agentName}, I'll do my best to provide a clear explanation. ${
+        userMessage.endsWith("?")
+          ? "What specifically would you like me to explain?"
+          : "Could you be more specific about what you'd like me to explain?"
+      }`;
+    } else {
+      // Enhanced responses using agent description as system prompt
+      const hasDatasets =
+        currentAgent.dataset_ids && currentAgent.dataset_ids.length > 0;
+
+      // Get dataset context if available
+      let datasetContext = "";
+      if (hasDatasets && typeof localStorage !== "undefined") {
+        const datasetsData = localStorage.getItem("bigstep_datasets");
+        if (datasetsData) {
+          const allDatasets = JSON.parse(datasetsData);
+          const agentDatasets = allDatasets.filter((d: any) =>
+            currentAgent.dataset_ids.includes(d.id)
+          );
+          if (agentDatasets.length > 0) {
+            const datasetNames = agentDatasets
+              .map((d: any) => d.name)
+              .join(", ");
+            datasetContext = ` I have access to specialized knowledge from: ${datasetNames}.`;
+          }
+        }
+      }
+
+      // Use persona system prompt as primary behavioral guide, enhanced by agent description
+      if (hasPersonaInstructions || hasAgentInstructions) {
+        // Combine persona system prompt with agent-specific instructions
+        let combinedInstructions = "";
+        if (hasPersonaInstructions && hasAgentInstructions) {
+          combinedInstructions = `${personaSystemPrompt}\n\nAdditionally, as ${agentName}: ${agentDescription}`;
+        } else if (hasPersonaInstructions) {
+          combinedInstructions = personaSystemPrompt;
+        } else {
+          combinedInstructions = agentDescription;
+        }
+
+        // Generate response following the combined behavioral instructions
+        const behavioralResponses = [
+          `${
+            hasPersonaInstructions
+              ? `Following my core role: ${
+                  personaSystemPrompt.split(".")[0]
+                }...`
+              : agentDescription
+          }${datasetContext}
+
+Regarding "${userMessage}": ${
+            userMessage.includes("?")
+              ? "Let me provide you with a detailed response based on my training."
+              : "I'd like to address this thoughtfully."
+          }`,
+
+          `As ${agentName}, I'm guided by my purpose: ${
+            hasPersonaInstructions
+              ? personaSystemPrompt
+                  .split("\n")[0]
+                  .replace(/^You are (a |an )?/i, "")
+                  .trim()
+              : agentDescription
+                  .toLowerCase()
+                  .replace(/^i am|^i'm/, "")
+                  .trim()
+          }.${datasetContext}
+
+Your inquiry "${userMessage}" aligns with what I'm designed to help with. ${
+            userMessage.includes("how") || userMessage.includes("what")
+              ? "Let me walk you through this systematically."
+              : "Here's my approach to this topic."
+          }`,
+
+          `Based on my behavioral framework${
+            hasPersonaInstructions ? " from my persona training" : ""
+          }:${datasetContext}
+
+I find your message "${userMessage}" particularly relevant. ${
+            userMessage.length > 50
+              ? "You've shared a detailed question - let me provide a comprehensive response."
+              : "Let me give you a thorough answer."
+          }`,
+        ];
+
+        return behavioralResponses[
+          Math.floor(Math.random() * behavioralResponses.length)
+        ];
+      } else {
+        // Fallback to generic educational responses
+        const agentPersona = currentAgent.persona_id
+          ? `trained with specialized knowledge`
+          : `your learning assistant`;
+
+        const responses = [
+          `That's a fascinating question! As ${agentName}, ${agentPersona}, I can provide detailed insights on this topic.${datasetContext} Let me break this down for you: ${
+            userMessage.includes("?")
+              ? "What specific aspect would you like me to focus on?"
+              : "Could you be more specific about what you'd like to know more about?"
+          }`,
+
+          `Excellent point! I'm ${agentName}, and I've been designed to help with complex learning challenges.${datasetContext} Based on what you're asking, I can see several important angles to consider. Would you like me to dive deeper into the theoretical foundation or focus on practical applications?`,
+
+          `I appreciate you bringing this up! As ${agentName}, I specialize in comprehensive educational support.${datasetContext} This topic connects to several key concepts that I think you'll find valuable. Let me walk you through my understanding and see how I can best help you grasp this.`,
+        ];
+
+        return responses[Math.floor(Math.random() * responses.length)];
+      }
+    }
   }
 
-  if (lowerMessage.includes("help") || lowerMessage.includes("how")) {
-    return responses.help[Math.floor(Math.random() * responses.help.length)];
-  }
-
-  if (lowerMessage.includes("thank") || lowerMessage.includes("thanks")) {
-    return responses.thanks[
-      Math.floor(Math.random() * responses.thanks.length)
-    ];
-  }
-
-  if (lowerMessage.includes("bye") || lowerMessage.includes("goodbye")) {
-    return responses.goodbye[
-      Math.floor(Math.random() * responses.goodbye.length)
-    ];
-  }
-
-  // Default responses
-  return responses.default[
-    Math.floor(Math.random() * responses.default.length)
-  ];
+  // Fallback response if no agent info available
+  return "I'm here to help! Could you tell me more about what you'd like to know?";
 }
 
 function getResponseTemplates(style: string) {

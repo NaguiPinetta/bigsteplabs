@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
+  import { goto } from "$app/navigation";
   import { authStore, canManageContent } from "$lib/stores/auth";
   import {
     agentsStore,
@@ -263,6 +264,16 @@
         "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-300",
     };
     return colors[status as keyof typeof colors] || colors.inactive;
+  }
+
+  async function handleStartChat(agent: any) {
+    if (!agent) return;
+
+    console.log("🚀 Starting chat with agent:", agent.name);
+    // Close the test dialog
+    testDialogOpen = false;
+    // Navigate to chat page - the agent should be available there now
+    goto("/chat");
   }
 
   function getStatusIcon(status: string) {
@@ -1021,11 +1032,7 @@
     <Button variant="outline" on:click={() => (testDialogOpen = false)}>
       Close
     </Button>
-    <Button
-      on:click={() => {
-        /* Navigate to chat */
-      }}
-    >
+    <Button on:click={() => handleStartChat(selectedAgent)}>
       <MessageSquare class="w-4 h-4 mr-2" />
       Start Chat
     </Button>
