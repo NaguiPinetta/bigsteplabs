@@ -1,67 +1,134 @@
 <script lang="ts">
-  import { enhance } from "$app/forms";
+  import { onMount } from "svelte";
   import { goto } from "$app/navigation";
-  import { signInAsAdmin } from "$lib/stores/auth";
-  import type { ActionData } from "./$types";
+  import { sendMagicLink, redirectAuthenticatedUser } from "$lib/auth";
+  import { authStore, signInAsAdmin } from "$lib/stores/auth";
+  import Button from "$lib/components/ui/button.svelte";
+  import Input from "$lib/components/ui/input.svelte";
+  import { Mail, Lock, Loader2 } from "lucide-svelte";
 
-  export let form: ActionData;
-
+  let email = "";
+  let adminUsername = "";
+  let adminPassword = "";
+  let activeTab = "magic";
   let loading = false;
-  let email = form?.email || "";
-  let username = "";
-  let password = "";
-  let loginMode = "email"; // 'email' or 'admin'
-  let adminError = "";
-  let adminLoading = false;
+  let message = "";
+  let messageType = "info"; // "info", "success", "error"
 
-  // Check for errors in URL parameters
-  import { page } from "$app/stores";
-  $: urlError = $page.url.searchParams.get("error");
-  $: errorMessage = getErrorMessage(urlError);
+  $: user = $authStore.user;
 
-  function getErrorMessage(error: string | null) {
+  onMount(async () => {
+    // Check if user is already authenticated
+    if (user) {
+      await redirectAuthenticatedUser();
+    }
+
+    // Check for error parameters in URL
+    const urlParams = new URLSearchParams(window.location.search);
+    const error = urlParams.get("error");
+
+    if (error) {
+      setMessage(getErrorMessage(error), "error");
+      // Clear the error from URL
+      const url = new URL(window.location.href);
+      url.searchParams.delete("error");
+      window.history.replaceState({}, "", url.toString());
+    }
+  });
+
+  function getErrorMessage(error: string): string {
     switch (error) {
-      case "exchange_failed":
-        return "Failed to complete sign in. Please try requesting a new magic link.";
-      case "callback_failed":
-        return "Authentication callback failed. Please try again.";
       case "no_code":
-        return "Invalid magic link. Please request a new one.";
+        return "No authentication code found. Please request a new magic link.";
+      case "invalid_link":
+        return "The magic link is invalid or has expired. Please request a new one.";
+      case "exchange_failed":
+        return "Failed to complete authentication. Please try again.";
       case "timeout":
-        return "Sign in took too long. Please try again.";
+        return "Authentication timed out. Please try again.";
       default:
-        return null;
+        return "An error occurred during authentication. Please try again.";
+    }
+  }
+
+  function setMessage(text: string, type: "info" | "success" | "error") {
+    message = text;
+    messageType = type;
+  }
+
+  async function handleMagicLink() {
+    if (!email) {
+      setMessage("Please enter an email address", "error");
+      return;
+    }
+
+    loading = true;
+    setMessage("", "info");
+
+    try {
+      const result = await sendMagicLink(email, "/dashboard");
+
+      if (result.success) {
+        setMessage(
+          "Magic link sent! Check your email and click the link to sign in.",
+          "success"
+        );
+        email = ""; // Clear email field
+      } else {
+        setMessage(
+          result.error?.message || "Failed to send magic link",
+          "error"
+        );
+      }
+    } catch (err) {
+      setMessage("An unexpected error occurred", "error");
+      console.error("Magic link error:", err);
+    } finally {
+      loading = false;
     }
   }
 
   async function handleAdminLogin() {
-    if (!username.trim() || !password.trim()) {
-      adminError = "Please enter both username and password";
+    if (!adminUsername || !adminPassword) {
+      setMessage("Please enter both username and password", "error");
       return;
     }
 
-    adminLoading = true;
-    adminError = "";
+    loading = true;
+    setMessage("", "info");
 
-    const result = await signInAsAdmin(username.trim(), password);
+    try {
+      const result = await signInAsAdmin(adminUsername, adminPassword);
 
-    if (result.success) {
-      goto("/dashboard");
-    } else {
-      adminError = result.error || "Login failed";
+      if (result.success) {
+        setMessage("Admin login successful! Redirecting...", "success");
+        setTimeout(() => {
+          goto("/dashboard");
+        }, 1000);
+      } else {
+        setMessage(result.error || "Invalid credentials", "error");
+      }
+    } catch (err) {
+      setMessage("An unexpected error occurred", "error");
+      console.error("Admin login error:", err);
+    } finally {
+      loading = false;
     }
-
-    adminLoading = false;
   }
 
-  function switchLoginMode(mode: string) {
-    loginMode = mode;
-    adminError = "";
+  function handleKeydown(event: any) {
+    if (event.key === "Enter") {
+      if (activeTab === "magic") {
+        handleMagicLink();
+      } else {
+        handleAdminLogin();
+      }
+    }
   }
 </script>
 
 <svelte:head>
-  <title>Sign in - BigStepLabs</title>
+  <title>Sign In - BigStepLabs</title>
   <meta name="description" content="Sign in to your BigStepLabs account" />
 </svelte:head>
 
@@ -117,143 +184,80 @@
       <!-- Login Mode Tabs -->
       <div class="flex space-x-1 bg-muted p-1 rounded-lg">
         <button
-          class={`flex-1 py-2 px-4 text-sm font-medium rounded-md transition-colors ${
-            loginMode === "email"
-              ? "bg-background text-foreground shadow-sm"
-              : "text-muted-foreground hover:text-foreground"
-          }`}
-          on:click={() => switchLoginMode("email")}
+          class="flex-1 py-2 px-4 text-sm font-medium rounded-md transition-colors {activeTab ===
+          'magic'
+            ? 'bg-background text-foreground shadow-sm'
+            : 'text-muted-foreground hover:text-foreground'}"
+          on:click={() => (activeTab = "magic")}
         >
           Magic Link
         </button>
         <button
-          class={`flex-1 py-2 px-4 text-sm font-medium rounded-md transition-colors ${
-            loginMode === "admin"
-              ? "bg-background text-foreground shadow-sm"
-              : "text-muted-foreground hover:text-foreground"
-          }`}
-          on:click={() => switchLoginMode("admin")}
+          class="flex-1 py-2 px-4 text-sm font-medium rounded-md transition-colors {activeTab ===
+          'admin'
+            ? 'bg-background text-foreground shadow-sm'
+            : 'text-muted-foreground hover:text-foreground'}"
+          on:click={() => (activeTab = "admin")}
         >
           Admin Login
         </button>
       </div>
 
-      <!-- Error Messages -->
-      {#if errorMessage}
+      <!-- Error/Success Messages -->
+      {#if message}
         <div
-          class="bg-destructive/15 border border-destructive/20 text-destructive px-4 py-3 rounded-md text-sm"
+          class="rounded-md p-4 {messageType === 'error'
+            ? 'bg-destructive/15 border border-destructive/20 text-destructive'
+            : messageType === 'success'
+              ? 'bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 text-green-700 dark:text-green-300'
+              : 'bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300'}"
         >
-          {errorMessage}
+          <p class="text-sm">
+            {message}
+          </p>
         </div>
       {/if}
 
-      {#if form?.error}
-        <div
-          class="bg-destructive/15 border border-destructive/20 text-destructive px-4 py-3 rounded-md text-sm"
-        >
-          {form.error}
-        </div>
-      {/if}
-
-      {#if adminError}
-        <div
-          class="bg-destructive/15 border border-destructive/20 text-destructive px-4 py-3 rounded-md text-sm"
-        >
-          {adminError}
-        </div>
-      {/if}
-
-      <!-- Success Message -->
-      {#if form?.success}
-        <div
-          class="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 text-green-700 dark:text-green-300 px-4 py-3 rounded-md text-sm"
-        >
-          ✓ Magic link sent to <strong>{form.email}</strong><br />
-          Check your email and click the link to continue.
-        </div>
-      {/if}
-
-      {#if loginMode === "email"}
-        <!-- Magic Link Form -->
-        <form
-          method="POST"
-          use:enhance={() => {
-            loading = true;
-            return async ({ update }) => {
-              loading = false;
-              update();
-            };
-          }}
-        >
-          <div class="space-y-4">
-            <div>
-              <label
-                for="email"
-                class="block text-sm font-medium text-foreground mb-2"
-              >
-                Email address
-              </label>
-              <input
-                id="email"
-                name="email"
-                type="email"
-                autocomplete="email"
-                required
-                bind:value={email}
-                disabled={loading}
-                class="w-full px-3 py-2 border border-input bg-background text-foreground rounded-md focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary disabled:opacity-50"
-                placeholder="Enter your email"
-              />
-            </div>
-
-            <button
-              type="submit"
-              disabled={loading || !email.trim()}
-              class="w-full bg-red-600 hover:bg-red-700 disabled:bg-red-400 text-white font-medium py-2 px-4 rounded-md transition-colors disabled:cursor-not-allowed flex items-center justify-center"
+      <!-- Magic Link Form -->
+      {#if activeTab === "magic"}
+        <form class="space-y-4" on:submit|preventDefault={handleMagicLink}>
+          <div>
+            <label
+              for="email"
+              class="block text-sm font-medium text-foreground mb-2"
             >
-              {#if loading}
-                <svg
-                  class="animate-spin -ml-1 mr-3 h-5 w-5 text-white"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                >
-                  <circle
-                    class="opacity-25"
-                    cx="12"
-                    cy="12"
-                    r="10"
-                    stroke="currentColor"
-                    stroke-width="4"
-                  ></circle>
-                  <path
-                    class="opacity-75"
-                    fill="currentColor"
-                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                  ></path>
-                </svg>
-                Sending magic link...
-              {:else}
-                <svg
-                  class="w-4 h-4 mr-2"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="2"
-                    d="M3 8l7.89 4.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
-                  />
-                </svg>
-                Send magic link
-              {/if}
-            </button>
+              Email address
+            </label>
+            <Input
+              id="email"
+              type="email"
+              bind:value={email}
+              placeholder="Enter your email"
+              disabled={loading}
+              on:keydown={handleKeydown}
+              required
+            />
           </div>
+
+          <Button
+            type="submit"
+            class="w-full bg-red-600 hover:bg-red-700 disabled:bg-red-400"
+            disabled={loading || !email}
+          >
+            {#if loading}
+              <Loader2 class="mr-2 h-4 w-4 animate-spin" />
+              Sending magic link...
+            {:else}
+              <Mail class="mr-2 h-4 w-4" />
+              Send magic link
+            {/if}
+          </Button>
         </form>
-      {:else}
-        <!-- Admin Login Form -->
-        <div class="space-y-4">
+      {/if}
+
+      <!-- Admin Login Form -->
+      {#if activeTab === "admin"}
+        <form class="space-y-4" on:submit|preventDefault={handleAdminLogin}>
           <div>
             <label
               for="username"
@@ -261,16 +265,14 @@
             >
               Username
             </label>
-            <input
+            <Input
               id="username"
-              name="username"
               type="text"
-              autocomplete="username"
-              required
-              bind:value={username}
-              disabled={adminLoading}
-              class="w-full px-3 py-2 border border-input bg-background text-foreground rounded-md focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary disabled:opacity-50"
+              bind:value={adminUsername}
               placeholder="Enter admin username"
+              disabled={loading}
+              on:keydown={handleKeydown}
+              required
             />
           </div>
 
@@ -281,65 +283,31 @@
             >
               Password
             </label>
-            <input
+            <Input
               id="password"
-              name="password"
               type="password"
-              autocomplete="current-password"
-              required
-              bind:value={password}
-              disabled={adminLoading}
-              class="w-full px-3 py-2 border border-input bg-background text-foreground rounded-md focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary disabled:opacity-50"
+              bind:value={adminPassword}
               placeholder="Enter admin password"
-              on:keydown={(e) => e.key === "Enter" && handleAdminLogin()}
+              disabled={loading}
+              on:keydown={handleKeydown}
+              required
             />
           </div>
 
-          <button
-            type="button"
-            on:click={handleAdminLogin}
-            disabled={adminLoading || !username.trim() || !password.trim()}
-            class="w-full bg-red-600 hover:bg-red-700 disabled:bg-red-400 text-white font-medium py-2 px-4 rounded-md transition-colors disabled:cursor-not-allowed flex items-center justify-center"
+          <Button
+            type="submit"
+            class="w-full bg-red-600 hover:bg-red-700 disabled:bg-red-400"
+            disabled={loading || !adminUsername || !adminPassword}
           >
-            {#if adminLoading}
-              <svg
-                class="animate-spin -ml-1 mr-3 h-5 w-5 text-white"
-                fill="none"
-                viewBox="0 0 24 24"
-              >
-                <circle
-                  class="opacity-25"
-                  cx="12"
-                  cy="12"
-                  r="10"
-                  stroke="currentColor"
-                  stroke-width="4"
-                ></circle>
-                <path
-                  class="opacity-75"
-                  fill="currentColor"
-                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                ></path>
-              </svg>
+            {#if loading}
+              <Loader2 class="mr-2 h-4 w-4 animate-spin" />
               Signing in...
             {:else}
-              <svg
-                class="w-4 h-4 mr-2"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1"
-                />
-              </svg>
+              <Lock class="mr-2 h-4 w-4" />
               Sign in as Admin
             {/if}
-          </button>
-        </div>
+          </Button>
+        </form>
       {/if}
 
       <!-- Footer -->
@@ -355,16 +323,14 @@
           >
         </div>
 
-        {#if loginMode === "email"}
-          <div class="mt-4">
-            <a
-              href="/dev"
-              class="text-sm text-muted-foreground hover:text-primary underline"
-            >
-              Development Mode (Test without email)
-            </a>
-          </div>
-        {/if}
+        <div class="mt-4">
+          <a
+            href="/dev"
+            class="text-sm text-muted-foreground hover:text-primary underline"
+          >
+            Development Mode (Test without email)
+          </a>
+        </div>
       </div>
     </div>
   </div>

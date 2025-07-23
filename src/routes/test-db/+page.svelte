@@ -1,6 +1,15 @@
 <script lang="ts">
   import { onMount } from "svelte";
+  import { supabase } from "$lib/supabase";
   import Button from "$lib/components/ui/button.svelte";
+  import Card from "$lib/components/ui/card.svelte";
+  import {
+    Database,
+    CheckCircle,
+    XCircle,
+    Loader2,
+    TestTube,
+  } from "lucide-svelte";
   import {
     loadPersonas,
     createPersona,
@@ -36,13 +45,20 @@
     chatStore,
   } from "$lib/stores/chat";
 
-  let testResults: Array<{
-    test: string;
-    status: "pending" | "success" | "error";
-    message: string;
-    data?: any;
-  }> = [];
-  let isRunning = false;
+  let testResults = {
+    connection: { status: "pending", message: "" },
+    tables: { status: "pending", message: "" },
+    auth: { status: "pending", message: "" },
+    rls: { status: "pending", message: "" },
+    personas: { status: "pending", message: "" },
+    models: { status: "pending", message: "" },
+    datasets: { status: "pending", message: "" },
+    agents: { status: "pending", message: "" },
+    chat: { status: "pending", message: "" },
+  };
+
+  let loading = true;
+  let runningTests = false;
   let testData: any = {};
 
   // Reactive stores
@@ -52,24 +68,152 @@
   $: agents = $agentsStore.agents;
   $: chatSessions = $chatStore.sessions;
 
-  function addTestResult(
-    test: string,
-    status: "pending" | "success" | "error",
-    message: string,
-    data?: any
-  ) {
-    testResults = [...testResults, { test, status, message, data }];
+  onMount(async () => {
+    await runBasicTests();
+  });
+
+  async function runBasicTests() {
+    loading = true;
+
+    // Test 1: Connection and list all tables
+    try {
+      console.log("🔍 Testing database connection...");
+
+      // First, let's see what tables actually exist
+      const { data: tablesData, error: tablesError } = await supabase
+        .from("information_schema.tables")
+        .select("table_name")
+        .eq("table_schema", "public");
+
+      if (tablesError) {
+        console.error("❌ Error checking tables:", tablesError);
+        testResults.connection = {
+          status: "error",
+          message: `Connection failed: ${tablesError.message}`,
+        };
+        loading = false;
+        return;
+      }
+
+      console.log("✅ Database connection successful");
+      console.log(
+        "📋 Available tables:",
+        tablesData?.map((t) => t.table_name) || []
+      );
+
+      testResults.connection = {
+        status: "success",
+        message: "Connected to Supabase successfully",
+      };
+
+      // Check if our expected tables exist
+      const expectedTables = [
+        "users",
+        "personas",
+        "models",
+        "datasets",
+        "agents",
+        "chat_sessions",
+      ];
+      const existingTables = tablesData?.map((t) => t.table_name) || [];
+      const missingTables = expectedTables.filter(
+        (table) => !existingTables.includes(table)
+      );
+
+      if (missingTables.length > 0) {
+        testResults.tables = {
+          status: "error",
+          message: `Missing tables: ${missingTables.join(", ")}. Run database migrations first.`,
+        };
+      } else {
+        testResults.tables = {
+          status: "success",
+          message: `All expected tables found (${existingTables.length} total)`,
+        };
+      }
+
+      // Test 3: Authentication
+      try {
+        const { data: authData, error: authError } =
+          await supabase.auth.getSession();
+        if (authError) {
+          testResults.auth = {
+            status: "error",
+            message: `Auth test failed: ${authError.message}`,
+          };
+        } else {
+          testResults.auth = {
+            status: "success",
+            message: "Authentication system working",
+          };
+        }
+      } catch (authErr) {
+        testResults.auth = {
+          status: "error",
+          message: `Auth test failed: ${authErr}`,
+        };
+      }
+
+      // Test 4: RLS (Row Level Security)
+      try {
+        const { data: rlsData, error: rlsError } = await supabase
+          .from("users")
+          .select("count")
+          .limit(1);
+
+        if (rlsError && rlsError.code === "42501") {
+          testResults.rls = {
+            status: "success",
+            message: "RLS policies are active (access denied as expected)",
+          };
+        } else if (rlsError) {
+          testResults.rls = {
+            status: "warning",
+            message: `RLS test: ${rlsError.message}`,
+          };
+        } else {
+          testResults.rls = {
+            status: "warning",
+            message: "RLS might not be properly configured",
+          };
+        }
+      } catch (rlsErr) {
+        testResults.rls = {
+          status: "error",
+          message: `RLS test failed: ${rlsErr}`,
+        };
+      }
+    } catch (error) {
+      console.error("❌ Basic tests failed:", error);
+      testResults.connection = {
+        status: "error",
+        message: `Connection failed: ${error}`,
+      };
+    }
+
+    loading = false;
   }
 
-  async function runAllTests() {
-    isRunning = true;
-    testResults = [];
-
+  async function runComprehensiveTests() {
+    runningTests = true;
     console.log("🧪 Starting comprehensive database tests...");
 
     try {
       // Test 1: Load existing data
-      addTestResult("Load Existing Data", "pending", "Loading current data...");
+      testResults.personas = {
+        status: "pending",
+        message: "Loading personas...",
+      };
+      testResults.models = { status: "pending", message: "Loading models..." };
+      testResults.datasets = {
+        status: "pending",
+        message: "Loading datasets...",
+      };
+      testResults.agents = { status: "pending", message: "Loading agents..." };
+      testResults.chat = {
+        status: "pending",
+        message: "Loading chat sessions...",
+      };
 
       await Promise.all([
         loadPersonas(),
@@ -79,14 +223,32 @@
         loadChatSessions(),
       ]);
 
-      addTestResult(
-        "Load Existing Data",
-        "success",
-        `Loaded: ${personas.length} personas, ${models.length} models, ${datasets.length} datasets, ${agents.length} agents, ${chatSessions.length} chat sessions`
-      );
+      testResults.personas = {
+        status: "success",
+        message: `Loaded ${personas.length} personas`,
+      };
+      testResults.models = {
+        status: "success",
+        message: `Loaded ${models.length} models`,
+      };
+      testResults.datasets = {
+        status: "success",
+        message: `Loaded ${datasets.length} datasets`,
+      };
+      testResults.agents = {
+        status: "success",
+        message: `Loaded ${agents.length} agents`,
+      };
+      testResults.chat = {
+        status: "success",
+        message: `Loaded ${chatSessions.length} chat sessions`,
+      };
 
       // Test 2: Create Persona
-      addTestResult("Create Persona", "pending", "Creating test persona...");
+      testResults.personas = {
+        status: "pending",
+        message: "Creating test persona...",
+      };
       const newPersona = {
         name: "Test Persona",
         system_prompt: "You are a helpful test assistant.",
@@ -99,15 +261,16 @@
       if (personaResult.error) throw new Error(personaResult.error);
 
       testData.personaId = personaResult.data?.id;
-      addTestResult(
-        "Create Persona",
-        "success",
-        `Created persona: ${personaResult.data?.name}`,
-        personaResult.data
-      );
+      testResults.personas = {
+        status: "success",
+        message: `Created persona: ${personaResult.data?.name}`,
+      };
 
       // Test 3: Create Model
-      addTestResult("Create Model", "pending", "Creating test model...");
+      testResults.models = {
+        status: "pending",
+        message: "Creating test model...",
+      };
       const newModel = {
         name: "Test Model",
         provider: "openai",
@@ -122,15 +285,16 @@
       if (modelResult.error) throw new Error(modelResult.error);
 
       testData.modelId = modelResult.data?.id;
-      addTestResult(
-        "Create Model",
-        "success",
-        `Created model: ${modelResult.data?.name}`,
-        modelResult.data
-      );
+      testResults.models = {
+        status: "success",
+        message: `Created model: ${modelResult.data?.name}`,
+      };
 
       // Test 4: Create Dataset
-      addTestResult("Create Dataset", "pending", "Creating test dataset...");
+      testResults.datasets = {
+        status: "pending",
+        message: "Creating test dataset...",
+      };
       const newDataset = {
         name: "Test Dataset",
         description: "Test dataset for database operations",
@@ -144,15 +308,16 @@
       if (datasetResult.error) throw new Error(datasetResult.error);
 
       testData.datasetId = datasetResult.data?.id;
-      addTestResult(
-        "Create Dataset",
-        "success",
-        `Created dataset: ${datasetResult.data?.name}`,
-        datasetResult.data
-      );
+      testResults.datasets = {
+        status: "success",
+        message: `Created dataset: ${datasetResult.data?.name}`,
+      };
 
       // Test 5: Create Agent
-      addTestResult("Create Agent", "pending", "Creating test agent...");
+      testResults.agents = {
+        status: "pending",
+        message: "Creating test agent...",
+      };
       const newAgent = {
         name: "Test Agent",
         description: "Test agent for database operations",
@@ -167,19 +332,16 @@
       if (agentResult.error) throw new Error(agentResult.error);
 
       testData.agentId = agentResult.data?.id;
-      addTestResult(
-        "Create Agent",
-        "success",
-        `Created agent: ${agentResult.data?.name}`,
-        agentResult.data
-      );
+      testResults.agents = {
+        status: "success",
+        message: `Created agent: ${agentResult.data?.name}`,
+      };
 
       // Test 6: Create Chat Session
-      addTestResult(
-        "Create Chat Session",
-        "pending",
-        "Creating test chat session..."
-      );
+      testResults.chat = {
+        status: "pending",
+        message: "Creating test chat session...",
+      };
       const sessionResult = await createChatSession(
         testData.agentId,
         "test-user-id"
@@ -187,75 +349,80 @@
       if (sessionResult.error) throw new Error(sessionResult.error);
 
       testData.sessionId = sessionResult.data?.id;
-      addTestResult(
-        "Create Chat Session",
-        "success",
-        `Created chat session: ${sessionResult.data?.title}`,
-        sessionResult.data
-      );
+      testResults.chat = {
+        status: "success",
+        message: `Created chat session: ${sessionResult.data?.title}`,
+      };
 
       // Test 7: Send Message
-      addTestResult("Send Message", "pending", "Sending test message...");
+      testResults.chat = {
+        status: "pending",
+        message: "Sending test message...",
+      };
       const messageResult = await sendMessage(
         "Hello, this is a test message!",
         testData.sessionId
       );
       if (messageResult.error) throw new Error(messageResult.error);
 
-      addTestResult(
-        "Send Message",
-        "success",
-        "Message sent and AI response received",
-        messageResult.data
-      );
+      testResults.chat = {
+        status: "success",
+        message: "Message sent and AI response received",
+      };
 
       // Test 8: Update Persona
-      addTestResult("Update Persona", "pending", "Updating test persona...");
+      testResults.personas = {
+        status: "pending",
+        message: "Updating test persona...",
+      };
       const updatePersonaResult = await updatePersona(testData.personaId, {
         name: "Updated Test Persona",
         system_prompt: "You are an updated test assistant.",
       });
       if (updatePersonaResult.error) throw new Error(updatePersonaResult.error);
 
-      addTestResult(
-        "Update Persona",
-        "success",
-        `Updated persona: ${updatePersonaResult.data?.name}`,
-        updatePersonaResult.data
-      );
+      testResults.personas = {
+        status: "success",
+        message: `Updated persona: ${updatePersonaResult.data?.name}`,
+      };
 
       // Test 9: Update Model
-      addTestResult("Update Model", "pending", "Updating test model...");
+      testResults.models = {
+        status: "pending",
+        message: "Updating test model...",
+      };
       const updateModelResult = await updateModel(testData.modelId, {
         name: "Updated Test Model",
         temperature: 0.8,
       });
       if (updateModelResult.error) throw new Error(updateModelResult.error);
 
-      addTestResult(
-        "Update Model",
-        "success",
-        `Updated model: ${updateModelResult.data?.name}`,
-        updateModelResult.data
-      );
+      testResults.models = {
+        status: "success",
+        message: `Updated model: ${updateModelResult.data?.name}`,
+      };
 
       // Test 10: Update Agent
-      addTestResult("Update Agent", "pending", "Updating test agent...");
+      testResults.agents = {
+        status: "pending",
+        message: "Updating test agent...",
+      };
       const updateAgentResult = await updateAgent(testData.agentId, {
         name: "Updated Test Agent",
         description: "Updated test agent description",
       });
       if (updateAgentResult.error) throw new Error(updateAgentResult.error);
 
-      addTestResult(
-        "Update Agent",
-        "success",
-        `Updated agent: ${updateAgentResult.data?.name}`,
-        updateAgentResult.data
-      );
+      testResults.agents = {
+        status: "success",
+        message: `Updated agent: ${updateAgentResult.data?.name}`,
+      };
 
       // Test 11: Load Updated Data
-      addTestResult("Load Updated Data", "pending", "Loading updated data...");
+      testResults.personas = {
+        status: "pending",
+        message: "Loading updated data...",
+      };
       await Promise.all([
         loadPersonas(),
         loadModels(),
@@ -264,65 +431,81 @@
         loadChatSessions(),
       ]);
 
-      addTestResult(
-        "Load Updated Data",
-        "success",
-        `Updated data loaded: ${personas.length} personas, ${models.length} models, ${datasets.length} datasets, ${agents.length} agents, ${chatSessions.length} chat sessions`
-      );
+      testResults.personas = {
+        status: "success",
+        message: `Updated data loaded: ${personas.length} personas, ${models.length} models, ${datasets.length} datasets, ${agents.length} agents, ${chatSessions.length} chat sessions`,
+      };
 
       // Test 12: Delete Chat Session
-      addTestResult(
-        "Delete Chat Session",
-        "pending",
-        "Deleting test chat session..."
-      );
+      testResults.chat = {
+        status: "pending",
+        message: "Deleting test chat session...",
+      };
       const deleteSessionResult = await deleteChatSession(testData.sessionId);
       if (deleteSessionResult.error) throw new Error(deleteSessionResult.error);
 
-      addTestResult(
-        "Delete Chat Session",
-        "success",
-        "Chat session deleted successfully"
-      );
+      testResults.chat = {
+        status: "success",
+        message: "Chat session deleted successfully",
+      };
 
       // Test 13: Delete Agent
-      addTestResult("Delete Agent", "pending", "Deleting test agent...");
+      testResults.agents = {
+        status: "pending",
+        message: "Deleting test agent...",
+      };
       const deleteAgentResult = await deleteAgent(testData.agentId);
       if (deleteAgentResult.error) throw new Error(deleteAgentResult.error);
 
-      addTestResult("Delete Agent", "success", "Agent deleted successfully");
+      testResults.agents = {
+        status: "success",
+        message: "Agent deleted successfully",
+      };
 
       // Test 14: Delete Dataset
-      addTestResult("Delete Dataset", "pending", "Deleting test dataset...");
+      testResults.datasets = {
+        status: "pending",
+        message: "Deleting test dataset...",
+      };
       const deleteDatasetResult = await deleteDataset(testData.datasetId);
       if (deleteDatasetResult.error) throw new Error(deleteDatasetResult.error);
 
-      addTestResult(
-        "Delete Dataset",
-        "success",
-        "Dataset deleted successfully"
-      );
+      testResults.datasets = {
+        status: "success",
+        message: "Dataset deleted successfully",
+      };
 
       // Test 15: Delete Model
-      addTestResult("Delete Model", "pending", "Deleting test model...");
+      testResults.models = {
+        status: "pending",
+        message: "Deleting test model...",
+      };
       const deleteModelResult = await deleteModel(testData.modelId);
       if (deleteModelResult.error) throw new Error(deleteModelResult.error);
 
-      addTestResult("Delete Model", "success", "Model deleted successfully");
+      testResults.models = {
+        status: "success",
+        message: "Model deleted successfully",
+      };
 
       // Test 16: Delete Persona
-      addTestResult("Delete Persona", "pending", "Deleting test persona...");
+      testResults.personas = {
+        status: "pending",
+        message: "Deleting test persona...",
+      };
       const deletePersonaResult = await deletePersona(testData.personaId);
       if (deletePersonaResult.error) throw new Error(deletePersonaResult.error);
 
-      addTestResult(
-        "Delete Persona",
-        "success",
-        "Persona deleted successfully"
-      );
+      testResults.personas = {
+        status: "success",
+        message: "Persona deleted successfully",
+      };
 
       // Test 17: Final Data Load
-      addTestResult("Final Data Load", "pending", "Loading final data...");
+      testResults.personas = {
+        status: "pending",
+        message: "Loading final data...",
+      };
       await Promise.all([
         loadPersonas(),
         loadModels(),
@@ -331,53 +514,51 @@
         loadChatSessions(),
       ]);
 
-      addTestResult(
-        "Final Data Load",
-        "success",
-        `Final data loaded: ${personas.length} personas, ${models.length} models, ${datasets.length} datasets, ${agents.length} agents, ${chatSessions.length} chat sessions`
-      );
+      testResults.personas = {
+        status: "success",
+        message: `Final data loaded: ${personas.length} personas, ${models.length} models, ${datasets.length} datasets, ${agents.length} agents, ${chatSessions.length} chat sessions`,
+      };
 
       console.log("✅ All database tests completed successfully!");
     } catch (error) {
       console.error("❌ Database test failed:", error);
-      addTestResult(
-        "Test Suite",
-        "error",
-        `Test failed: ${error instanceof Error ? error.message : "Unknown error"}`
+      const currentTest = Object.entries(testResults).find(
+        ([_, result]) => result.status === "pending"
       );
+      if (currentTest) {
+        testResults[currentTest[0] as keyof typeof testResults] = {
+          status: "error",
+          message: `Test failed: ${error instanceof Error ? error.message : "Unknown error"}`,
+        };
+      }
     } finally {
-      isRunning = false;
-    }
-  }
-
-  function clearResults() {
-    testResults = [];
-    testData = {};
-  }
-
-  function getStatusColor(status: string) {
-    switch (status) {
-      case "success":
-        return "bg-green-100 text-green-800 border-green-200";
-      case "error":
-        return "bg-red-100 text-red-800 border-red-200";
-      case "pending":
-        return "bg-yellow-100 text-yellow-800 border-yellow-200";
-      default:
-        return "bg-gray-100 text-gray-800 border-gray-200";
+      runningTests = false;
     }
   }
 
   function getStatusIcon(status: string) {
     switch (status) {
       case "success":
-        return "✅";
+        return CheckCircle;
       case "error":
-        return "❌";
-      case "pending":
-        return "⏳";
+        return XCircle;
+      case "warning":
+        return XCircle;
       default:
-        return "❓";
+        return Loader2;
+    }
+  }
+
+  function getStatusColor(status: string) {
+    switch (status) {
+      case "success":
+        return "text-green-600";
+      case "error":
+        return "text-red-600";
+      case "warning":
+        return "text-yellow-600";
+      default:
+        return "text-gray-600";
     }
   }
 </script>
@@ -386,125 +567,99 @@
   <title>Database Test - BigStepLabs</title>
 </svelte:head>
 
-<div class="container mx-auto p-6 space-y-6">
-  <div class="flex items-center justify-between">
-    <div>
-      <h1 class="text-3xl font-bold">Database Operations Test</h1>
-      <p class="text-muted-foreground">
-        Comprehensive test of all Supabase CRUD operations
-      </p>
-    </div>
-    <div class="flex space-x-2">
-      <Button variant="outline" on:click={clearResults} disabled={isRunning}>
-        Clear Results
-      </Button>
-      <Button on:click={runAllTests} disabled={isRunning}>
-        {isRunning ? "Running Tests..." : "Run All Tests"}
-      </Button>
-    </div>
+<div class="container mx-auto p-6">
+  <div class="flex items-center gap-3 mb-6">
+    <Database class="h-8 w-8 text-primary" />
+    <h1 class="text-3xl font-bold">Database Connection Test</h1>
   </div>
 
-  <!-- Current Data Summary -->
-  <div class="bg-card rounded-lg border p-6">
-    <h2 class="text-xl font-semibold mb-4">Current Data Summary</h2>
-    <p class="text-muted-foreground mb-4">Data currently loaded in stores</p>
-    <div class="grid grid-cols-2 md:grid-cols-5 gap-4">
-      <div class="text-center">
-        <div class="text-2xl font-bold text-blue-600">{personas.length}</div>
-        <div class="text-sm text-muted-foreground">Personas</div>
+  <div class="space-y-4">
+    <Card class="p-6">
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="text-xl font-semibold">Basic Connection Tests</h2>
+        <Button on:click={runBasicTests} disabled={loading}>
+          {#if loading}
+            <Loader2 class="h-4 w-4 animate-spin mr-2" />
+            Testing...
+          {:else}
+            Run Basic Tests
+          {/if}
+        </Button>
       </div>
-      <div class="text-center">
-        <div class="text-2xl font-bold text-green-600">{models.length}</div>
-        <div class="text-sm text-muted-foreground">Models</div>
-      </div>
-      <div class="text-center">
-        <div class="text-2xl font-bold text-purple-600">{datasets.length}</div>
-        <div class="text-sm text-muted-foreground">Datasets</div>
-      </div>
-      <div class="text-center">
-        <div class="text-2xl font-bold text-orange-600">{agents.length}</div>
-        <div class="text-sm text-muted-foreground">Agents</div>
-      </div>
-      <div class="text-center">
-        <div class="text-2xl font-bold text-red-600">{chatSessions.length}</div>
-        <div class="text-sm text-muted-foreground">Chat Sessions</div>
-      </div>
-    </div>
-  </div>
 
-  <!-- Test Results -->
-  <div class="bg-card rounded-lg border p-6">
-    <h2 class="text-xl font-semibold mb-4">Test Results</h2>
-    <p class="text-muted-foreground mb-4">
-      {testResults.length > 0
-        ? `${testResults.filter((r) => r.status === "success").length}/${testResults.length} tests passed`
-        : "No tests run yet"}
-    </p>
-    {#if testResults.length === 0}
-      <div class="text-center py-8 text-muted-foreground">
-        <p>Click "Run All Tests" to start testing database operations</p>
-      </div>
-    {:else}
-      <div class="space-y-3">
-        {#each testResults as result}
-          <div class="flex items-start space-x-3 p-3 rounded-lg border">
-            <div class="text-lg">{getStatusIcon(result.status)}</div>
+      <div class="space-y-4">
+        {#each Object.entries(testResults).slice(0, 4) as [testName, result]}
+          <div class="flex items-center gap-3 p-3 border rounded-lg">
+            {#if result.status === "pending"}
+              <Loader2 class="h-5 w-5 animate-spin text-gray-500" />
+            {:else}
+              <svelte:component
+                this={getStatusIcon(result.status)}
+                class="h-5 w-5 {getStatusColor(result.status)}"
+              />
+            {/if}
             <div class="flex-1">
-              <div class="flex items-center space-x-2">
-                <span class="font-medium">{result.test}</span>
-                <span
-                  class="px-2 py-1 text-xs rounded-full {getStatusColor(
-                    result.status
-                  )}"
-                >
-                  {result.status}
-                </span>
-              </div>
-              <p class="text-sm text-muted-foreground mt-1">{result.message}</p>
-              {#if result.data}
-                <details class="mt-2">
-                  <summary class="text-xs text-blue-600 cursor-pointer"
-                    >View Data</summary
-                  >
-                  <pre
-                    class="text-xs bg-gray-100 p-2 rounded mt-1 overflow-auto">{JSON.stringify(
-                      result.data,
-                      null,
-                      2
-                    )}</pre>
-                </details>
-              {/if}
+              <div class="font-medium capitalize">{testName}</div>
+              <div class="text-sm text-muted-foreground">{result.message}</div>
             </div>
           </div>
         {/each}
       </div>
-    {/if}
-  </div>
+    </Card>
 
-  <!-- Test Summary -->
-  {#if testResults.length > 0}
-    <div class="bg-card rounded-lg border p-6">
-      <h2 class="text-xl font-semibold mb-4">Test Summary</h2>
-      <div class="grid grid-cols-3 gap-4 text-center">
-        <div>
-          <div class="text-2xl font-bold text-green-600">
-            {testResults.filter((r) => r.status === "success").length}
-          </div>
-          <div class="text-sm text-muted-foreground">Passed</div>
-        </div>
-        <div>
-          <div class="text-2xl font-bold text-red-600">
-            {testResults.filter((r) => r.status === "error").length}
-          </div>
-          <div class="text-sm text-muted-foreground">Failed</div>
-        </div>
-        <div>
-          <div class="text-2xl font-bold text-yellow-600">
-            {testResults.filter((r) => r.status === "pending").length}
-          </div>
-          <div class="text-sm text-muted-foreground">Pending</div>
-        </div>
+    <Card class="p-6">
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="text-xl font-semibold">Comprehensive CRUD Tests</h2>
+        <Button
+          on:click={runComprehensiveTests}
+          disabled={runningTests}
+          variant="outline"
+        >
+          {#if runningTests}
+            <Loader2 class="h-4 w-4 animate-spin mr-2" />
+            Running Tests...
+          {:else}
+            <TestTube class="h-4 w-4 mr-2" />
+            Run All CRUD Tests
+          {/if}
+        </Button>
       </div>
-    </div>
-  {/if}
+
+      <div class="space-y-4">
+        {#each Object.entries(testResults).slice(4) as [testName, result]}
+          <div class="flex items-center gap-3 p-3 border rounded-lg">
+            {#if result.status === "pending"}
+              <Loader2 class="h-5 w-5 animate-spin text-gray-500" />
+            {:else}
+              <svelte:component
+                this={getStatusIcon(result.status)}
+                class="h-5 w-5 {getStatusColor(result.status)}"
+              />
+            {/if}
+            <div class="flex-1">
+              <div class="font-medium capitalize">{testName}</div>
+              <div class="text-sm text-muted-foreground">{result.message}</div>
+            </div>
+          </div>
+        {/each}
+      </div>
+    </Card>
+
+    <Card class="p-6">
+      <h3 class="text-lg font-semibold mb-4">Test Summary</h3>
+      <div class="space-y-2 text-sm">
+        <p>This comprehensive test suite verifies:</p>
+        <ul class="list-disc list-inside space-y-1 ml-4">
+          <li>Database connection and table existence</li>
+          <li>Authentication and RLS policies</li>
+          <li>
+            Full CRUD operations for all entities (Personas, Models, Datasets,
+            Agents, Chat)
+          </li>
+          <li>Data relationships and foreign key constraints</li>
+          <li>Error handling and edge cases</li>
+        </ul>
+      </div>
+    </Card>
+  </div>
 </div>

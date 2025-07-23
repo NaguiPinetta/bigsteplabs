@@ -19,6 +19,21 @@ export const authStore = writable<AuthState>(initialState);
 
 // Track if initialization is in progress to prevent multiple calls
 let initializingAuth = false;
+// Track if we're manually setting a session to prevent conflicts
+let manuallySettingSession = false;
+
+// Function to manually set session (used by auth utility)
+export const setSessionManually = (
+  session: Session | null,
+  user: AppUser | null
+) => {
+  manuallySettingSession = true;
+  authStore.set({ session, user, loading: false });
+  // Reset flag after a short delay
+  setTimeout(() => {
+    manuallySettingSession = false;
+  }, 1000);
+};
 
 // Simple admin login function
 export const signInAsAdmin = async (
@@ -74,8 +89,10 @@ export const signInAsAdmin = async (
 
 // Initialize auth state
 export const initAuth = async () => {
-  if (initializingAuth) {
-    console.log("Auth initialization already in progress");
+  if (initializingAuth || manuallySettingSession) {
+    console.log(
+      "Auth initialization already in progress or session being set manually"
+    );
     return;
   }
 

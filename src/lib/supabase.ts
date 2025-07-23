@@ -17,7 +17,7 @@ export const supabase = createClient<Database>(supabaseUrl, supabaseKey, {
   auth: {
     autoRefreshToken: true,
     persistSession: true,
-    detectSessionInUrl: true,
+    detectSessionInUrl: false, // Disable this to prevent the <anonymous code> issue
   },
 });
 

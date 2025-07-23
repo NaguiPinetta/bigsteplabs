@@ -1,5 +1,5 @@
-import { writable } from "svelte/store";
-// import { supabase } from "$lib/supabase";  // Commented out for mock data
+import { writable, get } from "svelte/store";
+import { supabase } from "$lib/supabase";
 import type { Unit } from "$lib/types/database";
 
 interface UnitsState {
@@ -9,54 +9,14 @@ interface UnitsState {
   selectedUnit: Unit | null;
 }
 
-// Load existing data from localStorage or use mock data as fallback
-function getInitialUnits(): Unit[] {
-  if (typeof localStorage !== "undefined") {
-    const stored = localStorage.getItem("bigstep_units");
-    if (stored) {
-      try {
-        return JSON.parse(stored);
-      } catch (e) {
-        console.warn("Failed to parse stored units:", e);
-      }
-    }
-  }
-
-  // Only return mock data if no existing data
-  return [
-    {
-      id: "mock-unit-1",
-      module_id: "mock-module-1",
-      title: "Basic Greetings",
-      description: "Learn common Spanish greetings and introductions",
-      slug: "basic-greetings",
-      status: "pending",
-      order_index: 1,
-      estimated_duration_minutes: 30,
-      is_published: true,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    },
-  ];
-}
-
-const initialUnits = getInitialUnits();
-
 const initialState: UnitsState = {
-  units: initialUnits,
+  units: [],
   loading: false,
   error: null,
   selectedUnit: null,
 };
 
 export const unitsStore = writable<UnitsState>(initialState);
-
-// Save units to localStorage whenever they change
-function saveUnitsToStorage(units: Unit[]) {
-  if (typeof localStorage !== "undefined") {
-    localStorage.setItem("bigstep_units", JSON.stringify(units));
-  }
-}
 
 /**
  * Generate a URL-friendly slug from a title
@@ -72,25 +32,41 @@ function generateSlug(title: string): string {
  * Load all units, optionally filtered by module
  */
 export async function loadUnits(moduleId?: string) {
+  console.log("🔍 Loading units from Supabase...");
   unitsStore.update((state) => ({ ...state, loading: true, error: null }));
 
-  // Simulate API delay
-  await new Promise((resolve) => setTimeout(resolve, 300));
-
   try {
-    const currentUnits = getInitialUnits();
-    const filteredUnits = moduleId
-      ? currentUnits.filter((unit) => unit.module_id === moduleId)
-      : currentUnits;
+    let query = supabase
+      .from("units")
+      .select("*")
+      .order("order_index", { ascending: true });
 
+    if (moduleId) {
+      query = query.eq("module_id", moduleId);
+    }
+
+    const { data: units, error } = await query;
+
+    if (error) {
+      console.error("❌ Error loading units:", error);
+      unitsStore.update((state) => ({
+        ...state,
+        loading: false,
+        error: error.message,
+      }));
+      return { data: null, error };
+    }
+
+    console.log("✅ Units loaded successfully:", units?.length || 0, "units");
     unitsStore.update((state) => ({
       ...state,
-      units: filteredUnits.sort((a, b) => a.order_index - b.order_index),
+      units: units || [],
       loading: false,
     }));
 
-    return { data: filteredUnits, error: null };
+    return { data: units, error: null };
   } catch (error) {
+    console.error("❌ Unexpected error loading units:", error);
     const errorMessage =
       error instanceof Error ? error.message : "Failed to load units";
     unitsStore.update((state) => ({
@@ -103,58 +79,63 @@ export async function loadUnits(moduleId?: string) {
 }
 
 /**
- * Create a new unit (mock implementation)
+ * Create a new unit
  */
 export async function createUnit(
   unit: Omit<Unit, "id" | "created_at" | "updated_at" | "order_index" | "slug">
 ) {
+  console.log("🔍 Creating unit in Supabase:", unit);
   unitsStore.update((state) => ({ ...state, loading: true, error: null }));
 
-  // Simulate API delay
-  await new Promise((resolve) => setTimeout(resolve, 500));
-
   try {
-    const currentUnits = getInitialUnits();
+    // Generate slug from title
+    const slug = generateSlug(unit.title);
 
-    // Calculate next order index for this module
-    const moduleUnits = currentUnits.filter(
-      (u) => u.module_id === unit.module_id
-    );
-    const nextOrder =
-      moduleUnits.length > 0
-        ? Math.max(...moduleUnits.map((u) => u.order_index)) + 1
-        : 1;
+    // Get the next order index for this module
+    const { data: currentUnits, error: countError } = await supabase
+      .from("units")
+      .select("order_index")
+      .eq("module_id", unit.module_id)
+      .order("order_index", { ascending: false })
+      .limit(1);
 
-    const newUnit: Unit = {
-      id: `unit-${Date.now()}`,
-      module_id: unit.module_id,
-      title: unit.title,
-      description: unit.description,
-      slug: generateSlug(unit.title),
-      status: unit.status || "pending",
-      order_index: nextOrder,
-      estimated_duration_minutes: unit.estimated_duration_minutes || 30,
-      is_published: unit.is_published || false,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
+    if (countError) {
+      console.error("❌ Error getting order index:", countError);
+      throw new Error(countError.message);
+    }
+
+    const nextOrderIndex = (currentUnits?.[0]?.order_index || 0) + 1;
+
+    const newUnitData = {
+      ...unit,
+      slug,
+      order_index: nextOrderIndex,
     };
 
-    // Add to current units
-    const updatedUnits = [...currentUnits, newUnit].sort(
-      (a, b) => a.order_index - b.order_index
-    );
-    saveUnitsToStorage(updatedUnits);
+    const { data: newUnit, error } = await supabase
+      .from("units")
+      .insert(newUnitData)
+      .select()
+      .single();
 
-    // Update store
-    unitsStore.update((state) => ({
-      ...state,
-      units: updatedUnits,
-      loading: false,
-    }));
+    if (error) {
+      console.error("❌ Error creating unit:", error);
+      unitsStore.update((state) => ({
+        ...state,
+        loading: false,
+        error: error.message,
+      }));
+      return { data: null, error: error.message };
+    }
 
-    console.log("✅ Unit created successfully:", newUnit.title);
+    console.log("✅ Unit created successfully:", newUnit);
+
+    // Refresh the units list
+    await loadUnits();
+
     return { data: newUnit, error: null };
   } catch (error) {
+    console.error("❌ Unexpected error creating unit:", error);
     const errorMessage =
       error instanceof Error ? error.message : "Failed to create unit";
     unitsStore.update((state) => ({
@@ -167,165 +148,162 @@ export async function createUnit(
 }
 
 /**
- * Update a unit (mock implementation)
+ * Update a unit
  */
 export async function updateUnit(id: string, updates: Partial<Unit>) {
-  try {
-    // Simulate API delay
-    await new Promise((resolve) => setTimeout(resolve, 300));
+  console.log("🔍 Updating unit in Supabase:", id, updates);
 
-    const currentUnits = getInitialUnits();
-    const unitIndex = currentUnits.findIndex((u) => u.id === id);
-    if (unitIndex === -1) {
-      throw new Error("Unit not found");
+  try {
+    const { data: updatedUnit, error } = await supabase
+      .from("units")
+      .update({
+        ...updates,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", id)
+      .select()
+      .single();
+
+    if (error) {
+      console.error("❌ Error updating unit:", error);
+      return { data: null, error: error.message };
     }
 
-    // Update the unit
-    const updatedUnit = {
-      ...currentUnits[unitIndex],
-      ...updates,
-      updated_at: new Date().toISOString(),
-    };
+    console.log("✅ Unit updated successfully:", updatedUnit);
 
-    currentUnits[unitIndex] = updatedUnit;
-    const sortedUnits = [...currentUnits].sort(
-      (a, b) => a.order_index - b.order_index
-    );
-    saveUnitsToStorage(sortedUnits);
+    // Refresh the units list
+    await loadUnits();
 
-    // Update store
-    unitsStore.update((state) => ({
-      ...state,
-      units: sortedUnits,
-    }));
-
-    console.log("✅ Unit updated successfully:", updatedUnit.title);
     return { data: updatedUnit, error: null };
   } catch (error) {
+    console.error("❌ Unexpected error updating unit:", error);
     const errorMessage =
       error instanceof Error ? error.message : "Failed to update unit";
-    unitsStore.update((state) => ({ ...state, error: errorMessage }));
     return { data: null, error: errorMessage };
   }
 }
 
 /**
- * Delete a unit (mock implementation)
+ * Delete a unit
  */
 export async function deleteUnit(id: string) {
-  try {
-    // Simulate API delay
-    await new Promise((resolve) => setTimeout(resolve, 300));
+  console.log("🔍 Deleting unit from Supabase:", id);
 
-    const currentUnits = getInitialUnits();
-    const unitIndex = currentUnits.findIndex((u) => u.id === id);
-    if (unitIndex === -1) {
-      throw new Error("Unit not found");
+  try {
+    const { error } = await supabase.from("units").delete().eq("id", id);
+
+    if (error) {
+      console.error("❌ Error deleting unit:", error);
+      return { data: null, error: error.message };
     }
 
-    const deletedUnit = currentUnits[unitIndex];
-    currentUnits.splice(unitIndex, 1);
-    saveUnitsToStorage(currentUnits);
+    console.log("✅ Unit deleted successfully:", id);
 
-    // Update store
-    unitsStore.update((state) => ({
-      ...state,
-      units: [...currentUnits],
-    }));
+    // Refresh the units list
+    await loadUnits();
 
-    console.log("✅ Unit deleted successfully:", deletedUnit.title);
-    return { success: true, error: null };
+    return { data: { id }, error: null };
   } catch (error) {
+    console.error("❌ Unexpected error deleting unit:", error);
     const errorMessage =
       error instanceof Error ? error.message : "Failed to delete unit";
-    unitsStore.update((state) => ({ ...state, error: errorMessage }));
-    return { success: false, error: errorMessage };
-  }
-}
-
-/**
- * Reorder units within a module (mock implementation)
- */
-export async function reorderUnits(unitIds: string[]) {
-  try {
-    // Simulate API delay
-    await new Promise((resolve) => setTimeout(resolve, 300));
-
-    const currentUnits = getInitialUnits();
-
-    // Update order indexes based on new order
-    unitIds.forEach((id, index) => {
-      const unit = currentUnits.find((u) => u.id === id);
-      if (unit) {
-        unit.order_index = index + 1;
-        unit.updated_at = new Date().toISOString();
-      }
-    });
-
-    const sortedUnits = [...currentUnits].sort(
-      (a, b) => a.order_index - b.order_index
-    );
-    saveUnitsToStorage(sortedUnits);
-
-    // Update store
-    unitsStore.update((state) => ({
-      ...state,
-      units: sortedUnits,
-    }));
-
-    console.log("✅ Units reordered successfully");
-    return { success: true, error: null };
-  } catch (error) {
-    const errorMessage =
-      error instanceof Error ? error.message : "Failed to reorder units";
-    unitsStore.update((state) => ({ ...state, error: errorMessage }));
-    return { success: false, error: errorMessage };
-  }
-}
-
-/**
- * Toggle unit publication status (mock implementation)
- */
-export async function toggleUnitPublication(id: string) {
-  try {
-    // Simulate API delay
-    await new Promise((resolve) => setTimeout(resolve, 300));
-
-    const currentUnits = getInitialUnits();
-    const unit = currentUnits.find((u) => u.id === id);
-    if (!unit) {
-      throw new Error("Unit not found");
-    }
-
-    unit.is_published = !unit.is_published;
-    unit.updated_at = new Date().toISOString();
-    saveUnitsToStorage(currentUnits);
-
-    // Update store
-    unitsStore.update((state) => ({
-      ...state,
-      units: [...currentUnits],
-    }));
-
-    console.log("✅ Unit publication toggled:", unit.title, unit.is_published);
-    return { data: unit, error: null };
-  } catch (error) {
-    const errorMessage =
-      error instanceof Error ? error.message : "Failed to toggle publication";
-    unitsStore.update((state) => ({ ...state, error: errorMessage }));
     return { data: null, error: errorMessage };
   }
 }
 
 /**
- * Set selected unit
+ * Reorder units
+ */
+export async function reorderUnits(unitIds: string[]) {
+  console.log("🔍 Reordering units in Supabase:", unitIds);
+
+  try {
+    // Update each unit's order_index
+    for (let i = 0; i < unitIds.length; i++) {
+      const { error } = await supabase
+        .from("units")
+        .update({ order_index: i + 1 })
+        .eq("id", unitIds[i]);
+
+      if (error) {
+        console.error("❌ Error reordering unit:", error);
+        return { data: null, error: error.message };
+      }
+    }
+
+    console.log("✅ Units reordered successfully");
+
+    // Refresh the units list
+    await loadUnits();
+
+    return { data: unitIds, error: null };
+  } catch (error) {
+    console.error("❌ Unexpected error reordering units:", error);
+    const errorMessage =
+      error instanceof Error ? error.message : "Failed to reorder units";
+    return { data: null, error: errorMessage };
+  }
+}
+
+/**
+ * Toggle unit publication status
+ */
+export async function toggleUnitPublication(id: string) {
+  console.log("🔍 Toggling unit publication:", id);
+
+  try {
+    // Get current unit
+    const { data: currentUnit, error: fetchError } = await supabase
+      .from("units")
+      .select("is_published")
+      .eq("id", id)
+      .single();
+
+    if (fetchError) {
+      console.error("❌ Error fetching unit:", fetchError);
+      return { data: null, error: fetchError.message };
+    }
+
+    const newPublishedStatus = !currentUnit.is_published;
+
+    const { data: updatedUnit, error } = await supabase
+      .from("units")
+      .update({
+        is_published: newPublishedStatus,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", id)
+      .select()
+      .single();
+
+    if (error) {
+      console.error("❌ Error toggling publication:", error);
+      return { data: null, error: error.message };
+    }
+
+    console.log("✅ Unit publication toggled successfully:", updatedUnit);
+
+    // Refresh the units list
+    await loadUnits();
+
+    return { data: updatedUnit, error: null };
+  } catch (error) {
+    console.error("❌ Unexpected error toggling publication:", error);
+    const errorMessage =
+      error instanceof Error ? error.message : "Failed to toggle publication";
+    return { data: null, error: errorMessage };
+  }
+}
+
+/**
+ * Set the selected unit
  */
 export function setSelectedUnit(unit: Unit | null) {
   unitsStore.update((state) => ({ ...state, selectedUnit: unit }));
 }
 
 /**
- * Clear units error
+ * Clear any error in the store
  */
 export function clearUnitsError() {
   unitsStore.update((state) => ({ ...state, error: null }));
@@ -340,28 +318,16 @@ export function validateUnit(unit: Partial<Unit>): {
 } {
   const errors: string[] = [];
 
-  if (!unit.title || unit.title.trim().length < 3) {
-    errors.push("Unit title must be at least 3 characters long");
-  }
-
-  if (unit.title && unit.title.length > 100) {
-    errors.push("Unit title must be less than 100 characters");
+  if (!unit.title?.trim()) {
+    errors.push("Title is required");
   }
 
   if (!unit.module_id) {
-    errors.push("Unit must be associated with a module");
+    errors.push("Module is required");
   }
 
-  if (unit.description && unit.description.length > 500) {
-    errors.push("Unit description must be less than 500 characters");
-  }
-
-  if (
-    unit.estimated_duration_minutes &&
-    (unit.estimated_duration_minutes < 1 ||
-      unit.estimated_duration_minutes > 1440)
-  ) {
-    errors.push("Estimated duration must be between 1 and 1440 minutes");
+  if (unit.estimated_duration_minutes && unit.estimated_duration_minutes < 1) {
+    errors.push("Duration must be at least 1 minute");
   }
 
   return {
@@ -371,78 +337,76 @@ export function validateUnit(unit: Partial<Unit>): {
 }
 
 /**
- * Get unit statistics (mock implementation)
+ * Get unit statistics (mock implementation for now)
  */
 export async function getUnitStats(unitId: string) {
-  // Simulate API delay
-  await new Promise((resolve) => setTimeout(resolve, 200));
-
-  // Return mock statistics
+  // This would typically fetch from analytics or progress tables
   return {
-    content: Math.floor(Math.random() * 10) + 1,
-    completions: Math.floor(Math.random() * 50) + 5,
-    avgRating: (Math.random() * 2 + 3).toFixed(1), // 3.0 - 5.0
+    totalStudents: 0,
+    averageCompletionTime: 0,
+    completionRate: 0,
   };
 }
 
 /**
- * Duplicate a unit (mock implementation)
+ * Duplicate a unit
  */
 export async function duplicateUnit(unitId: string) {
-  try {
-    // Simulate API delay
-    await new Promise((resolve) => setTimeout(resolve, 500));
+  console.log("🔍 Duplicating unit:", unitId);
 
-    const currentUnits = getInitialUnits();
-    const originalUnit = currentUnits.find((u) => u.id === unitId);
-    if (!originalUnit) {
-      throw new Error("Unit not found");
+  try {
+    // Get the original unit
+    const { data: originalUnit, error: fetchError } = await supabase
+      .from("units")
+      .select("*")
+      .eq("id", unitId)
+      .single();
+
+    if (fetchError) {
+      console.error("❌ Error fetching unit to duplicate:", fetchError);
+      return { data: null, error: fetchError.message };
     }
 
-    // Calculate next order index for this module
-    const moduleUnits = currentUnits.filter(
-      (u) => u.module_id === originalUnit.module_id
-    );
-    const nextOrder = Math.max(...moduleUnits.map((u) => u.order_index)) + 1;
-
-    const duplicatedUnit: Unit = {
+    // Create duplicate with modified title
+    const duplicateData = {
       ...originalUnit,
-      id: `unit-${Date.now()}`,
+      id: undefined, // Let Supabase generate new ID
       title: `${originalUnit.title} (Copy)`,
       slug: generateSlug(`${originalUnit.title} (Copy)`),
-      order_index: nextOrder,
       is_published: false,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
+      created_at: undefined, // Let Supabase set this
+      updated_at: undefined, // Let Supabase set this
     };
 
-    const updatedUnits = [...currentUnits, duplicatedUnit].sort(
-      (a, b) => a.order_index - b.order_index
-    );
-    saveUnitsToStorage(updatedUnits);
+    const { data: newUnit, error } = await supabase
+      .from("units")
+      .insert(duplicateData)
+      .select()
+      .single();
 
-    // Update store
-    unitsStore.update((state) => ({
-      ...state,
-      units: updatedUnits,
-    }));
+    if (error) {
+      console.error("❌ Error duplicating unit:", error);
+      return { data: null, error: error.message };
+    }
 
-    console.log("✅ Unit duplicated successfully:", duplicatedUnit.title);
-    return { data: duplicatedUnit, error: null };
+    console.log("✅ Unit duplicated successfully:", newUnit);
+
+    // Refresh the units list
+    await loadUnits();
+
+    return { data: newUnit, error: null };
   } catch (error) {
+    console.error("❌ Unexpected error duplicating unit:", error);
     const errorMessage =
       error instanceof Error ? error.message : "Failed to duplicate unit";
-    unitsStore.update((state) => ({ ...state, error: errorMessage }));
     return { data: null, error: errorMessage };
   }
 }
 
 /**
- * Get units by module ID (helper function)
+ * Get units by module (helper function)
  */
 export function getUnitsByModule(moduleId: string): Unit[] {
-  const currentUnits = getInitialUnits();
-  return currentUnits
-    .filter((unit) => unit.module_id === moduleId)
-    .sort((a, b) => a.order_index - b.order_index);
+  const state = get(unitsStore);
+  return state.units.filter((unit: Unit) => unit.module_id === moduleId);
 }

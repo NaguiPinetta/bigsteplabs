@@ -47,9 +47,23 @@
   }));
 
   onMount(async () => {
+    console.log("🔍 Units page onMount - Debug info:");
+    console.log("  - User:", user);
+    console.log("  - Can manage:", canManage);
+    console.log("  - Auth store state:", $authStore);
+
     if (canManage) {
+      console.log("✅ Loading units and modules...");
       // Load both units and modules
       await Promise.all([loadUnits(), loadModules()]);
+      console.log(
+        "📋 Load complete - Units:",
+        units.length,
+        "Modules:",
+        modules.length
+      );
+    } else {
+      console.log("❌ Cannot manage content - not loading data");
     }
   });
 

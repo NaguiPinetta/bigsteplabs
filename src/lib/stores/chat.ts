@@ -436,32 +436,47 @@ async function getMessageCount(sessionId: string): Promise<number> {
 }
 
 /**
- * Simulate AI response (replace with actual AI integration)
+ * Simulate AI response based on agent configuration and user message
  */
 async function simulateAIResponse(
   userMessage: string,
   sessionId: string
 ): Promise<string> {
-  // Get the current session to access agent info
+  // Get the current session and agent info from Supabase
   let currentAgent: any = null;
   let currentSession: any = null;
 
-  if (typeof localStorage !== "undefined") {
-    const sessionsData = localStorage.getItem("bigstep_chat_sessions");
-    if (sessionsData) {
-      const sessions = JSON.parse(sessionsData);
-      currentSession = sessions.find((s: any) => s.id === sessionId);
+  try {
+    // Fetch session with agent details
+    const { data: sessionData, error: sessionError } = await supabase
+      .from("chat_sessions")
+      .select(
+        `
+        *,
+        agent:agents(
+          id, name, description, dataset_ids,
+          persona:personas(id, name, system_prompt),
+          model:models(id, name, provider, engine)
+        )
+      `
+      )
+      .eq("id", sessionId)
+      .single();
 
-      if (currentSession) {
-        const agentsData = localStorage.getItem("bigstep_agents");
-        if (agentsData) {
-          const agents = JSON.parse(agentsData);
-          currentAgent = agents.find(
-            (a: any) => a.id === currentSession.agent_id
-          );
-        }
-      }
+    if (sessionError) {
+      console.error("❌ Error fetching session:", sessionError);
+      return "I'm having trouble accessing the session information. Please try again.";
     }
+
+    currentSession = sessionData;
+    currentAgent = sessionData.agent;
+
+    if (!currentAgent) {
+      return "I'm sorry, but I can't find the agent configuration for this session.";
+    }
+  } catch (error) {
+    console.error("❌ Error in simulateAIResponse:", error);
+    return "I'm experiencing technical difficulties. Please try again.";
   }
 
   // Simulate processing time
@@ -480,23 +495,14 @@ async function simulateAIResponse(
 
     // Get persona system prompt if available
     let personaSystemPrompt = "";
-    if (currentAgent.persona_id && typeof localStorage !== "undefined") {
-      const personasData = localStorage.getItem("bigstep_personas");
-      if (personasData) {
-        const allPersonas = JSON.parse(personasData);
-        const agentPersona = allPersonas.find(
-          (p: any) => p.id === currentAgent.persona_id
-        );
-        if (agentPersona && agentPersona.system_prompt) {
-          personaSystemPrompt = agentPersona.system_prompt;
-          console.log(
-            "🎭 Using persona system prompt for",
-            agentName,
-            ":",
-            agentPersona.name
-          );
-        }
-      }
+    if (currentAgent.persona?.system_prompt) {
+      personaSystemPrompt = currentAgent.persona.system_prompt;
+      console.log(
+        "🎭 Using persona system prompt for",
+        agentName,
+        ":",
+        currentAgent.persona.name
+      );
     }
 
     // Use both persona system prompt and agent description as behavioral guide
@@ -836,21 +842,23 @@ async function simulateAIResponse(
 
       // Get dataset context and content if available
       let datasetContext = "";
-      if (hasDatasets && typeof localStorage !== "undefined") {
-        const datasetsData = localStorage.getItem("bigstep_datasets");
-        if (datasetsData) {
-          const allDatasets = JSON.parse(datasetsData);
-          const agentDatasets = allDatasets.filter((d: any) =>
-            currentAgent.dataset_ids.includes(d.id)
-          );
-          if (agentDatasets.length > 0) {
-            const datasetNames = agentDatasets
+      if (hasDatasets) {
+        try {
+          const { data: datasetsData, error: datasetsError } = await supabase
+            .from("datasets")
+            .select("id, name, metadata")
+            .in("id", currentAgent.dataset_ids);
+
+          if (datasetsError) {
+            console.error("❌ Error fetching datasets:", datasetsError);
+          } else if (datasetsData && datasetsData.length > 0) {
+            const datasetNames = datasetsData
               .map((d: any) => d.name)
               .join(", ");
             datasetContext = ` I can help you with materials from: ${datasetNames}.`;
 
             // Check for curriculum content in datasets
-            agentDatasets.forEach((dataset: any) => {
+            datasetsData.forEach((dataset: any) => {
               if (dataset.metadata?.text_content) {
                 const content = dataset.metadata.text_content.toLowerCase();
                 if (
@@ -870,6 +878,8 @@ async function simulateAIResponse(
               }
             });
           }
+        } catch (error) {
+          console.error("❌ Error processing datasets:", error);
         }
       }
 

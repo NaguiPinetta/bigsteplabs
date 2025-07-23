@@ -69,7 +69,11 @@
 
   let validationErrors: string[] = [];
   let testingModel: string | null = null;
-  let testResults: Record<string, { success: boolean; error?: string }> = {};
+  let testResults: Record<
+    string,
+    { success: boolean; error?: string; response?: string }
+  > = {};
+  let hasLoadedModels = false; // Flag to prevent infinite loop
 
   let providers = getModelProviders();
   let presets = getModelPresets();
@@ -101,12 +105,21 @@
     // Load models immediately - don't wait for permission checks
     console.log("🔄 Loading models on page mount...");
     loadModels();
+    hasLoadedModels = true;
   });
 
   // Also load models when user becomes available (fallback)
-  $: if (user && canManage && !state.loading && models && models.length === 0) {
+  $: if (
+    user &&
+    canManage &&
+    !state.loading &&
+    !hasLoadedModels &&
+    models &&
+    models.length === 0
+  ) {
     console.log("🔄 Fallback: Loading models for authenticated user...");
     loadModels();
+    hasLoadedModels = true;
   }
 
   function resetNewModel() {
@@ -189,7 +202,11 @@
   async function handleTestModel(model: any) {
     testingModel = model.id;
     const result = await testModel(model.id);
-    testResults[model.id] = result;
+    testResults[model.id] = {
+      success: result.success,
+      error: result.error || undefined,
+      response: result.response || undefined,
+    };
     testingModel = null;
   }
 
