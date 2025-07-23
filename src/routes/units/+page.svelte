@@ -171,32 +171,11 @@
   {:else if units.length === 0}
     <Card class="p-12 text-center">
       <Layers3 class="w-16 h-16 text-muted-foreground mx-auto mb-4" />
-      <h2 class="text-xl font-semibold mb-2">No Units Yet</h2>
+      <h3 class="text-xl font-semibold text-foreground mb-2">No Units Yet</h3>
       <p class="text-muted-foreground mb-6">
         Create your first unit to start organizing your learning content. Units
         are lessons or activities within a module.
       </p>
-
-      {#if modules.length === 0}
-        <div
-          class="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-md p-4 mb-6"
-        >
-          <div class="flex items-center">
-            <AlertCircle class="w-5 h-5 text-yellow-600 mr-2" />
-            <div class="text-left">
-              <h4
-                class="text-sm font-medium text-yellow-800 dark:text-yellow-200"
-              >
-                No Modules Available
-              </h4>
-              <p class="mt-1 text-sm text-yellow-700 dark:text-yellow-300">
-                You need to create at least one module before you can create
-                units.
-              </p>
-            </div>
-          </div>
-        </div>
-      {/if}
 
       <Button on:click={openCreateDialog} disabled={modules.length === 0}>
         <Plus class="w-4 h-4 mr-2" />
