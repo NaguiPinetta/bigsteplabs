@@ -61,7 +61,14 @@ export interface Dataset {
   description?: string;
   user_id: string;
   file_url?: string;
+  file_name?: string;
+  file_size?: number;
+  file_type?: string;
+  content_type?: string;
+  text_content?: string;
+  text_format?: string;
   total_chunks?: number;
+  processing_status?: string;
   metadata?: Record<string, any>;
   created_at: string;
   updated_at?: string;

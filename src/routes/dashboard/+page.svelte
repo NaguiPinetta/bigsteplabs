@@ -15,8 +15,8 @@
     user: $authStore.user,
     hasUser: !!$authStore.user,
     userRole: $authStore.user?.role,
-    isAdmin: isAdmin($authStore.user),
-    canManageContent: canManageContent($authStore.user),
+    isAdmin: isAdmin(),
+    canManageContent: canManageContent(),
   });
 
   onMount(() => {
@@ -48,8 +48,8 @@
       <p><strong>Loading:</strong> {$authStore.loading}</p>
       <p><strong>Has User:</strong> {!!$authStore.user}</p>
       <p><strong>User Role:</strong> {$authStore.user?.role || "None"}</p>
-      <p><strong>Is Admin:</strong> {isAdmin($authStore.user)}</p>
-      <p><strong>Can Manage:</strong> {canManageContent($authStore.user)}</p>
+      <p><strong>Is Admin:</strong> {isAdmin()}</p>
+      <p><strong>Can Manage:</strong> {canManageContent()}</p>
       <p>
         <strong>User Object:</strong>
         {JSON.stringify($authStore.user, null, 2)}
@@ -69,7 +69,7 @@
   {:else if user}
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
       <!-- Student Dashboard -->
-      {#if isCollaborator(user) || isStudent(user)}
+      {#if isCollaborator() || isStudent()}
         <div class="bg-card p-6 rounded-lg border shadow-sm">
           <h2 class="text-lg font-semibold mb-2">📚 My Learning</h2>
           <p class="text-muted-foreground text-sm mb-4">
@@ -85,7 +85,7 @@
       {/if}
 
       <!-- Content Management (Admin/Collaborator) -->
-      {#if canManageContent(user)}
+      {#if canManageContent()}
         <div class="bg-card p-6 rounded-lg border shadow-sm">
           <h2 class="text-lg font-semibold mb-2">📝 Content</h2>
           <p class="text-muted-foreground text-sm mb-4">
@@ -166,7 +166,7 @@
       {/if}
 
       <!-- Admin Only -->
-      {#if isAdmin(user)}
+      {#if isAdmin()}
         <div class="bg-card p-6 rounded-lg border shadow-sm">
           <h2 class="text-lg font-semibold mb-2">⚙️ System</h2>
           <p class="text-muted-foreground text-sm mb-4">

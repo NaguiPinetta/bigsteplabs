@@ -10,7 +10,8 @@
     // Get all VITE_ environment variables
     envVars = {
       VITE_SUPABASE_URL: import.meta.env.VITE_SUPABASE_URL,
-      VITE_PUBLISHABLE_KEY: import.meta.env.VITE_PUBLISHABLE_KEY,
+      VITE_SUPABASE_PUBLISHABLE_KEY: import.meta.env
+        .VITE_SUPABASE_PUBLISHABLE_KEY,
       VITE_SUPABASE_SERVICE_ROLE_KEY: import.meta.env
         .VITE_SUPABASE_SERVICE_ROLE_KEY,
       VITE_OPENAI_API_KEY: import.meta.env.VITE_OPENAI_API_KEY,
@@ -19,8 +20,8 @@
     // Get Supabase client config from environment variables
     supabaseConfig = {
       url: import.meta.env.VITE_SUPABASE_URL,
-      key: import.meta.env.VITE_PUBLISHABLE_KEY
-        ? `${import.meta.env.VITE_PUBLISHABLE_KEY.substring(0, 20)}...`
+      key: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY
+        ? `${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY.substring(0, 20)}...`
         : "undefined",
     };
   });

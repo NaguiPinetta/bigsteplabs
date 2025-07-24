@@ -59,7 +59,7 @@
   };
 
   $: user = $authStore.user;
-  $: canManage = canManageContent(user);
+  $: canManage = canManageContent();
   $: state = $datasetsStore;
   $: datasets = state.datasets;
   $: selectedDataset = state.selectedDataset;
@@ -83,36 +83,43 @@
   }
 
   async function handleCreateDataset() {
-    if (!newDataset.name.trim()) return;
+    if (!newDataset.name.trim() || !user) return;
 
-    const datasetData = {
-      name: newDataset.name.trim(),
-      description: newDataset.description.trim() || undefined,
-      content_type: newDataset.contentType as "file" | "text",
-      text_content:
-        newDataset.contentType === "text" ? newDataset.textContent : undefined,
-      text_format:
-        newDataset.contentType === "text"
-          ? (newDataset.textFormat as "json" | "markdown" | "plain")
-          : undefined,
-      file:
-        newDataset.contentType === "file" && newDataset.file
-          ? newDataset.file
-          : undefined,
-    };
-
-    const result = await createDataset(datasetData);
-
-    if (result.data) {
-      newDataset = {
-        name: "",
-        description: "",
-        contentType: "file",
-        textFormat: "plain",
-        textContent: "",
-        file: null as File | null,
+    try {
+      const datasetData = {
+        name: newDataset.name.trim(),
+        description: newDataset.description.trim() || null,
+        user_id: user.id,
+        content_type: newDataset.contentType as "file" | "text",
+        text_content:
+          newDataset.contentType === "text" ? newDataset.textContent : null,
+        text_format:
+          newDataset.contentType === "text"
+            ? (newDataset.textFormat as "json" | "markdown" | "plain")
+            : null,
+        file:
+          newDataset.contentType === "file" && newDataset.file
+            ? newDataset.file
+            : undefined,
       };
-      createDialogOpen = false;
+
+      const result = await createDataset(datasetData);
+
+      if (result) {
+        newDataset = {
+          name: "",
+          description: "",
+          contentType: "file",
+          textFormat: "plain",
+          textContent: "",
+          file: null as File | null,
+        };
+        createDialogOpen = false;
+      }
+    } catch (error) {
+      console.error("Error creating dataset:", error);
+      // Show error to user
+      alert("Failed to create dataset. Please check the console for details.");
     }
   }
 

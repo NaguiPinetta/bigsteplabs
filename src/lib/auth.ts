@@ -1,76 +1,116 @@
 import { supabase } from "./supabase";
-import { goto } from "$app/navigation";
 import { browser } from "$app/environment";
-import { setSessionManually } from "./stores/auth";
+import type { Session } from "@supabase/supabase-js";
 
-export interface AuthError {
+// Helper function to get the correct redirect URL based on environment
+function getRedirectUrl(redirectTo?: string): string {
+  const baseUrl = window.location.origin;
+  const callbackPath = "/auth/callback";
+
+  if (redirectTo) {
+    return `${baseUrl}${callbackPath}?next=${encodeURIComponent(redirectTo)}`;
+  }
+
+  return `${baseUrl}${callbackPath}`;
+}
+
+interface AuthError {
   type:
     | "no_code"
     | "invalid_link"
     | "exchange_failed"
     | "network_error"
-    | "unknown";
+    | "unknown"
+    | "auth_error"
+    | "no_tokens"
+    | "profile_creation_error"
+    | "profile_fetch_error";
   message: string;
   details?: any;
 }
 
-export interface AuthResult {
+interface AuthResult {
   success: boolean;
   error?: AuthError;
-  session?: any;
+  session?: Session;
   user?: any;
+  next?: string;
 }
 
 /**
- * Handle magic link authentication flow
- * Supports both URL hash (#access_token) and query parameter (?code=) formats
+ * Handle magic link authentication from URL parameters
  */
 export async function handleMagicLinkAuth(): Promise<AuthResult> {
-  if (!browser) {
-    return {
-      success: false,
-      error: { type: "unknown", message: "Not in browser environment" },
-    };
-  }
-
   try {
-    console.log("🔍 Starting magic link auth flow...");
+    console.log("🔍 Handling magic link authentication");
 
-    // Check for access token in URL hash (new Supabase format)
+    // Check for hash fragment (older Supabase versions)
     const hashParams = new URLSearchParams(window.location.hash.substring(1));
     const accessToken = hashParams.get("access_token");
     const refreshToken = hashParams.get("refresh_token");
-    const tokenType = hashParams.get("type");
 
-    console.log("🔍 URL hash params:", {
-      accessToken: !!accessToken,
-      refreshToken: !!refreshToken,
-      tokenType,
-    });
+    if (accessToken && refreshToken) {
+      console.log("🔍 Found tokens in hash fragment");
+      const { data, error } = await supabase.auth.setSession({
+        access_token: accessToken,
+        refresh_token: refreshToken,
+      });
 
-    if (accessToken && refreshToken && tokenType === "magiclink") {
-      console.log("✅ Found access token in URL hash");
-      return await handleAccessTokenAuth(accessToken, refreshToken);
+      if (error) {
+        console.error("❌ Hash auth failed:", error.message);
+        return {
+          success: false,
+          error: {
+            type: "auth_error",
+            message: error.message,
+            details: error,
+          },
+        };
+      }
+
+      if (data.session) {
+        console.log("✅ Hash authentication successful");
+        return { success: true, session: data.session };
+      }
     }
 
-    // Check for code in URL query parameters (legacy format)
+    // Check for query parameters (newer Supabase versions)
     const urlParams = new URLSearchParams(window.location.search);
     const code = urlParams.get("code");
-
-    console.log("🔍 URL query params:", { code: !!code });
+    const next = urlParams.get("next");
 
     if (code) {
-      console.log("✅ Found code in URL query");
-      return await handleCodeAuth(code);
+      console.log("🔍 Found auth code in query parameters");
+      const { data, error } = await supabase.auth.exchangeCodeForSession(code);
+
+      if (error) {
+        console.error("❌ Code exchange failed:", error.message);
+        return {
+          success: false,
+          error: {
+            type: "auth_error",
+            message: error.message,
+            details: error,
+          },
+        };
+      }
+
+      if (data.session) {
+        console.log("✅ Code exchange successful");
+        return {
+          success: true,
+          session: data.session,
+          next: next || undefined,
+        };
+      }
     }
 
-    // No authentication parameters found
-    console.log("❌ No authentication parameters found");
+    console.log("❌ No authentication tokens found");
     return {
       success: false,
       error: {
-        type: "no_code",
-        message: "No authentication code or token found in URL",
+        type: "no_tokens",
+        message: "No authentication tokens found in URL",
       },
     };
   } catch (error) {
@@ -78,8 +118,8 @@ export async function handleMagicLinkAuth(): Promise<AuthResult> {
     return {
       success: false,
       error: {
-        type: "unknown",
-        message: "Unexpected error during authentication",
+        type: "network_error",
+        message: "Authentication failed",
         details: error,
       },
     };
@@ -143,10 +183,10 @@ async function handleAccessTokenAuth(
     });
 
     // Create user profile if needed
-    await ensureUserProfile(data.session.user);
+    await ensureUserProfile(data.session);
 
     // Update the auth store to prevent timeout - only set session, let store handle user
-    setSessionManually(data.session, null);
+    // setSessionManually(data.session, null); // This line was removed as per the new_code
 
     return {
       success: true,
@@ -201,10 +241,10 @@ async function handleCodeAuth(code: string): Promise<AuthResult> {
     console.log("✅ Code authentication successful");
 
     // Create user profile if needed
-    await ensureUserProfile(data.session.user);
+    await ensureUserProfile(data.session);
 
     // Update the auth store to prevent timeout - only set session, let store handle user
-    setSessionManually(data.session, null);
+    // setSessionManually(data.session, null); // This line was removed as per the new_code
 
     return {
       success: true,
@@ -227,40 +267,75 @@ async function handleCodeAuth(code: string): Promise<AuthResult> {
 /**
  * Ensure user profile exists in our users table
  */
-async function ensureUserProfile(user: any): Promise<void> {
+export async function ensureUserProfile(session: Session): Promise<AuthResult> {
   try {
-    console.log("🔍 Ensuring user profile exists...");
+    console.log("🔍 Ensuring user profile exists");
 
+    // Check if user profile exists
     const { data: existingUser, error: fetchError } = await supabase
       .from("users")
       .select("*")
-      .eq("id", user.id)
+      .eq("id", session.user.id)
       .single();
 
     if (fetchError && fetchError.code === "PGRST116") {
-      // User doesn't exist, create them
-      console.log("📝 Creating new user profile...");
-      const { error: createError } = await supabase.from("users").insert({
-        id: user.id,
-        email: user.email,
-        role: "Student", // Default role
-      });
+      // User doesn't exist, create profile
+      console.log("🔍 Creating new user profile");
+      const { data: newUser, error: createError } = await supabase
+        .from("users")
+        .insert({
+          id: session.user.id,
+          email: session.user.email || "",
+          role: "Student", // Default role
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .select()
+        .single();
 
       if (createError) {
-        console.error("❌ Failed to create user profile:", createError);
-      } else {
-        console.log("✅ User profile created successfully");
+        console.error("❌ Failed to create user profile:", createError.message);
+        return {
+          success: false,
+          error: {
+            type: "profile_creation_error",
+            message: "Failed to create user profile",
+            details: createError,
+          },
+        };
       }
-    } else if (existingUser) {
-      console.log("✅ User profile already exists");
+
+      console.log("✅ User profile created successfully");
+      return { success: true, user: newUser };
+    } else if (fetchError) {
+      console.error("❌ Failed to fetch user profile:", fetchError.message);
+      return {
+        success: false,
+        error: {
+          type: "profile_fetch_error",
+          message: "Failed to fetch user profile",
+          details: fetchError,
+        },
+      };
     }
+
+    console.log("✅ User profile already exists");
+    return { success: true, user: existingUser };
   } catch (error) {
-    console.error("❌ Error ensuring user profile:", error);
+    console.error("❌ User profile error:", error);
+    return {
+      success: false,
+      error: {
+        type: "network_error",
+        message: "Failed to ensure user profile",
+        details: error,
+      },
+    };
   }
 }
 
 /**
- * Send magic link email
+ * Send magic link to user's email
  */
 export async function sendMagicLink(
   email: string,
@@ -269,21 +344,34 @@ export async function sendMagicLink(
   try {
     console.log("🔍 Sending magic link to:", email);
 
-    const callbackUrl = redirectTo
-      ? `${window.location.origin}/auth/callback?next=${encodeURIComponent(
-          redirectTo
-        )}`
-      : `${window.location.origin}/auth/callback`;
+    // Determine the correct callback URL based on environment
+    let callbackUrl;
+    if (window.location.origin.includes("localhost")) {
+      // Force localhost redirect
+      callbackUrl = redirectTo
+        ? `http://localhost:5173/auth/callback?next=${encodeURIComponent(
+            redirectTo
+          )}`
+        : `http://localhost:5173/auth/callback`;
+    } else {
+      // Use production redirect
+      callbackUrl = redirectTo
+        ? `${window.location.origin}/auth/callback?next=${encodeURIComponent(
+            redirectTo
+          )}`
+        : `${window.location.origin}/auth/callback`;
+    }
 
     const { error } = await supabase.auth.signInWithOtp({
       email,
       options: {
         emailRedirectTo: callbackUrl,
+        shouldCreateUser: true,
       },
     });
 
     if (error) {
-      console.error("❌ Magic link send failed:", error);
+      console.error("❌ Magic link send failed:", error.message);
       return {
         success: false,
         error: {
@@ -321,11 +409,11 @@ export async function signOut(redirectTo?: string): Promise<void> {
     const redirectUrl = redirectTo || "/auth/login";
     console.log("🔄 Redirecting to:", redirectUrl);
 
-    await goto(redirectUrl, { replaceState: true });
+    // await goto(redirectUrl, { replaceState: true }); // This line was removed as per the new_code
   } catch (error) {
     console.error("❌ Sign out error:", error);
     // Still redirect even if sign out fails
-    await goto("/auth/login", { replaceState: true });
+    // await goto("/auth/login", { replaceState: true }); // This line was removed as per the new_code
   }
 }
 
@@ -359,42 +447,30 @@ export async function isAuthenticated(): Promise<boolean> {
   return !!session;
 }
 
-/**
- * Redirect authenticated user to appropriate page
- */
 export async function redirectAuthenticatedUser(): Promise<void> {
   try {
-    console.log("🔍 Checking authentication status for redirect...");
-    const session = await getCurrentSession();
-
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
     if (session) {
-      console.log("✅ User is authenticated, redirecting to dashboard");
-      console.log("🔍 Session user:", {
-        id: session.user.id,
-        email: session.user.email,
-      });
-      await goto("/dashboard", { replaceState: true });
-    } else {
-      console.log("❌ No session found, redirecting to login");
-      await goto("/auth/login", { replaceState: true });
+      console.log("🔍 User already authenticated, redirecting to dashboard");
+      window.location.href = "/dashboard";
     }
   } catch (error) {
-    console.error("❌ Redirect error:", error);
-    // Fallback to login page
-    await goto("/auth/login", { replaceState: true });
+    console.error("❌ Redirect check failed:", error);
   }
 }
 
-/**
- * Redirect unauthenticated user to login
- */
 export async function redirectUnauthenticatedUser(): Promise<void> {
   try {
-    console.log("❌ User is not authenticated, redirecting to login");
-    await goto("/auth/login", { replaceState: true });
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    if (!session) {
+      console.log("🔍 User not authenticated, redirecting to login");
+      window.location.href = "/auth/login";
+    }
   } catch (error) {
-    console.error("❌ Redirect error:", error);
-    // Fallback to login page
-    window.location.href = "/auth/login";
+    console.error("❌ Redirect check failed:", error);
   }
 }

@@ -1,6 +1,10 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { handleMagicLinkAuth, redirectAuthenticatedUser } from "$lib/auth";
+  import {
+    handleMagicLinkAuth,
+    redirectAuthenticatedUser,
+    ensureUserProfile,
+  } from "$lib/auth";
   import Button from "$lib/components/ui/button.svelte";
   import Card from "$lib/components/ui/card.svelte";
   import { AlertCircle, CheckCircle, Loader2 } from "lucide-svelte";
@@ -28,8 +32,22 @@
         hasUser: !!result.user,
       });
 
-      if (result.success) {
+      if (result.success && result.session) {
         console.log("✅ Authentication successful");
+
+        // Ensure user profile exists
+        console.log("🔍 Ensuring user profile exists...");
+        const profileResult = await ensureUserProfile(result.session);
+
+        if (profileResult.success) {
+          console.log("✅ User profile ensured:", profileResult.user);
+        } else {
+          console.error(
+            "❌ Failed to ensure user profile:",
+            profileResult.error
+          );
+        }
+
         status = "Authentication successful! Redirecting...";
         success = true;
 

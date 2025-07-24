@@ -28,6 +28,7 @@
     clearChatError,
     setCurrentSession,
   } from "$lib/stores/chat";
+  import { isOpenAIConfigured } from "$lib/utils/openai-test";
 
   // Reactive state
   $: ({ user } = $authStore);
@@ -295,8 +296,17 @@
                 class="flex items-center space-x-2 text-sm text-muted-foreground"
               >
                 <Users class="w-3 h-3" />
-                <span>{currentSession.agent?.persona?.name || "Assistant"}</span
-                >
+                <span>{currentSession.agent?.persona?.name || "Assistant"}</span>
+                <span>•</span>
+                <span class="flex items-center space-x-1">
+                  {#if isOpenAIConfigured()}
+                    <div class="w-2 h-2 bg-green-500 rounded-full"></div>
+                    <span class="text-xs">OpenAI</span>
+                  {:else}
+                    <div class="w-2 h-2 bg-red-500 rounded-full"></div>
+                    <span class="text-xs">No API Key</span>
+                  {/if}
+                </span>
                 <span>•</span>
                 <Cpu class="w-3 h-3" />
                 <span>{currentSession.agent?.model?.name || "AI Model"}</span>

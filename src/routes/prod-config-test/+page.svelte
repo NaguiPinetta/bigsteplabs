@@ -18,7 +18,7 @@
     try {
       // Check environment variables
       const url = import.meta.env.VITE_SUPABASE_URL;
-      const key = import.meta.env.VITE_PUBLISHABLE_KEY;
+      const key = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 
       if (!url || url === "https://placeholder.supabase.co") {
         configStatus = "❌ VITE_SUPABASE_URL not set";
@@ -26,7 +26,7 @@
       }
 
       if (!key || key === "placeholder-key") {
-        configStatus = "❌ VITE_PUBLISHABLE_KEY not set";
+        configStatus = "❌ VITE_SUPABASE_PUBLISHABLE_KEY not set";
         return;
       }
 
@@ -54,7 +54,7 @@
         authStatus = "✅ Authentication configured";
       }
     } catch (error) {
-      configStatus = `❌ Configuration error: ${error.message}`;
+      configStatus = `❌ Configuration error: ${error instanceof Error ? error.message : String(error)}`;
     }
   }
 
@@ -73,7 +73,7 @@
         authStatus = "✅ Magic link sent successfully";
       }
     } catch (error) {
-      authStatus = `❌ Magic link error: ${error.message}`;
+      authStatus = `❌ Magic link error: ${error instanceof Error ? error.message : String(error)}`;
     }
   }
 </script>
@@ -152,8 +152,10 @@
           {import.meta.env.VITE_SUPABASE_URL ? "✅ Set" : "❌ Not set"}
         </div>
         <div>
-          <strong>VITE_PUBLISHABLE_KEY:</strong>
-          {import.meta.env.VITE_PUBLISHABLE_KEY ? "✅ Set" : "❌ Not set"}
+          <strong>VITE_SUPABASE_PUBLISHABLE_KEY:</strong>
+          {import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY
+            ? "✅ Set"
+            : "❌ Not set"}
         </div>
       </div>
     </Card>

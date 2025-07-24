@@ -1,7 +1,7 @@
 import { writable } from "svelte/store";
-import type { User, Session } from "@supabase/supabase-js";
-import type { User as AppUser } from "../types";
+import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "../supabase";
+import type { User as AppUser } from "../types";
 
 interface AuthState {
   session: Session | null;
@@ -9,232 +9,160 @@ interface AuthState {
   loading: boolean;
 }
 
-const initialState: AuthState = {
-  session: null,
-  user: null,
-  loading: true,
-};
-
+const initialState: AuthState = { session: null, user: null, loading: true };
 export const authStore = writable<AuthState>(initialState);
 
-// Track if initialization is in progress to prevent multiple calls
-let initializingAuth = false;
-// Track if we're manually setting a session to prevent conflicts
-let manuallySettingSession = false;
+// Sign in using Supabase email/password (for admin or regular users)
+export async function signInWithEmail(email: string, password: string) {
+  const { data, error } = await supabase.auth.signInWithPassword({
+    email,
+    password,
+  });
+  if (error) return { success: false, error: error.message };
+  await updateAuthState(data.session);
+  return { success: true };
+}
 
-// Function to manually set session (used by auth utility)
-export const setSessionManually = (
-  session: Session | null,
-  user: AppUser | null
-) => {
-  manuallySettingSession = true;
-  authStore.set({ session, user, loading: false });
-  // Reset flag after a short delay
-  setTimeout(() => {
-    manuallySettingSession = false;
-  }, 1000);
-};
+// Sign in via magic link (already available in src/lib/auth.ts)
+// The login page can call sendMagicLink() for non-password flows
 
-// Simple admin login function
-export const signInAsAdmin = async (
-  username: string,
-  password: string
-): Promise<{ success: boolean; error?: string }> => {
-  try {
-    // Check hardcoded admin credentials
-    if (username === "admin" && password === "B1g573p1d10m45") {
-      const mockUser: AppUser = {
-        id: "admin-mock-id",
-        email: "admin@bigsteplabs.com",
-        role: "Admin",
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      };
+// Remove the previous signInAsAdmin function entirely. Instead, after
+// signing in, check the user's role to determine admin privileges:
 
-      const mockSession = {
-        access_token: "mock-admin-token",
-        refresh_token: "mock-refresh-token",
-        expires_in: 3600,
-        token_type: "bearer",
-        user: {
-          id: mockUser.id,
-          email: mockUser.email || "",
-        },
-      } as any;
-
-      // Store in localStorage for persistence
-      if (typeof localStorage !== "undefined") {
-        localStorage.setItem(
-          "bigstep_auth_session",
-          JSON.stringify(mockSession)
-        );
-        localStorage.setItem("bigstep_auth_user", JSON.stringify(mockUser));
-      }
-
-      // Set auth state
-      authStore.set({
-        session: mockSession,
-        user: mockUser,
-        loading: false,
-      });
-
-      return { success: true };
-    } else {
-      return { success: false, error: "Invalid username or password" };
-    }
-  } catch (error) {
-    return { success: false, error: "Authentication failed" };
-  }
-};
-
-// Initialize auth state
-export const initAuth = async () => {
-  if (initializingAuth || manuallySettingSession) {
-    console.log(
-      "Auth initialization already in progress or session being set manually"
-    );
+async function updateAuthState(session: Session | null) {
+  if (!session) {
+    authStore.set({ session: null, user: null, loading: false });
     return;
   }
-
-  initializingAuth = true;
-
+  
   try {
-    console.log("Starting auth initialization");
-
-    // First check for localStorage session (for simple admin login)
-    if (typeof localStorage !== "undefined") {
-      const storedSession = localStorage.getItem("bigstep_auth_session");
-      const storedUser = localStorage.getItem("bigstep_auth_user");
-
-      if (storedSession && storedUser) {
-        try {
-          const session = JSON.parse(storedSession);
-          const user = JSON.parse(storedUser);
-
-          authStore.set({
-            session,
-            user,
-            loading: false,
-          });
-
-          initializingAuth = false;
-          return;
-        } catch (e) {
-          // Clear invalid stored data
-          localStorage.removeItem("bigstep_auth_session");
-          localStorage.removeItem("bigstep_auth_user");
-        }
-      }
-    }
-
-    // Set timeout to prevent infinite loading
-    const timeoutId = setTimeout(() => {
-      console.log("Auth initialization timeout - setting loading to false");
-      authStore.set({ session: null, user: null, loading: false });
-      initializingAuth = false;
-    }, 10000); // 10 second timeout
-
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
-
-    clearTimeout(timeoutId);
-    console.log("Supabase getSession result:", { hasSession: !!session });
-
-    if (session) {
-      await updateAuthState(session);
-    } else {
-      console.log("No session found, setting auth state");
-      authStore.set({ session: null, user: null, loading: false });
-    }
-
-    // Listen for auth changes
-    supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log("Auth state change:", event, { hasSession: !!session });
-      if (session) {
-        await updateAuthState(session);
-      } else {
-        authStore.set({ session: null, user: null, loading: false });
-      }
-    });
-  } catch (error) {
-    console.error("Auth initialization error:", error);
-    authStore.set({ session: null, user: null, loading: false });
-  } finally {
-    initializingAuth = false;
-  }
-};
-
-async function updateAuthState(session: Session) {
-  try {
-    // Get user profile from our users table
-    const { data: userProfile, error } = await supabase
+    // Fetch the corresponding profile from your users table
+    const { data: profile, error } = await supabase
       .from("users")
       .select("*")
       .eq("id", session.user.id)
       .single();
-
-    if (error) {
-      console.error("Error fetching user profile:", error);
-      // If user doesn't exist in users table, create one
-      if (error.code === "PGRST116") {
+      
+          if (error && error.code === "PGRST116") {
+        // User doesn't exist, create profile
+        console.log("🔍 Creating new user profile for:", session.user.email);
+        
+        // Determine role based on email
+        let role = "Student"; // Default role
+        if (session.user.email === "jdpinetta@gmail.com") {
+          role = "Admin";
+          console.log("🔍 Setting admin role for:", session.user.email);
+        }
+        
         const { data: newUser, error: createError } = await supabase
           .from("users")
           .insert({
             id: session.user.id,
             email: session.user.email || "",
-            role: "Student", // Default role
+            role: role,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
           })
           .select()
           .single();
 
-        if (createError) {
-          console.error("Error creating user profile:", createError);
-          authStore.set({ session, user: null, loading: false });
-          return;
-        }
-
-        authStore.set({ session, user: newUser, loading: false });
-      } else {
+      if (createError) {
+        console.error("❌ Failed to create user profile:", createError);
         authStore.set({ session, user: null, loading: false });
+      } else {
+        console.log("✅ User profile created successfully:", newUser);
+        authStore.set({ session, user: newUser as AppUser, loading: false });
       }
+    } else if (error) {
+      console.error("❌ Failed to fetch user profile:", error);
+      authStore.set({ session, user: null, loading: false });
     } else {
-      authStore.set({ session, user: userProfile, loading: false });
+      console.log("✅ User profile found:", profile);
+      authStore.set({ session, user: profile as AppUser, loading: false });
     }
-  } catch (err) {
-    console.error("Auth state update error:", err);
+  } catch (error) {
+    console.error("❌ Error in updateAuthState:", error);
     authStore.set({ session, user: null, loading: false });
   }
 }
 
-export const signOut = async () => {
-  // Clear localStorage
-  if (typeof localStorage !== "undefined") {
-    localStorage.removeItem("bigstep_auth_session");
-    localStorage.removeItem("bigstep_auth_user");
-  }
-
-  // Sign out from Supabase
+export async function signOut() {
   await supabase.auth.signOut();
   authStore.set({ session: null, user: null, loading: false });
-};
+}
 
-// Force reset auth state (for clearing stuck sessions)
-export const resetAuth = () => {
-  initializingAuth = false;
-  if (typeof localStorage !== "undefined") {
-    localStorage.removeItem("bigstep_auth_session");
-    localStorage.removeItem("bigstep_auth_user");
+// Initialize auth state
+export async function initAuth() {
+  try {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    await updateAuthState(session);
+
+    // Listen for auth changes
+    supabase.auth.onAuthStateChange(async (event, session) => {
+      console.log("Auth state changed:", event);
+      await updateAuthState(session);
+    });
+  } catch (error) {
+    console.error("Auth initialization failed:", error);
+    authStore.set({ session: null, user: null, loading: false });
   }
-  authStore.set({ session: null, user: null, loading: false });
-};
+}
 
-// Helper functions for role checking
-export const isAdmin = (user: AppUser | null): boolean =>
-  user?.role === "Admin";
-export const isCollaborator = (user: AppUser | null): boolean =>
-  user?.role === "Collaborator";
-export const isStudent = (user: AppUser | null): boolean =>
-  user?.role === "Student";
-export const canManageContent = (user: AppUser | null): boolean =>
-  user?.role === "Admin" || user?.role === "Collaborator";
+// Helper functions
+export function getCurrentUser(): AppUser | null {
+  let user: AppUser | null = null;
+  authStore.subscribe((state) => {
+    user = state.user;
+  })();
+  return user;
+}
+
+export function getCurrentSession(): Session | null {
+  let session: Session | null = null;
+  authStore.subscribe((state) => {
+    session = state.session;
+  })();
+  return session;
+}
+
+export function isAuthenticated(): boolean {
+  let session: Session | null = null;
+  authStore.subscribe((state) => {
+    session = state.session;
+  })();
+  return !!session;
+}
+
+// Role helpers
+export function hasRole(role: string): boolean {
+  const user = getCurrentUser();
+  return user?.role === role;
+}
+
+export function isStudent(): boolean {
+  return hasRole("Student");
+}
+
+export function isInstructor(): boolean {
+  return hasRole("Instructor");
+}
+
+export function isAdmin(): boolean {
+  return hasRole("Admin");
+}
+
+export function isCollaborator(): boolean {
+  return hasRole("Collaborator");
+}
+
+export function canManageContent(): boolean {
+  const user = getCurrentUser();
+  return user?.role === "Admin" || user?.role === "Collaborator";
+}
+
+// Reset auth state (for testing/debugging)
+export function resetAuth() {
+  authStore.set(initialState);
+}

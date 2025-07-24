@@ -157,6 +157,9 @@ export interface Database {
           file_name: string | null;
           file_size: number | null;
           file_type: string | null;
+          content_type: string;
+          text_content: string | null;
+          text_format: string | null;
           total_chunks: number;
           processing_status: string;
           metadata: any;
@@ -172,6 +175,9 @@ export interface Database {
           file_name?: string | null;
           file_size?: number | null;
           file_type?: string | null;
+          content_type?: string;
+          text_content?: string | null;
+          text_format?: string | null;
           total_chunks?: number;
           processing_status?: string;
           metadata?: any;
@@ -187,6 +193,9 @@ export interface Database {
           file_name?: string | null;
           file_size?: number | null;
           file_type?: string | null;
+          content_type?: string;
+          text_content?: string | null;
+          text_format?: string | null;
           total_chunks?: number;
           processing_status?: string;
           metadata?: any;

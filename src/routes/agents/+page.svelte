@@ -83,7 +83,7 @@
   let statuses = getAgentStatuses();
 
   $: user = $authStore.user;
-  $: canManage = canManageContent(user);
+  $: canManage = canManageContent();
   $: state = $agentsStore;
   $: agents = state.agents;
   $: selectedAgent = state.selectedAgent;
@@ -142,9 +142,8 @@
       description: newAgent.description.trim() || null,
       persona_id: newAgent.persona_id,
       model_id: newAgent.model_id,
-      dataset_id: newAgent.dataset_id || null,
+      dataset_ids: newAgent.dataset_id ? [newAgent.dataset_id] : [],
       status: newAgent.status,
-      configuration: newAgent.configuration,
       created_by: user.id,
     });
 
@@ -166,9 +165,8 @@
       description: editAgent.description.trim() || null,
       persona_id: editAgent.persona_id,
       model_id: editAgent.model_id,
-      dataset_id: editAgent.dataset_id || null,
-      status: editAgent.status,
-      configuration: editAgent.configuration,
+      dataset_ids: editAgent.dataset_id ? [editAgent.dataset_id] : [],
+      is_active: editAgent.status === "active",
     });
 
     if (result.data) {
@@ -190,7 +188,11 @@
   async function handleTestAgent(agent: any) {
     testingAgent = agent.id;
     const result = await testAgent(agent.id);
-    testResults[agent.id] = result;
+    testResults[agent.id] = {
+      success: result.success,
+      error: result.error || undefined,
+      response: result.response || undefined,
+    };
     testingAgent = null;
 
     if (result.success && result.response) {
@@ -200,8 +202,8 @@
   }
 
   async function toggleAgentStatus(agent: any) {
-    const newStatus = agent.status === "active" ? "inactive" : "active";
-    await updateAgent(agent.id, { status: newStatus });
+    const newIsActive = !agent.is_active;
+    await updateAgent(agent.id, { is_active: newIsActive });
   }
 
   async function openEditDialog(agent: any) {
@@ -421,13 +423,15 @@
                 </h3>
                 <div class="flex items-center space-x-2">
                   <span
-                    class={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(agent.status)}`}
+                    class={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(agent.is_active ? "active" : "inactive")}`}
                   >
                     <svelte:component
-                      this={getStatusIcon(agent.status)}
+                      this={getStatusIcon(
+                        agent.is_active ? "active" : "inactive"
+                      )}
                       class="w-3 h-3 mr-1"
                     />
-                    {agent.status}
+                    {agent.is_active ? "active" : "inactive"}
                   </span>
                 </div>
               </div>
