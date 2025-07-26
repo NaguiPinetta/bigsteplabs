@@ -316,6 +316,7 @@ export interface Database {
           tools: any[] | null;
           output_format: string | null;
           is_active: boolean;
+          whisper_language: string;
           created_by: string | null;
           created_at: string;
           updated_at: string;
@@ -330,6 +331,7 @@ export interface Database {
           tools?: any[] | null;
           output_format?: string | null;
           is_active?: boolean;
+          whisper_language?: string;
           created_by?: string | null;
           created_at?: string;
           updated_at?: string;
@@ -344,6 +346,7 @@ export interface Database {
           tools?: any[] | null;
           output_format?: string | null;
           is_active?: boolean;
+          whisper_language?: string;
           created_by?: string | null;
           created_at?: string;
           updated_at?: string;

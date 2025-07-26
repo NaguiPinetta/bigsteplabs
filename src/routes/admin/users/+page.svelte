@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { authStore, isAdmin } from "$lib/stores/auth";
+  import { supabase } from "$lib/supabase";
   import Button from "$lib/components/ui/button.svelte";
   import Card from "$lib/components/ui/card.svelte";
   import Dialog from "$lib/components/ui/dialog.svelte";
@@ -17,47 +18,26 @@
     AlertCircle,
     Search,
     Filter,
+    Loader2,
+    Mail,
   } from "lucide-svelte";
 
-  let users = [
-    {
-      id: "admin-mock-id",
-      email: "admin@bigsteplabs.com",
-      role: "Admin",
-      created_at: new Date().toISOString(),
-      last_login: new Date().toISOString(),
-      status: "active",
-    },
-    // Mock additional users for demonstration
-    {
-      id: "user-1",
-      email: "teacher@bigsteplabs.com",
-      role: "Collaborator",
-      created_at: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
-      last_login: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
-      status: "active",
-    },
-    {
-      id: "user-2",
-      email: "student@bigsteplabs.com",
-      role: "Student",
-      created_at: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
-      last_login: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
-      status: "active",
-    },
-  ];
-
+  let users: any[] = [];
   let filteredUsers = users;
   let searchQuery = "";
   let roleFilter = "all";
   let createDialogOpen = false;
   let editDialogOpen = false;
   let deleteDialogOpen = false;
+  let loading = false;
+  let error = "";
 
   let newUser = {
     email: "",
+    password: "",
     role: "Student",
-    sendInvite: true,
+    addToAllowlist: true,
+    createWithPassword: false,
   };
 
   let editUser = {
@@ -65,12 +45,13 @@
     email: "",
     role: "",
     status: "",
+    newPassword: "",
   };
 
-  let userToDelete = null;
+  let userToDelete: any = null;
 
   $: user = $authStore.user;
-  $: canAccess = isAdmin(user);
+  $: canAccess = isAdmin();
 
   const roleOptions = [
     { label: "Admin", value: "Admin" },
@@ -84,6 +65,265 @@
     { label: "Collaborator", value: "Collaborator" },
     { label: "Student", value: "Student" },
   ];
+
+  async function loadUsers() {
+    loading = true;
+    error = "";
+
+    try {
+      // Load existing users
+      const { data: existingUsers, error: usersError } = await supabase
+        .from("users")
+        .select("*")
+        .order("created_at", { ascending: false });
+
+      if (usersError) throw usersError;
+
+      // Load allowlisted users
+      const { data: allowlistedUsers, error: allowlistError } = await supabase
+        .from("allowlist")
+        .select("*")
+        .order("created_at", { ascending: false });
+
+      if (allowlistError) throw allowlistError;
+
+      // Combine and format the data
+      const existingUsersFormatted = (existingUsers || []).map((user) => ({
+        ...user,
+        status: "active",
+        is_allowlisted: false,
+        source: "existing",
+      }));
+
+      const allowlistedUsersFormatted = (allowlistedUsers || []).map(
+        (allowlistEntry) => ({
+          id: allowlistEntry.id,
+          email: allowlistEntry.email,
+          role: allowlistEntry.role,
+          created_at: allowlistEntry.created_at,
+          updated_at: allowlistEntry.updated_at,
+          status: "pending",
+          is_allowlisted: true,
+          source: "allowlist",
+        })
+      );
+
+      // Combine both lists, prioritizing existing users (remove allowlist entries for existing users)
+      const existingEmails = new Set(
+        existingUsersFormatted.map((u) => u.email)
+      );
+      const uniqueAllowlistedUsers = allowlistedUsersFormatted.filter(
+        (u) => !existingEmails.has(u.email)
+      );
+
+      users = [...existingUsersFormatted, ...uniqueAllowlistedUsers];
+      filterUsers();
+      console.log(
+        "✅ Users loaded:",
+        users.length,
+        "(existing:",
+        existingUsersFormatted.length,
+        "allowlisted:",
+        uniqueAllowlistedUsers.length,
+        ")"
+      );
+    } catch (err) {
+      console.error("❌ Error loading users:", err);
+      error = err instanceof Error ? err.message : "Failed to load users";
+    } finally {
+      loading = false;
+    }
+  }
+
+  async function addToAllowlist() {
+    try {
+      // Add user to allowlist
+      const { data: newAllowlistEntry, error: allowlistError } = await supabase
+        .from("allowlist")
+        .insert({
+          email: newUser.email,
+          role: newUser.role,
+          invited_by: user?.email,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .select()
+        .single();
+
+      if (allowlistError && allowlistError.code !== "23505") {
+        // Ignore duplicate key errors
+        throw allowlistError;
+      }
+
+      console.log("✅ User added to allowlist:", newUser.email);
+
+      // Reload users to show the new allowlisted user
+      await loadUsers();
+
+      createDialogOpen = false;
+      newUser = {
+        email: "",
+        password: "",
+        role: "Student",
+        addToAllowlist: true,
+        createWithPassword: false,
+      };
+
+      // Show success message
+      alert(
+        `${newUser.email} has been added to the allowlist. They can now sign up directly.`
+      );
+    } catch (err) {
+      console.error("❌ Error adding user to allowlist:", err);
+      error =
+        err instanceof Error ? err.message : "Failed to add user to allowlist";
+    }
+  }
+
+  async function createUserWithPassword() {
+    try {
+      if (!newUser.email.trim()) {
+        error = "Email is required";
+        return;
+      }
+
+      // For now, use magic link creation since password creation is failing
+      console.log("🔍 Creating user with magic link:", {
+        email: newUser.email,
+        role: newUser.role,
+      });
+
+      const response = await fetch("/api/admin/create-user-magic-link", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          email: newUser.email,
+          role: newUser.role,
+        }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || "Failed to create user");
+      }
+
+      console.log("✅ User created successfully:", result.user);
+
+      // Reload users to show the new user
+      await loadUsers();
+
+      createDialogOpen = false;
+      newUser = {
+        email: "",
+        password: "",
+        role: "Student",
+        addToAllowlist: true,
+        createWithPassword: false,
+      };
+
+      // Show success message
+      alert(
+        `${newUser.email} has been created successfully. They can sign in using magic link.`
+      );
+    } catch (err) {
+      console.error("❌ Error creating user:", err);
+      error = err instanceof Error ? err.message : "Failed to create user";
+    }
+  }
+
+  async function updateUser() {
+    try {
+      // Update user profile in database
+      const { error: updateError } = await supabase
+        .from("users")
+        .update({
+          role: editUser.role,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", editUser.id);
+
+      if (updateError) throw updateError;
+
+      // Update password if provided
+      if (editUser.newPassword.trim()) {
+        if (editUser.newPassword.length < 8) {
+          error = "Password must be at least 8 characters long";
+          return;
+        }
+
+        console.log("🔍 Updating user password:", editUser.email);
+
+        const response = await fetch("/api/admin/update-user", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            userId: editUser.id,
+            role: editUser.role,
+            password: editUser.newPassword,
+          }),
+        });
+
+        const result = await response.json();
+
+        if (!response.ok) {
+          throw new Error(result.error || "Failed to update user password");
+        }
+
+        console.log("✅ User password updated successfully");
+      }
+
+      console.log("✅ User updated:", editUser.email);
+
+      // Reload users
+      await loadUsers();
+
+      editDialogOpen = false;
+      editUser.newPassword = "";
+    } catch (err) {
+      console.error("❌ Error updating user:", err);
+      error = err instanceof Error ? err.message : "Failed to update user";
+    }
+  }
+
+  async function deleteUser() {
+    if (!userToDelete) return;
+
+    try {
+      if (userToDelete.source === "allowlist") {
+        // Delete from allowlist
+        const { error: deleteError } = await supabase
+          .from("allowlist")
+          .delete()
+          .eq("id", userToDelete.id);
+
+        if (deleteError) throw deleteError;
+        console.log("✅ User removed from allowlist:", userToDelete.email);
+      } else {
+        // Delete existing user
+        const { error: deleteError } = await supabase
+          .from("users")
+          .delete()
+          .eq("id", userToDelete.id);
+
+        if (deleteError) throw deleteError;
+        console.log("✅ User deleted:", userToDelete.email);
+      }
+
+      // Reload users
+      await loadUsers();
+
+      deleteDialogOpen = false;
+      userToDelete = null;
+    } catch (err) {
+      console.error("❌ Error deleting user:", err);
+      error = err instanceof Error ? err.message : "Failed to delete user";
+    }
+  }
 
   function filterUsers() {
     filteredUsers = users.filter((user) => {
@@ -137,7 +377,13 @@
   }
 
   function openCreateDialog() {
-    newUser = { email: "", role: "Student", sendInvite: true };
+    newUser = {
+      email: "",
+      password: "",
+      role: "Student",
+      addToAllowlist: true,
+      createWithPassword: false,
+    };
     createDialogOpen = true;
   }
 
@@ -146,7 +392,8 @@
       id: user.id,
       email: user.email,
       role: user.role,
-      status: user.status,
+      status: "active", // Users are always active in our system
+      newPassword: "",
     };
     editDialogOpen = true;
   }
@@ -156,40 +403,11 @@
     deleteDialogOpen = true;
   }
 
-  function handleCreateUser() {
-    // Mock user creation
-    const mockUser = {
-      id: "user-" + Date.now(),
-      email: newUser.email,
-      role: newUser.role,
-      created_at: new Date().toISOString(),
-      last_login: null,
-      status: "pending",
-    };
-
-    users = [...users, mockUser];
-    createDialogOpen = false;
-
-    // Show success message (in real app, this would be a toast/notification)
-    alert(`User invitation sent to ${newUser.email}`);
-  }
-
-  function handleUpdateUser() {
-    users = users.map((u) =>
-      u.id === editUser.id
-        ? { ...u, role: editUser.role, status: editUser.status }
-        : u
-    );
-    editDialogOpen = false;
-    alert("User updated successfully");
-  }
-
-  function handleDeleteUser() {
-    users = users.filter((u) => u.id !== userToDelete.id);
-    deleteDialogOpen = false;
-    userToDelete = null;
-    alert("User deleted successfully");
-  }
+  onMount(() => {
+    if (canAccess) {
+      loadUsers();
+    }
+  });
 </script>
 
 <svelte:head>
@@ -210,12 +428,12 @@
     <div>
       <h1 class="text-2xl font-bold text-foreground">User Management</h1>
       <p class="text-muted-foreground">
-        Manage user accounts, roles, and permissions
+        Manage user accounts, roles, and allowlist access
       </p>
     </div>
     <Button on:click={openCreateDialog}>
       <Plus class="w-4 h-4 mr-2" />
-      Invite User
+      Add User
     </Button>
   </div>
 
@@ -235,9 +453,7 @@
         </div>
       </div>
       <div class="sm:w-48">
-        <Select bind:value={roleFilter} options={filterOptions}>
-          <Filter class="w-4 h-4 mr-2" slot="icon" />
-        </Select>
+        <Select bind:value={roleFilter} options={filterOptions} />
       </div>
     </div>
   </Card>
@@ -281,91 +497,108 @@
           </tr>
         </thead>
         <tbody class="bg-background divide-y divide-border">
-          {#each filteredUsers as user (user.id)}
-            <tr class="hover:bg-muted/25">
-              <td class="px-6 py-4 whitespace-nowrap">
-                <div class="flex items-center">
-                  <div
-                    class="w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center"
-                  >
-                    <span class="text-sm font-medium text-primary">
-                      {user.email.charAt(0).toUpperCase()}
-                    </span>
-                  </div>
-                  <div class="ml-4">
-                    <div class="text-sm font-medium text-foreground">
-                      {user.email}
+          {#if loading}
+            <tr>
+              <td colspan="6" class="px-6 py-4 text-center">
+                <Loader2 class="w-6 h-6 text-primary animate-spin" />
+                <span class="ml-2">Loading users...</span>
+              </td>
+            </tr>
+          {:else if error}
+            <tr>
+              <td colspan="6" class="px-6 py-4 text-center text-destructive">
+                {error}
+              </td>
+            </tr>
+          {:else}
+            {#each filteredUsers as user (user.id)}
+              <tr class="hover:bg-muted/25">
+                <td class="px-6 py-4 whitespace-nowrap">
+                  <div class="flex items-center">
+                    <div
+                      class="w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center"
+                    >
+                      <span class="text-sm font-medium text-primary">
+                        {user.email.charAt(0).toUpperCase()}
+                      </span>
                     </div>
-                    <div class="text-sm text-muted-foreground">
-                      ID: {user.id}
+                    <div class="ml-4">
+                      <div class="text-sm font-medium text-foreground">
+                        {user.email}
+                      </div>
+                      <div class="text-sm text-muted-foreground">
+                        ID: {user.id}
+                      </div>
                     </div>
                   </div>
-                </div>
-              </td>
-              <td class="px-6 py-4 whitespace-nowrap">
-                <span
-                  class={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getRoleColor(user.role)}`}
-                >
-                  <svelte:component
-                    this={getRoleIcon(user.role)}
-                    class="w-3 h-3 mr-1"
-                  />
-                  {user.role}
-                </span>
-              </td>
-              <td
-                class="px-6 py-4 whitespace-nowrap text-sm text-muted-foreground"
-              >
-                {formatDate(user.created_at)}
-              </td>
-              <td
-                class="px-6 py-4 whitespace-nowrap text-sm text-muted-foreground"
-              >
-                {user.last_login ? formatDate(user.last_login) : "Never"}
-              </td>
-              <td class="px-6 py-4 whitespace-nowrap">
-                <span
-                  class={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                    user.status === "active"
-                      ? "bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-300"
-                      : "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-300"
-                  }`}
-                >
-                  {user.status}
-                </span>
-              </td>
-              <td
-                class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium"
-              >
-                <div class="flex items-center justify-end space-x-2">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    on:click={() => openEditDialog(user)}
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap">
+                  <span
+                    class={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getRoleColor(user.role)}`}
                   >
-                    <Edit class="w-4 h-4" />
-                  </Button>
-                  {#if user.id !== "admin-mock-id"}
+                    <svelte:component
+                      this={getRoleIcon(user.role)}
+                      class="w-3 h-3 mr-1"
+                    />
+                    {user.role}
+                  </span>
+                </td>
+                <td
+                  class="px-6 py-4 whitespace-nowrap text-sm text-muted-foreground"
+                >
+                  {formatDate(user.created_at)}
+                </td>
+                <td
+                  class="px-6 py-4 whitespace-nowrap text-sm text-muted-foreground"
+                >
+                  {user.last_login ? formatDate(user.last_login) : "Never"}
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap">
+                  <span
+                    class={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                      user.is_allowlisted
+                        ? "bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-300"
+                        : user.status === "active"
+                          ? "bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-300"
+                          : "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-300"
+                    }`}
+                  >
+                    {user.is_allowlisted ? "Allowlisted" : user.status}
+                  </span>
+                </td>
+                <td
+                  class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium"
+                >
+                  <div class="flex items-center justify-end space-x-2">
                     <Button
                       variant="ghost"
                       size="sm"
-                      on:click={() => openDeleteDialog(user)}
-                      class="text-destructive hover:text-destructive"
+                      on:click={() => openEditDialog(user)}
                     >
-                      <Trash2 class="w-4 h-4" />
+                      <Edit class="w-4 h-4" />
                     </Button>
-                  {/if}
-                </div>
-              </td>
-            </tr>
-          {/each}
+                    {#if user.email !== "jdpinetta@gmail.com"}
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        on:click={() => openDeleteDialog(user)}
+                        class="text-destructive hover:text-destructive"
+                      >
+                        <Trash2 class="w-4 h-4" />
+                      </Button>
+                    {/if}
+                  </div>
+                </td>
+              </tr>
+            {/each}
+          {/if}
         </tbody>
       </table>
     </div>
   </Card>
 
   <!-- Summary Stats -->
-  <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mt-6">
+  <div class="grid grid-cols-1 md:grid-cols-5 gap-4 mt-6">
     <Card class="p-4">
       <div class="flex items-center">
         <Users class="w-8 h-8 text-blue-600" />
@@ -408,10 +641,21 @@
         </div>
       </div>
     </Card>
+    <Card class="p-4">
+      <div class="flex items-center">
+        <UserCheck class="w-8 h-8 text-purple-600" />
+        <div class="ml-4">
+          <div class="text-2xl font-bold text-foreground">
+            {users.filter((u) => u.is_allowlisted).length}
+          </div>
+          <div class="text-sm text-muted-foreground">Allowlisted</div>
+        </div>
+      </div>
+    </Card>
   </div>
 
   <!-- Create User Dialog -->
-  <Dialog bind:open={createDialogOpen} title="Invite New User">
+  <Dialog bind:open={createDialogOpen} title="Create New User">
     <div class="space-y-4">
       <div>
         <label for="user-email" class="block text-sm font-medium mb-2"
@@ -437,26 +681,82 @@
         />
       </div>
 
-      <div class="flex items-center space-x-2">
-        <input
-          type="checkbox"
-          id="send-invite"
-          bind:checked={newUser.sendInvite}
-          class="rounded border-input"
-        />
-        <label for="send-invite" class="text-sm font-medium">
-          Send invitation email immediately
-        </label>
+      <!-- Authentication Method Toggle -->
+      <div class="space-y-3">
+        <label class="block text-sm font-medium">Authentication Method</label>
+        <div class="flex space-x-1 bg-muted p-1 rounded-lg">
+          <button
+            type="button"
+            class="flex-1 py-2 px-3 text-sm font-medium rounded-md transition-colors {!newUser.createWithPassword
+              ? 'bg-background text-foreground shadow-sm'
+              : 'text-muted-foreground hover:text-foreground'}"
+            on:click={() => (newUser.createWithPassword = false)}
+          >
+            <Mail class="w-4 h-4 inline mr-2" />
+            Magic Link
+          </button>
+          <button
+            type="button"
+            class="flex-1 py-2 px-3 text-sm font-medium rounded-md transition-colors {newUser.createWithPassword
+              ? 'bg-background text-foreground shadow-sm'
+              : 'text-muted-foreground hover:text-foreground'}"
+            on:click={() => (newUser.createWithPassword = true)}
+          >
+            <Mail class="w-4 h-4 inline mr-2" />
+            Magic Link
+          </button>
+        </div>
       </div>
+
+      <!-- Magic Link Info (when magic link method is selected) -->
+      {#if newUser.createWithPassword}
+        <div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-md p-4">
+          <div class="flex">
+            <Mail class="w-5 h-5 text-blue-600 dark:text-blue-400 flex-shrink-0" />
+            <div class="ml-3">
+              <h4 class="text-sm font-medium text-blue-800 dark:text-blue-200">
+                Magic Link Authentication
+              </h4>
+              <p class="mt-1 text-sm text-blue-700 dark:text-blue-300">
+                The user will receive a magic link via email to sign in. No password required.
+              </p>
+            </div>
+          </div>
+        </div>
+      {/if}
+
+      <!-- Allowlist Option (only show when magic link method is selected) -->
+      {#if !newUser.createWithPassword}
+        <div class="flex items-center space-x-2">
+          <input
+            type="checkbox"
+            id="send-invite"
+            bind:checked={newUser.addToAllowlist}
+            class="rounded border-input"
+          />
+          <label for="send-invite" class="text-sm font-medium">
+            Allow this user to sign up directly
+          </label>
+        </div>
+      {/if}
     </div>
 
     <div slot="footer" class="flex justify-end space-x-2">
       <Button variant="outline" on:click={() => (createDialogOpen = false)}>
         Cancel
       </Button>
-      <Button on:click={handleCreateUser} disabled={!newUser.email.trim()}>
-        Send Invite
-      </Button>
+      {#if newUser.createWithPassword}
+        <Button
+          on:click={createUserWithPassword}
+          disabled={!newUser.email.trim()}
+        >
+          Create User with Magic Link
+        </Button>
+      {:else}
+        <Button on:click={addToAllowlist} disabled={!newUser.email.trim()}>
+          Add to Allowlist
+        </Button>
+      {/if}
     </div>
   </Dialog>
 
@@ -496,13 +796,32 @@
           ]}
         />
       </div>
+
+      <div>
+        <label for="edit-user-password" class="block text-sm font-medium mb-2"
+          >New Password (optional)</label
+        >
+        <Input
+          id="edit-user-password"
+          bind:value={editUser.newPassword}
+          type="password"
+          placeholder="Leave blank to keep current password"
+        />
+        <p class="text-xs text-muted-foreground mt-1">
+          Enter a new password to reset the user's password (min 8 characters)
+        </p>
+      </div>
     </div>
 
     <div slot="footer" class="flex justify-end space-x-2">
       <Button variant="outline" on:click={() => (editDialogOpen = false)}>
         Cancel
       </Button>
-      <Button on:click={handleUpdateUser}>Save Changes</Button>
+      <Button on:click={updateUser}>
+        {editUser.newPassword.trim()
+          ? "Save Changes & Reset Password"
+          : "Save Changes"}
+      </Button>
     </div>
   </Dialog>
 
@@ -535,9 +854,7 @@
       <Button variant="outline" on:click={() => (deleteDialogOpen = false)}>
         Cancel
       </Button>
-      <Button variant="destructive" on:click={handleDeleteUser}>
-        Delete User
-      </Button>
+      <Button variant="destructive" on:click={deleteUser}>Delete User</Button>
     </div>
   </Dialog>
 {/if}

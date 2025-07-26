@@ -232,8 +232,12 @@ export async function setCurrentSession(session: ChatSession | null) {
 /**
  * Send a message in the current session to Supabase
  */
-export async function sendMessage(content: string, sessionId: string) {
-  console.log("💬 Sending message:", content);
+export async function sendMessage(
+  content: string,
+  sessionId: string,
+  audioUrl?: string
+) {
+  console.log("💬 Sending message:", content, audioUrl ? "(with audio)" : "");
 
   chatStore.update((state) => ({
     ...state,
@@ -253,6 +257,13 @@ export async function sendMessage(content: string, sessionId: string) {
       throw new Error("Session not found");
     }
 
+    // Prepare message metadata
+    const messageMetadata: any = {};
+    if (audioUrl) {
+      messageMetadata.audio_url = audioUrl;
+      messageMetadata.is_voice_message = true;
+    }
+
     // Create and save user message to database
     const { data: userMessage, error: userError } = await supabase
       .from("messages")
@@ -260,7 +271,7 @@ export async function sendMessage(content: string, sessionId: string) {
         session_id: sessionId,
         role: "user",
         content: content.trim(),
-        metadata: {},
+        metadata: messageMetadata,
       })
       .select()
       .single();
@@ -277,7 +288,7 @@ export async function sendMessage(content: string, sessionId: string) {
     // Generate AI response using OpenAI API
     const startTime = Date.now();
     let aiResponse;
-    
+
     try {
       aiResponse = await generateAIResponse(
         content,
@@ -287,12 +298,12 @@ export async function sendMessage(content: string, sessionId: string) {
     } catch (error) {
       console.error("❌ OpenAI API error:", error);
       throw new Error(
-        error instanceof Error 
-          ? error.message 
+        error instanceof Error
+          ? error.message
           : "Failed to generate AI response. Please check your OpenAI API key and try again."
       );
     }
-    
+
     const responseTime = Date.now() - startTime;
 
     // Create and save AI message to database
@@ -340,8 +351,8 @@ export async function sendMessage(content: string, sessionId: string) {
     chatStore.update((state) => ({
       ...state,
       messages: [...state.messages, aiMessage],
-      sendingMessage: false,
       typingIndicator: false,
+      sendingMessage: false,
     }));
 
     console.log("✅ Messages sent and received successfully via OpenAI API");

@@ -3,6 +3,15 @@
   import { authStore, canManageContent } from "$lib/stores/auth";
   import { unitsStore, loadUnits } from "$lib/stores/units";
   import { modulesStore, loadModules } from "$lib/stores/modules";
+  import {
+    contentStore,
+    loadContent,
+    createContent,
+    updateContent,
+    deleteContent,
+    clearContentError,
+    validateContent,
+  } from "$lib/stores/content";
 
   import Button from "$lib/components/ui/button.svelte";
   import Dialog from "$lib/components/ui/dialog.svelte";
@@ -21,10 +30,8 @@
     AlertCircle,
   } from "lucide-svelte";
 
-  // Mock content data for development
-  let content: any[] = [];
-  let loading = false;
-  let error = "";
+  // Content state from store
+  let contentState = $contentStore;
 
   // Dialog state
   let showCreateDialog = false;
@@ -47,8 +54,12 @@
   $: canManage = canManageContent(user);
   $: unitState = $unitsStore;
   $: moduleState = $modulesStore;
+  $: contentState = $contentStore;
   $: units = unitState.units;
   $: modules = moduleState.modules;
+  $: content = contentState.content;
+  $: loading = contentState.loading;
+  $: error = contentState.error;
 
   $: filteredUnits = selectedModuleFilter
     ? units.filter((unit) => unit.module_id === selectedModuleFilter)
@@ -64,8 +75,8 @@
 
   onMount(async () => {
     if (canManage) {
-      // Load units and modules
-      await Promise.all([loadUnits(), loadModules()]);
+      // Load all required data
+      await Promise.all([loadUnits(), loadModules(), loadContent()]);
     }
   });
 
@@ -113,36 +124,41 @@
 
   async function handleCreate() {
     if (!formTitle.trim() || !formUnitId) {
-      error = "Please fill in all required fields";
+      clearContentError();
+      contentStore.update((state) => ({
+        ...state,
+        error: "Please fill in all required fields",
+      }));
       return;
     }
 
     try {
       submitting = true;
-      error = "";
+      clearContentError();
 
-      // Simulate API delay
-      await new Promise((resolve) => setTimeout(resolve, 500));
-
-      const newContent = {
-        id: `content-${Date.now()}`,
+      const result = await createContent({
         title: formTitle.trim(),
-        slug: formSlug.trim() || generateSlug(formTitle),
-        body: formBody.trim() || null,
+        description: formBody.trim() || "No description provided",
+        content: formBody.trim() || "",
+        type: "markdown",
         unit_id: formUnitId,
-        estimated_minutes: formEstimatedMinutes,
-        content_type: "lesson",
-        status: "draft",
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      };
+        file_url: null,
+        is_published: false,
+        metadata: {
+          estimated_minutes: formEstimatedMinutes,
+          slug: formSlug.trim() || generateSlug(formTitle),
+        },
+      });
 
-      content = [newContent, ...content];
-      console.log("✅ Content created successfully:", newContent.title);
-      closeDialogs();
+      if (result.error) {
+        console.error("Error creating content:", result.error);
+      } else {
+        console.log("✅ Content created successfully:", result.data?.title);
+        closeDialogs();
+      }
     } catch (err: any) {
-      error = err.message;
       console.error("Error creating content:", err);
+      contentStore.update((state) => ({ ...state, error: err.message }));
     } finally {
       submitting = false;
     }
@@ -401,7 +417,7 @@
               <!-- Content Type Icon -->
               <div class="mt-1 text-muted-foreground">
                 <svelte:component
-                  this={getContentTypeIcon(item.content_type)}
+                  this={getContentTypeIcon(item.type)}
                   class="w-5 h-5"
                 />
               </div>

@@ -117,6 +117,7 @@ export interface Agent {
   dataset_ids: string[];
   tools?: Record<string, any>[];
   output_format?: string;
+  whisper_language?: string;
   is_active: boolean;
   created_at: string;
   updated_at?: string;

@@ -1,7 +1,8 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import Sidebar from "../navigation/sidebar.svelte";
-  import { authStore, signOut, initAuth } from "$lib/stores/auth";
+  import { authStore, initAuth } from "$lib/stores/auth";
+  import { signOut } from "$lib/auth";
   import { goto } from "$app/navigation";
   import { LogOut } from "lucide-svelte";
   import {
@@ -33,7 +34,6 @@
 
   async function handleSignOut() {
     await signOut();
-    goto("/auth/login");
   }
 
   // Navigation items based on user role

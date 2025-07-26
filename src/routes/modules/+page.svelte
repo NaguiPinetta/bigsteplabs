@@ -96,7 +96,7 @@
 
     const result = await createModule({
       title: newModule.title.trim(),
-      description: newModule.description.trim() || null,
+      description: newModule.description.trim() || "No description provided",
       is_published: newModule.is_published,
     });
 
@@ -138,8 +138,7 @@
   }
 
   async function handleDuplicateModule(module: any) {
-    const newTitle = `${module.title} (Copy)`;
-    await duplicateModule(module.id, newTitle);
+    await duplicateModule(module.id);
   }
 
   async function openEditDialog(module: any) {

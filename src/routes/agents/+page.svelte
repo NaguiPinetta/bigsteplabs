@@ -59,6 +59,7 @@
     dataset_id: "",
     status: "active",
     configuration: {},
+    whisper_language: "en",
   };
 
   let editAgent = {
@@ -70,6 +71,7 @@
     dataset_id: "",
     status: "active",
     configuration: {},
+    whisper_language: "en",
   };
 
   let validationErrors: string[] = [];
@@ -81,6 +83,22 @@
 
   let templates = getAgentTemplates();
   let statuses = getAgentStatuses();
+
+  // Language options for Whisper
+  let languageOptions = [
+    { value: "en", label: "English" },
+    { value: "de", label: "German" },
+    { value: "es", label: "Spanish" },
+    { value: "fr", label: "French" },
+    { value: "it", label: "Italian" },
+    { value: "pt", label: "Portuguese" },
+    { value: "ru", label: "Russian" },
+    { value: "ja", label: "Japanese" },
+    { value: "ko", label: "Korean" },
+    { value: "zh", label: "Chinese" },
+    { value: "ar", label: "Arabic" },
+    { value: "auto", label: "Auto-detect" },
+  ];
 
   $: user = $authStore.user;
   $: canManage = canManageContent();
@@ -124,6 +142,7 @@
       dataset_id: "",
       status: "active",
       configuration: {},
+      whisper_language: "en",
     };
     validationErrors = [];
   }
@@ -144,6 +163,7 @@
       model_id: newAgent.model_id,
       dataset_ids: newAgent.dataset_id ? [newAgent.dataset_id] : [],
       status: newAgent.status,
+      whisper_language: newAgent.whisper_language,
       created_by: user.id,
     });
 
@@ -167,6 +187,7 @@
       model_id: editAgent.model_id,
       dataset_ids: editAgent.dataset_id ? [editAgent.dataset_id] : [],
       is_active: editAgent.status === "active",
+      whisper_language: editAgent.whisper_language,
     });
 
     if (result.data) {
@@ -214,8 +235,9 @@
       persona_id: agent.persona_id,
       model_id: agent.model_id,
       dataset_id: agent.dataset_id || "",
-      status: agent.status,
+      status: agent.is_active ? "active" : "inactive",
       configuration: agent.configuration || {},
+      whisper_language: agent.whisper_language || "en",
     };
     validationErrors = [];
     editDialogOpen = true;
@@ -715,6 +737,21 @@
         Optional dataset for specialized knowledge
       </p>
     </div>
+
+    <div>
+      <label for="whisper-language" class="block text-sm font-medium mb-2"
+        >Voice Recognition Language</label
+      >
+      <Select
+        id="whisper-language"
+        bind:value={newAgent.whisper_language}
+        options={languageOptions}
+        placeholder="Select language..."
+      />
+      <p class="text-xs text-muted-foreground mt-1">
+        Language for voice message transcription (Whisper)
+      </p>
+    </div>
   </div>
 
   <div slot="footer" class="flex justify-end space-x-2">
@@ -820,6 +857,21 @@
         bind:value={editAgent.dataset_id}
         options={datasetOptions}
       />
+    </div>
+
+    <div>
+      <label for="edit-whisper-language" class="block text-sm font-medium mb-2"
+        >Voice Recognition Language</label
+      >
+      <Select
+        id="edit-whisper-language"
+        bind:value={editAgent.whisper_language}
+        options={languageOptions}
+        placeholder="Select language..."
+      />
+      <p class="text-xs text-muted-foreground mt-1">
+        Language for voice message transcription (Whisper)
+      </p>
     </div>
   </div>
 

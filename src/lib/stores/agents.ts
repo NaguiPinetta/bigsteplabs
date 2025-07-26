@@ -100,6 +100,7 @@ export async function createAgent(agent: any) {
         tools: null,
         output_format: null,
         is_active: (agent.status as string) === "active",
+        whisper_language: agent.whisper_language || "en",
         created_by: agent.created_by,
       })
       .select(
@@ -154,14 +155,23 @@ export async function createAgent(agent: any) {
 /**
  * Update an agent in Supabase
  */
-export async function updateAgent(id: string, updates: any) {
+export async function updateAgent(agentId: string, updates: any) {
   agentsStore.update((state) => ({ ...state, loading: true, error: null }));
 
   try {
     const { data, error } = await supabase
       .from("agents")
-      .update(updates)
-      .eq("id", id)
+      .update({
+        name: updates.name,
+        description: updates.description,
+        persona_id: updates.persona_id,
+        model_id: updates.model_id,
+        dataset_ids: updates.dataset_ids || [],
+        is_active: updates.is_active,
+        whisper_language: updates.whisper_language || "en",
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", agentId)
       .select(
         `
         *,
@@ -192,7 +202,7 @@ export async function updateAgent(id: string, updates: any) {
     // Update local store
     agentsStore.update((state) => ({
       ...state,
-      agents: state.agents.map((a) => (a.id === id ? enrichedAgent : a)),
+      agents: state.agents.map((a) => (a.id === agentId ? enrichedAgent : a)),
       loading: false,
     }));
 

@@ -12,4 +12,9 @@ export default defineConfig({
       $utils: "/src/lib/utils",
     },
   },
+  // Expose environment variables for server-side use
+  define: {
+    // This makes SUPABASE_SERVICE_ROLE_KEY available server-side
+    'process.env.SUPABASE_SERVICE_ROLE_KEY': JSON.stringify(process.env.SUPABASE_SERVICE_ROLE_KEY),
+  },
 });

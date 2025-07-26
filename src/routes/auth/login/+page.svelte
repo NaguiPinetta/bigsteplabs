@@ -1,16 +1,20 @@
 <script lang="ts">
   import { goto } from "$app/navigation";
   import { sendMagicLink, redirectAuthenticatedUser } from "$lib/auth";
+  import { signInWithEmail } from "$lib/stores/auth";
   import { onMount } from "svelte";
   import Button from "$lib/components/ui/button.svelte";
   import Input from "$lib/components/ui/input.svelte";
   import Card from "$lib/components/ui/card.svelte";
-  import { Loader2, Mail, Shield } from "lucide-svelte";
+  import { Loader2, Mail, Shield, Eye, EyeOff } from "lucide-svelte";
 
   let email = "";
+  let password = "";
+  let showPassword = false;
   let loading = false;
   let message = "";
   let messageType: "success" | "error" = "success";
+  let loginMethod: "magic" | "password" = "magic";
 
   onMount(async () => {
     // Redirect if already authenticated
@@ -46,6 +50,41 @@
     } finally {
       loading = false;
     }
+  }
+
+  async function handlePasswordLogin() {
+    if (!email.trim() || !password.trim()) {
+      message = "Please enter both email and password";
+      messageType = "error";
+      return;
+    }
+
+    loading = true;
+    message = "";
+
+    try {
+      const result = await signInWithEmail(email, password);
+
+      if (result.success) {
+        message = "Signing in...";
+        messageType = "success";
+        // Redirect to dashboard
+        goto("/dashboard");
+      } else {
+        message = result.error || "Invalid email or password";
+        messageType = "error";
+      }
+    } catch (error) {
+      message = "An unexpected error occurred";
+      messageType = "error";
+      console.error("Login error:", error);
+    } finally {
+      loading = false;
+    }
+  }
+
+  function togglePasswordVisibility() {
+    showPassword = !showPassword;
   }
 </script>
 
@@ -117,42 +156,137 @@
         </div>
       {/if}
 
-      <!-- Magic Link Form -->
-      <form class="space-y-4" on:submit|preventDefault={handleMagicLinkLogin}>
-        <div>
-          <label
-            for="email"
-            class="block text-sm font-medium text-foreground mb-2"
-          >
-            Email address
-          </label>
-          <Input
-            id="email"
-            type="email"
-            bind:value={email}
-            placeholder="Enter your email"
-            disabled={loading}
-            on:keydown={(e) =>
-              (e as unknown as KeyboardEvent).key === "Enter" &&
-              handleMagicLinkLogin()}
-            required
-          />
-        </div>
-
-        <Button
-          type="submit"
-          class="w-full bg-red-600 hover:bg-red-700 disabled:bg-red-400"
-          disabled={loading || !email}
+      <!-- Authentication Method Toggle -->
+      <div class="flex space-x-1 bg-muted p-1 rounded-lg">
+        <button
+          type="button"
+          class="flex-1 py-2 px-3 text-sm font-medium rounded-md transition-colors {loginMethod === 'magic'
+            ? 'bg-background text-foreground shadow-sm'
+            : 'text-muted-foreground hover:text-foreground'}"
+          on:click={() => (loginMethod = 'magic')}
         >
-          {#if loading}
-            <Loader2 class="mr-2 h-4 w-4 animate-spin" />
-            Sending magic link...
-          {:else}
-            <Mail class="mr-2 h-4 w-4" />
-            Send magic link
-          {/if}
-        </Button>
-      </form>
+          <Mail class="w-4 h-4 inline mr-2" />
+          Magic Link
+        </button>
+        <button
+          type="button"
+          class="flex-1 py-2 px-3 text-sm font-medium rounded-md transition-colors {loginMethod === 'password'
+            ? 'bg-background text-foreground shadow-sm'
+            : 'text-muted-foreground hover:text-foreground'}"
+          on:click={() => (loginMethod = 'password')}
+        >
+          <Shield class="w-4 h-4 inline mr-2" />
+          Password
+        </button>
+      </div>
+
+      <!-- Magic Link Form -->
+      {#if loginMethod === 'magic'}
+        <form class="space-y-4" on:submit|preventDefault={handleMagicLinkLogin}>
+          <div>
+            <label
+              for="email"
+              class="block text-sm font-medium text-foreground mb-2"
+            >
+              Email address
+            </label>
+            <Input
+              id="email"
+              type="email"
+              bind:value={email}
+              placeholder="Enter your email"
+              disabled={loading}
+              on:keydown={(e) =>
+                (e as unknown as KeyboardEvent).key === "Enter" &&
+                handleMagicLinkLogin()}
+              required
+            />
+          </div>
+
+          <Button
+            type="submit"
+            class="w-full bg-red-600 hover:bg-red-700 disabled:bg-red-400"
+            disabled={loading || !email}
+          >
+            {#if loading}
+              <Loader2 class="mr-2 h-4 w-4 animate-spin" />
+              Sending magic link...
+            {:else}
+              <Mail class="mr-2 h-4 w-4" />
+              Send magic link
+            {/if}
+          </Button>
+        </form>
+      {/if}
+
+      <!-- Password Form -->
+      {#if loginMethod === 'password'}
+        <form class="space-y-4" on:submit|preventDefault={handlePasswordLogin}>
+          <div>
+            <label
+              for="email-password"
+              class="block text-sm font-medium text-foreground mb-2"
+            >
+              Email address
+            </label>
+            <Input
+              id="email-password"
+              type="email"
+              bind:value={email}
+              placeholder="Enter your email"
+              disabled={loading}
+              required
+            />
+          </div>
+
+          <div>
+            <label
+              for="password"
+              class="block text-sm font-medium text-foreground mb-2"
+            >
+              Password
+            </label>
+            <div class="relative">
+              <Input
+                id="password"
+                type={showPassword ? "text" : "password"}
+                bind:value={password}
+                placeholder="Enter your password"
+                disabled={loading}
+                on:keydown={(e) =>
+                  (e as unknown as KeyboardEvent).key === "Enter" &&
+                  handlePasswordLogin()}
+                required
+              />
+              <button
+                type="button"
+                class="absolute inset-y-0 right-0 flex items-center pr-3 text-muted-foreground hover:text-foreground"
+                on:click={togglePasswordVisibility}
+              >
+                {#if showPassword}
+                  <EyeOff class="w-4 h-4" />
+                {:else}
+                  <Eye class="w-4 h-4" />
+                {/if}
+              </button>
+            </div>
+          </div>
+
+          <Button
+            type="submit"
+            class="w-full bg-red-600 hover:bg-red-700 disabled:bg-red-400"
+            disabled={loading || !email || !password}
+          >
+            {#if loading}
+              <Loader2 class="mr-2 h-4 w-4 animate-spin" />
+              Signing in...
+            {:else}
+              <Shield class="mr-2 h-4 w-4" />
+              Sign in with password
+            {/if}
+          </Button>
+        </form>
+      {/if}
 
       <!-- Footer -->
       <div class="text-center">

@@ -12,6 +12,8 @@ interface AuthState {
 const initialState: AuthState = { session: null, user: null, loading: true };
 export const authStore = writable<AuthState>(initialState);
 
+let authInitialized = false;
+
 // Sign in using Supabase email/password (for admin or regular users)
 export async function signInWithEmail(email: string, password: string) {
   const { data, error } = await supabase.auth.signInWithPassword({
@@ -34,7 +36,7 @@ async function updateAuthState(session: Session | null) {
     authStore.set({ session: null, user: null, loading: false });
     return;
   }
-  
+
   try {
     // Fetch the corresponding profile from your users table
     const { data: profile, error } = await supabase
@@ -42,29 +44,29 @@ async function updateAuthState(session: Session | null) {
       .select("*")
       .eq("id", session.user.id)
       .single();
-      
-          if (error && error.code === "PGRST116") {
-        // User doesn't exist, create profile
-        console.log("🔍 Creating new user profile for:", session.user.email);
-        
-        // Determine role based on email
-        let role = "Student"; // Default role
-        if (session.user.email === "jdpinetta@gmail.com") {
-          role = "Admin";
-          console.log("🔍 Setting admin role for:", session.user.email);
-        }
-        
-        const { data: newUser, error: createError } = await supabase
-          .from("users")
-          .insert({
-            id: session.user.id,
-            email: session.user.email || "",
-            role: role,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          })
-          .select()
-          .single();
+
+    if (error && error.code === "PGRST116") {
+      // User doesn't exist, create profile
+      console.log("🔍 Creating new user profile for:", session.user.email);
+
+      // Determine role based on email
+      let role = "Student"; // Default role
+      if (session.user.email === "jdpinetta@gmail.com") {
+        role = "Admin";
+        console.log("🔍 Setting admin role for:", session.user.email);
+      }
+
+      const { data: newUser, error: createError } = await supabase
+        .from("users")
+        .insert({
+          id: session.user.id,
+          email: session.user.email || "",
+          role: role,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .select()
+        .single();
 
       if (createError) {
         console.error("❌ Failed to create user profile:", createError);
@@ -93,7 +95,13 @@ export async function signOut() {
 
 // Initialize auth state
 export async function initAuth() {
+  if (authInitialized) {
+    console.log("Auth already initialized, skipping...");
+    return;
+  }
+
   try {
+    console.log("Initializing auth...");
     const {
       data: { session },
     } = await supabase.auth.getSession();
@@ -104,6 +112,9 @@ export async function initAuth() {
       console.log("Auth state changed:", event);
       await updateAuthState(session);
     });
+
+    authInitialized = true;
+    console.log("Auth initialization complete");
   } catch (error) {
     console.error("Auth initialization failed:", error);
     authStore.set({ session: null, user: null, loading: false });

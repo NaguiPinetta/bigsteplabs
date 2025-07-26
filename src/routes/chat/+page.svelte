@@ -14,6 +14,9 @@
     Cpu,
     Trash2,
     MoreHorizontal,
+    Mic,
+    MicOff,
+    Square,
   } from "lucide-svelte";
 
   import { authStore } from "$lib/stores/auth";
@@ -48,6 +51,14 @@
   let messagesContainer: HTMLElement;
   let newChatDialogOpen = false;
   let selectedAgentId = "";
+
+  // Voice recording state
+  let isRecording = false;
+  let mediaRecorder: MediaRecorder | null = null;
+  let audioChunks: Blob[] = [];
+  let isTranscribing = false;
+  let recordingError = "";
+  let currentAudioUrl: string | null = null;
 
   // Load data on mount
   onMount(async () => {
@@ -86,11 +97,15 @@
     if (!messageInput.trim() || !currentSession || sendingMessage) return;
 
     const content = messageInput.trim();
+    const audioUrl = currentAudioUrl; // Store reference before clearing
     messageInput = "";
+    currentAudioUrl = null; // Clear the audio URL
+
+    console.log("📤 Sending message with audio URL:", audioUrl);
 
     // Clear any previous errors
     await clearChatError();
-    await sendMessage(content, currentSession.id);
+    await sendMessage(content, currentSession.id, audioUrl || undefined);
 
     // Re-focus the input after sending
     setTimeout(() => {
@@ -158,6 +173,92 @@
 
   function clearCurrentSession() {
     setCurrentSession(null);
+  }
+
+  // Voice recording functions
+  async function startRecording() {
+    try {
+      recordingError = "";
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+
+      mediaRecorder = new MediaRecorder(stream);
+      audioChunks = [];
+
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          audioChunks.push(event.data);
+        }
+      };
+
+      mediaRecorder.onstop = async () => {
+        await handleRecordingComplete();
+        stream.getTracks().forEach((track) => track.stop());
+      };
+
+      mediaRecorder.start();
+      isRecording = true;
+      console.log("🎙️ Recording started");
+    } catch (error) {
+      console.error("❌ Error starting recording:", error);
+      recordingError = "Failed to access microphone. Please check permissions.";
+    }
+  }
+
+  function stopRecording() {
+    if (mediaRecorder && isRecording) {
+      mediaRecorder.stop();
+      isRecording = false;
+      console.log("⏹️ Recording stopped");
+    }
+  }
+
+  async function handleRecordingComplete() {
+    if (audioChunks.length === 0 || !currentSession) return;
+
+    isTranscribing = true;
+    recordingError = "";
+
+    try {
+      const audioBlob = new Blob(audioChunks, { type: "audio/wav" });
+      const formData = new FormData();
+      formData.append("file", audioBlob, "recording.wav");
+      formData.append("sessionId", currentSession?.id || "default");
+      formData.append("agentId", currentSession?.agent_id || "");
+
+      const response = await fetch("/api/whisper-transcribe", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!response.ok) {
+        throw new Error(`Transcription failed: ${response.statusText}`);
+      }
+
+      const result = await response.json();
+
+      if (result.text && result.text.trim()) {
+        // Insert transcribed text into the input
+        messageInput = result.text.trim();
+        console.log("✅ Transcription completed:", result.text);
+
+        // Store audio URL for later use (we'll attach it to the message when sent)
+        if (result.audioUrl) {
+          currentAudioUrl = result.audioUrl;
+          console.log("✅ Audio stored and URL captured:", result.audioUrl);
+          console.log("🔍 Current audio URL state:", currentAudioUrl);
+        } else {
+          console.warn("⚠️ No audio URL returned from transcription API");
+        }
+      } else {
+        recordingError = "No speech detected. Please try again.";
+      }
+    } catch (error) {
+      console.error("❌ Transcription error:", error);
+      recordingError = "Failed to transcribe audio. Please try again.";
+    } finally {
+      isTranscribing = false;
+      audioChunks = [];
+    }
   }
 
   function getAgentIcon(agent: any): string {
@@ -296,7 +397,8 @@
                 class="flex items-center space-x-2 text-sm text-muted-foreground"
               >
                 <Users class="w-3 h-3" />
-                <span>{currentSession.agent?.persona?.name || "Assistant"}</span>
+                <span>{currentSession.agent?.persona?.name || "Assistant"}</span
+                >
                 <span>•</span>
                 <span class="flex items-center space-x-1">
                   {#if isOpenAIConfigured()}
@@ -359,6 +461,33 @@
                     } rounded-lg px-4 py-2`}
                   >
                     <p class="whitespace-pre-wrap">{message.content}</p>
+
+                    <!-- Audio Playback for Voice Messages -->
+                    {#if message.metadata?.audio_url}
+                      <div
+                        class="mt-2 p-2 bg-background/50 rounded-md border border-border/50"
+                      >
+                        <div class="flex items-center space-x-2 mb-1">
+                          <Mic class="w-3 h-3 text-muted-foreground" />
+                          <span
+                            class="text-xs font-medium text-muted-foreground"
+                            >Voice Message</span
+                          >
+                        </div>
+                        <audio
+                          controls
+                          src={message.metadata.audio_url}
+                          class="w-full h-8"
+                          preload="none"
+                        ></audio>
+                      </div>
+                    {:else if message.metadata?.is_voice_message}
+                      <!-- Debug: Show when voice message flag is set but no audio URL -->
+                      <div class="mt-2 text-xs text-muted-foreground">
+                        🎵 Voice message (audio URL missing)
+                      </div>
+                    {/if}
+
                     <p
                       class={`text-xs mt-1 ${
                         message.role === "user"
@@ -410,16 +539,40 @@
           <textarea
             bind:value={messageInput}
             placeholder="Type your message... (Enter to send, Shift+Enter for new line)"
-            disabled={sendingMessage || currentSession.status !== "active"}
+            disabled={sendingMessage ||
+              currentSession.status !== "active" ||
+              isRecording}
             on:keydown={handleKeyPress}
             class="flex-1 min-h-[40px] max-h-32 resize-none border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 rounded-md"
             rows="1"
           ></textarea>
+
+          <!-- Voice Recording Button -->
+          <Button
+            variant={isRecording ? "destructive" : "outline"}
+            size="sm"
+            on:click={isRecording ? stopRecording : startRecording}
+            disabled={sendingMessage ||
+              currentSession.status !== "active" ||
+              isTranscribing}
+            class="self-end"
+            title={isRecording ? "Stop recording" : "Start voice recording"}
+          >
+            {#if isTranscribing}
+              <Loader2 class="w-4 h-4 animate-spin" />
+            {:else if isRecording}
+              <Square class="w-4 h-4" />
+            {:else}
+              <Mic class="w-4 h-4" />
+            {/if}
+          </Button>
+
           <Button
             on:click={handleSendMessage}
             disabled={!messageInput.trim() ||
               sendingMessage ||
-              currentSession.status !== "active"}
+              currentSession.status !== "active" ||
+              isRecording}
             class="self-end"
           >
             {#if sendingMessage}
@@ -429,6 +582,31 @@
             {/if}
           </Button>
         </div>
+
+        <!-- Recording Status and Error Messages -->
+        {#if isRecording}
+          <div
+            class="flex items-center space-x-2 mt-2 text-sm text-muted-foreground"
+          >
+            <div class="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
+            <span>Recording... Click the square button to stop</span>
+          </div>
+        {/if}
+
+        {#if isTranscribing}
+          <div
+            class="flex items-center space-x-2 mt-2 text-sm text-muted-foreground"
+          >
+            <Loader2 class="w-4 h-4 animate-spin" />
+            <span>Transcribing audio...</span>
+          </div>
+        {/if}
+
+        {#if recordingError}
+          <div class="mt-2 text-sm text-destructive">
+            {recordingError}
+          </div>
+        {/if}
 
         {#if currentSession.status !== "active"}
           <p class="text-sm text-muted-foreground mt-2">

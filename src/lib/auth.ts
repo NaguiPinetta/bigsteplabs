@@ -362,11 +362,12 @@ export async function sendMagicLink(
         : `${window.location.origin}/auth/callback`;
     }
 
+    // Since we know the user exists, only try with shouldCreateUser: false
     const { error } = await supabase.auth.signInWithOtp({
       email,
       options: {
         emailRedirectTo: callbackUrl,
-        shouldCreateUser: true,
+        shouldCreateUser: false, // Only for existing users
       },
     });
 
