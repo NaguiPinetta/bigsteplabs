@@ -89,8 +89,23 @@ async function updateAuthState(session: Session | null) {
 }
 
 export async function signOut() {
-  await supabase.auth.signOut();
-  authStore.set({ session: null, user: null, loading: false });
+  try {
+    console.log("🔍 Auth store: Signing out...");
+    
+    // Clear the auth store immediately
+    authStore.set({ session: null, user: null, loading: false });
+    
+    // Sign out from Supabase
+    const { error } = await supabase.auth.signOut();
+    
+    if (error) {
+      console.error("❌ Auth store: Supabase sign out error:", error);
+    } else {
+      console.log("✅ Auth store: Sign out successful");
+    }
+  } catch (error) {
+    console.error("❌ Auth store: Sign out error:", error);
+  }
 }
 
 // Initialize auth state

@@ -7,6 +7,16 @@ function getRedirectUrl(redirectTo?: string): string {
   const baseUrl = window.location.origin;
   const callbackPath = "/auth/callback";
 
+  // Ensure we have a valid base URL
+  if (!baseUrl || baseUrl === "null") {
+    console.warn("Invalid base URL detected, using fallback");
+    return redirectTo
+      ? `https://your-production-domain.com${callbackPath}?next=${encodeURIComponent(
+          redirectTo
+        )}`
+      : `https://your-production-domain.com${callbackPath}`;
+  }
+
   if (redirectTo) {
     return `${baseUrl}${callbackPath}?next=${encodeURIComponent(redirectTo)}`;
   }
@@ -344,6 +354,13 @@ export async function sendMagicLink(
   try {
     console.log("🔍 Sending magic link to:", email);
 
+    // Detect mobile device
+    const isMobile =
+      /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
+        navigator.userAgent
+      );
+    console.log("🔍 Device type:", isMobile ? "Mobile" : "Desktop");
+
     // Determine the correct callback URL based on environment
     let callbackUrl;
     if (window.location.origin.includes("localhost")) {
@@ -354,13 +371,14 @@ export async function sendMagicLink(
           )}`
         : `http://localhost:5173/auth/callback`;
     } else {
-      // Use production redirect
+      // Use production redirect with mobile consideration
+      const baseUrl = window.location.origin;
       callbackUrl = redirectTo
-        ? `${window.location.origin}/auth/callback?next=${encodeURIComponent(
-            redirectTo
-          )}`
-        : `${window.location.origin}/auth/callback`;
+        ? `${baseUrl}/auth/callback?next=${encodeURIComponent(redirectTo)}`
+        : `${baseUrl}/auth/callback`;
     }
+
+    console.log("🔍 Using callback URL:", callbackUrl);
 
     // Since we know the user exists, only try with shouldCreateUser: false
     const { error } = await supabase.auth.signInWithOtp({
@@ -405,16 +423,42 @@ export async function signOut(redirectTo?: string): Promise<void> {
   try {
     console.log("🔍 Signing out user...");
 
-    await supabase.auth.signOut();
+    // Clear any stored session data first
+    if (typeof window !== "undefined") {
+      // Clear any auth-related localStorage
+      const keysToRemove = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && (key.includes('supabase') || key.includes('auth'))) {
+          keysToRemove.push(key);
+        }
+      }
+      keysToRemove.forEach(key => localStorage.removeItem(key));
+    }
+
+    // Sign out from Supabase
+    const { error } = await supabase.auth.signOut();
+    
+    if (error) {
+      console.error("❌ Supabase sign out error:", error);
+      // Continue with local cleanup even if Supabase fails
+    } else {
+      console.log("✅ Supabase sign out successful");
+    }
 
     const redirectUrl = redirectTo || "/auth/login";
     console.log("🔄 Redirecting to:", redirectUrl);
 
-    // await goto(redirectUrl, { replaceState: true }); // This line was removed as per the new_code
+    // Use window.location for hard redirect to ensure complete session cleanup
+    if (typeof window !== "undefined") {
+      window.location.href = redirectUrl;
+    }
   } catch (error) {
     console.error("❌ Sign out error:", error);
-    // Still redirect even if sign out fails
-    // await goto("/auth/login", { replaceState: true }); // This line was removed as per the new_code
+    // Force redirect even if everything fails
+    if (typeof window !== "undefined") {
+      window.location.href = redirectTo || "/auth/login";
+    }
   }
 }
 

@@ -33,7 +33,19 @@
   }
 
   async function handleSignOut() {
-    await signOut();
+    try {
+      console.log("🔍 Dashboard: Starting sign out process...");
+
+      // Clear the auth store first
+      authStore.set({ session: null, user: null, loading: false });
+
+      // Call the main sign out function
+      await signOut();
+    } catch (error) {
+      console.error("❌ Dashboard: Sign out error:", error);
+      // Force redirect even if sign out fails
+      window.location.href = "/auth/login";
+    }
   }
 
   // Navigation items based on user role
