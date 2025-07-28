@@ -130,28 +130,61 @@ export async function buildAgentContext(
 
     // Add dataset context if available
     if (agent.dataset_ids && agent.dataset_ids.length > 0) {
+      console.log("🔍 Agent has datasets:", agent.dataset_ids);
+
       const { data: datasets } = await supabase
         .from("datasets")
         .select("id, name, description, metadata")
         .in("id", agent.dataset_ids);
 
       if (datasets && datasets.length > 0) {
-        systemPrompt += "Available Knowledge Bases:\n";
-        datasets.forEach((dataset) => {
-          systemPrompt += `- ${dataset.name}: ${
-            dataset.description || "No description"
-          }\n`;
+        console.log(
+          "🔍 Found datasets:",
+          datasets.map((d) => d.name)
+        );
+        systemPrompt +=
+          "You have access to the following knowledge bases. Use this information to inform your responses, but provide original, contextual answers rather than copying the source material verbatim:\n\n";
 
-          // Include dataset content if available
-          if (dataset.metadata?.text_content) {
-            systemPrompt += `  Content: ${dataset.metadata.text_content.substring(
-              0,
-              500
-            )}...\n`;
+        // Fetch chunks for each dataset
+        for (const dataset of datasets) {
+          systemPrompt += `Knowledge Base: ${dataset.name}\n`;
+          if (dataset.description) {
+            systemPrompt += `Description: ${dataset.description}\n`;
           }
-        });
-        systemPrompt += "\n";
+
+          // Fetch dataset chunks
+          const { data: chunks } = await supabase
+            .from("dataset_chunks")
+            .select("content, index, metadata")
+            .eq("dataset_id", dataset.id)
+            .order("index", { ascending: true });
+
+          if (chunks && chunks.length > 0) {
+            console.log(
+              `🔍 Found ${chunks.length} chunks for dataset: ${dataset.name}`
+            );
+            systemPrompt += `Available Information:\n`;
+
+            // Add chunks in a structured way that encourages understanding rather than copying
+            chunks.forEach((chunk, index) => {
+              // Clean and format the content
+              const cleanContent = chunk.content
+                .trim()
+                .replace(/\n+/g, " ")
+                .replace(/\s+/g, " ");
+              systemPrompt += `- ${cleanContent}\n`;
+            });
+            systemPrompt += "\n";
+          } else {
+            console.log(`⚠️ No chunks found for dataset: ${dataset.name}`);
+            systemPrompt += `Status: No content available yet.\n\n`;
+          }
+        }
+        systemPrompt +=
+          "Instructions: Use the above information to provide accurate, helpful responses. Synthesize the knowledge into your own words and provide context-appropriate answers. Do not quote the source material directly unless specifically asked to do so.\n\n";
       }
+    } else {
+      console.log("🔍 Agent has no datasets assigned");
     }
 
     // Add behavioral instructions

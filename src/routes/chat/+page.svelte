@@ -33,6 +33,7 @@
     clearChatError,
     setCurrentSession,
   } from "$lib/stores/chat";
+  import type { ChatSessionWithAgent } from "$lib/types/database";
   import { isOpenAIConfigured } from "$lib/utils/openai-test";
 
   // Reactive state
@@ -47,6 +48,13 @@
     typingIndicator,
     error: state,
   } = $chatStore);
+
+  // Debug reactive statement to track currentSession changes
+  $: {
+    console.log("🔄 currentSession changed:", currentSession);
+    console.log("🔄 currentSession ID:", currentSession?.id);
+    console.log("🔄 messages count:", messages.length);
+  }
 
   // Local state
   let messageInput = "";
@@ -323,8 +331,12 @@
 </svelte:head>
 
 <div class="h-[calc(100vh-4rem)] flex bg-background">
-  <!-- Sessions Sidebar -->
-  <div class="w-full md:w-80 border-r border-border bg-card flex flex-col">
+  <!-- Sessions Sidebar - Hidden on mobile when chat is active -->
+  <div
+    class="w-full md:w-80 border-r border-border bg-card flex flex-col {currentSession
+      ? 'hidden md:flex'
+      : ''}"
+  >
     <!-- Sidebar Header -->
     <div class="p-4 border-b border-border">
       <div class="flex items-center justify-between mb-4">
@@ -359,7 +371,24 @@
               session.id
                 ? 'ring-2 ring-primary'
                 : ''}"
-              on:click={() => setCurrentSession(session)}
+              on:click={() => {
+                console.log("🔍 Chat session clicked:", session);
+                console.log("🔍 Current session before click:", currentSession);
+                console.log("🔍 Session ID:", session.id);
+                console.log("🔍 Session agent:", session.agent);
+                console.log("🔍 Calling setCurrentSession...");
+                setCurrentSession(session)
+                  .then((result) => {
+                    console.log("🔍 setCurrentSession result:", result);
+                    console.log(
+                      "🔍 Current session after setCurrentSession:",
+                      $chatStore.currentSession
+                    );
+                  })
+                  .catch((error) => {
+                    console.error("❌ Error in setCurrentSession:", error);
+                  });
+              }}
             >
               <div class="flex items-start justify-between">
                 <div class="flex items-start space-x-3 flex-1 min-w-0">
@@ -597,7 +626,6 @@
               currentSession.status !== "active" ||
               isTranscribing}
             class="self-end"
-            title={isRecording ? "Stop recording" : "Start voice recording"}
           >
             {#if isTranscribing}
               <Loader2 class="w-4 h-4 animate-spin" />
@@ -661,7 +689,7 @@
 
   <!-- Mobile Chat View -->
   {#if currentSession}
-    <div class="md:hidden flex flex-col h-[calc(100vh-4rem)]">
+    <div class="md:hidden flex flex-col h-[calc(100vh-4rem)] w-full">
       <!-- Mobile Chat Header -->
       <div class="p-4 border-b border-border bg-card">
         <div class="flex items-center justify-between">
@@ -669,6 +697,7 @@
             <button
               on:click={() => setCurrentSession(null)}
               class="p-2 hover:bg-accent rounded-md"
+              title="Back to Conversations"
             >
               <ChevronLeft class="w-5 h-5" />
             </button>
@@ -685,6 +714,15 @@
                 {currentSession.status}
               </p>
             </div>
+          </div>
+          <div class="flex items-center space-x-2">
+            <Button
+              variant="outline"
+              size="sm"
+              on:click={() => setCurrentSession(null)}
+            >
+              Conversations
+            </Button>
           </div>
         </div>
       </div>
@@ -813,7 +851,6 @@
               currentSession.status !== "active" ||
               isTranscribing}
             class="self-end"
-            title={isRecording ? "Stop recording" : "Start voice recording"}
           >
             {#if isTranscribing}
               <Loader2 class="w-4 h-4 animate-spin" />
@@ -875,7 +912,7 @@
     </div>
   {:else}
     <!-- Mobile Welcome Screen -->
-    <div class="md:hidden flex-1 flex items-center justify-center p-4">
+    <div class="md:hidden flex-1 flex items-center justify-center p-4 w-full">
       <div class="text-center max-w-sm">
         <Bot class="w-16 h-16 text-muted-foreground mx-auto mb-4" />
         <h3 class="text-xl font-semibold text-foreground mb-2">

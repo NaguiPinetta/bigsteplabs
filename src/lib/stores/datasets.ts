@@ -211,7 +211,7 @@ export async function loadDatasetChunks(datasetId: string): Promise<any[]> {
       .from("dataset_chunks")
       .select("*")
       .eq("dataset_id", datasetId)
-      .order("chunk_index", { ascending: true });
+      .order("index", { ascending: true });
 
     if (error) {
       throw error;
@@ -247,4 +247,105 @@ export function clearSelectedDataset(): void {
 
 export function clearDatasetsError(): void {
   datasetsStore.update((state) => ({ ...state, error: null }));
+}
+
+/**
+ * Create chunks from text content
+ */
+export async function createChunks(
+  datasetId: string,
+  content: string,
+  source: string,
+  chunkSize: number = 1000,
+  overlap: number = 200
+): Promise<{ data: any[] | null; error: string | null }> {
+  try {
+    console.log("🔍 Creating chunks for dataset:", datasetId);
+    console.log("🔍 Content length:", content.length);
+    console.log("🔍 Chunk size:", chunkSize, "Overlap:", overlap);
+
+    // Simple text chunking algorithm
+    const chunks: any[] = [];
+    let index = 0;
+    
+    for (let i = 0; i < content.length; i += chunkSize - overlap) {
+      const chunkContent = content.slice(i, i + chunkSize);
+      const charCount = chunkContent.length;
+      
+      chunks.push({
+        dataset_id: datasetId,
+        index: index,
+        content: chunkContent,
+        char_count: charCount,
+        token_count: Math.ceil(charCount / 4), // Rough estimate
+        metadata: {
+          source: source,
+          chunk_size: chunkSize,
+          overlap: overlap,
+          start_position: i,
+          end_position: Math.min(i + chunkSize, content.length)
+        }
+      });
+      
+      index++;
+    }
+
+    console.log("🔍 Created", chunks.length, "chunks");
+
+    // Insert chunks into database
+    const { data, error } = await supabase
+      .from("dataset_chunks")
+      .insert(chunks)
+      .select();
+
+    if (error) {
+      console.error("❌ Error inserting chunks:", error);
+      throw error;
+    }
+
+    console.log("✅ Successfully inserted", data?.length || 0, "chunks");
+
+    // Update dataset total_chunks count
+    await supabase
+      .from("datasets")
+      .update({ total_chunks: (data?.length || 0) })
+      .eq("id", datasetId);
+
+    // Refresh chunks in store
+    const updatedChunks = await loadDatasetChunks(datasetId);
+    datasetsStore.update((state) => ({
+      ...state,
+      chunks: {
+        ...state.chunks,
+        [datasetId]: updatedChunks
+      }
+    }));
+
+    return { data: data || [], error: null };
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : "Failed to create chunks";
+    console.error("❌ Error creating chunks:", errorMessage);
+    return { data: null, error: errorMessage };
+  }
+}
+
+/**
+ * Process file and create chunks
+ */
+export async function processFileToChunks(
+  datasetId: string,
+  file: File,
+  chunkSize: number = 1000,
+  overlap: number = 200
+): Promise<{ data: any[] | null; error: string | null }> {
+  try {
+    console.log("🔍 Processing file:", file.name, "for dataset:", datasetId);
+    
+    const text = await file.text();
+    return await createChunks(datasetId, text, `file:${file.name}`, chunkSize, overlap);
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : "Failed to process file";
+    console.error("❌ Error processing file:", errorMessage);
+    return { data: null, error: errorMessage };
+  }
 }

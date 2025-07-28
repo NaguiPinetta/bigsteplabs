@@ -1,6 +1,6 @@
 import { writable, get } from "svelte/store";
 import { supabase } from "$lib/supabase";
-import type { ChatSession, Message } from "$lib/types/database";
+import type { ChatSession, Message, ChatSessionWithAgent } from "$lib/types/database";
 import { generateAIResponse } from "$lib/services/openai";
 import {
   setLoadingState,
@@ -11,8 +11,8 @@ import {
 } from "./data-manager";
 
 interface ChatState {
-  sessions: ChatSession[];
-  currentSession: ChatSession | null;
+  sessions: ChatSessionWithAgent[];
+  currentSession: ChatSessionWithAgent | null;
   messages: Message[];
   agents: any[];
   loading: boolean;
@@ -215,7 +215,7 @@ export async function createChatSession(agentId: string, userId: string) {
 /**
  * Set current chat session and load messages from Supabase
  */
-export async function setCurrentSession(session: ChatSession | null) {
+export async function setCurrentSession(session: ChatSessionWithAgent | null) {
   if (!session) {
     chatStore.update((state) => ({
       ...state,

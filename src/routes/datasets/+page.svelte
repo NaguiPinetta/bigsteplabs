@@ -8,6 +8,8 @@
     updateDataset,
     deleteDataset,
     loadDatasetChunks,
+    createChunks,
+    processFileToChunks,
     setSelectedDataset,
     clearDatasetsError,
   } from "$lib/stores/datasets";
@@ -37,6 +39,8 @@
   let editDialogOpen = false;
   let chunkDialogOpen = false;
   let viewDialogOpen = false;
+  let deleteDialogOpen = false;
+  let datasetToDelete: any = null;
 
   let newDataset = {
     name: "",
@@ -55,8 +59,8 @@
 
   let chunkInput = {
     content: "",
-    chunkSize: 1000,
-    overlap: 200,
+    chunkSize: "1000",
+    overlap: "200",
   };
 
   $: user = $authStore.user;
@@ -89,15 +93,17 @@
     try {
       const datasetData = {
         name: newDataset.name.trim(),
-        description: newDataset.description.trim() || null,
+        description: newDataset.description.trim() || undefined,
         user_id: user.id,
         content_type: newDataset.contentType as "file" | "text",
         text_content:
-          newDataset.contentType === "text" ? newDataset.textContent : null,
+          newDataset.contentType === "text"
+            ? newDataset.textContent
+            : undefined,
         text_format:
           newDataset.contentType === "text"
             ? (newDataset.textFormat as "json" | "markdown" | "plain")
-            : null,
+            : undefined,
         file:
           newDataset.contentType === "file" && newDataset.file
             ? newDataset.file
@@ -129,24 +135,30 @@
 
     const result = await updateDataset(editDataset.id, {
       name: editDataset.name.trim(),
-      description: editDataset.description.trim() || null,
+      description: editDataset.description.trim() || undefined,
     });
 
-    if (result.data) {
+    if (result) {
       editDialogOpen = false;
     }
   }
 
   async function handleDeleteDataset(dataset: any) {
-    if (
-      !confirm(
-        `Are you sure you want to delete "${dataset.name}" and all its chunks?`
-      )
-    ) {
-      return;
-    }
+    datasetToDelete = dataset;
+    deleteDialogOpen = true;
+  }
 
-    await deleteDataset(dataset.id);
+  async function confirmDeleteDataset() {
+    if (datasetToDelete) {
+      await deleteDataset(datasetToDelete.id);
+      deleteDialogOpen = false;
+      datasetToDelete = null;
+    }
+  }
+
+  function cancelDeleteDataset() {
+    deleteDialogOpen = false;
+    datasetToDelete = null;
   }
 
   async function openEditDialog(dataset: any) {
@@ -166,7 +178,7 @@
 
   async function openChunkDialog(dataset: any) {
     setSelectedDataset(dataset);
-    chunkInput = { content: "", chunkSize: 1000, overlap: 200 };
+    chunkInput = { content: "", chunkSize: "1000", overlap: "200" };
     chunkDialogOpen = true;
   }
 
@@ -177,8 +189,8 @@
       selectedDataset.id,
       chunkInput.content,
       "manual_input",
-      chunkInput.chunkSize,
-      chunkInput.overlap
+      parseInt(chunkInput.chunkSize),
+      parseInt(chunkInput.overlap)
     );
 
     if (result.data) {
@@ -199,8 +211,8 @@
     await processFileToChunks(
       datasetId,
       file,
-      chunkInput.chunkSize,
-      chunkInput.overlap
+      parseInt(chunkInput.chunkSize),
+      parseInt(chunkInput.overlap)
     );
     chunkDialogOpen = false;
   }
@@ -535,8 +547,6 @@
             id="chunk-size"
             type="number"
             bind:value={chunkInput.chunkSize}
-            min="100"
-            max="4000"
           />
           <p class="text-xs text-muted-foreground mt-1">Characters per chunk</p>
         </div>
@@ -545,13 +555,7 @@
           <label for="overlap" class="block text-sm font-medium mb-2"
             >Overlap</label
           >
-          <Input
-            id="overlap"
-            type="number"
-            bind:value={chunkInput.overlap}
-            min="0"
-            max="500"
-          />
+          <Input id="overlap" type="number" bind:value={chunkInput.overlap} />
           <p class="text-xs text-muted-foreground mt-1">
             Character overlap between chunks
           </p>
@@ -659,6 +663,29 @@
     </Button>
     <Button variant="outline" on:click={() => (viewDialogOpen = false)}>
       Close
+    </Button>
+  </div>
+</Dialog>
+
+<!-- Delete Dataset Confirmation Dialog -->
+<Dialog bind:open={deleteDialogOpen} title="Delete Dataset">
+  {#if datasetToDelete}
+    <div class="space-y-4">
+      <p class="text-muted-foreground">
+        Are you sure you want to delete <strong>"{datasetToDelete.name}"</strong
+        > and all its chunks?
+      </p>
+      <p class="text-sm text-destructive">
+        This action cannot be undone. All content chunks will be permanently
+        deleted.
+      </p>
+    </div>
+  {/if}
+
+  <div slot="footer" class="flex justify-end space-x-2">
+    <Button variant="outline" on:click={cancelDeleteDataset}>Cancel</Button>
+    <Button variant="destructive" on:click={confirmDeleteDataset}>
+      Delete Dataset
     </Button>
   </div>
 </Dialog>

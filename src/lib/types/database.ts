@@ -235,6 +235,38 @@ export interface Database {
           created_at?: string;
         };
       };
+      dataset_chunks: {
+        Row: {
+          id: string;
+          dataset_id: string;
+          index: number;
+          content: string;
+          token_count: number | null;
+          char_count: number | null;
+          metadata: any;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          dataset_id: string;
+          index: number;
+          content: string;
+          token_count?: number | null;
+          char_count?: number | null;
+          metadata?: any;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          dataset_id?: string;
+          index?: number;
+          content?: string;
+          token_count?: number | null;
+          char_count?: number | null;
+          metadata?: any;
+          created_at?: string;
+        };
+      };
       personas: {
         Row: {
           id: string;
@@ -387,6 +419,7 @@ export interface Database {
           ended_at: string | null;
           message_count: number;
           metadata: any;
+          updated_at: string;
         };
         Insert: {
           id?: string;
@@ -399,6 +432,7 @@ export interface Database {
           ended_at?: string | null;
           message_count?: number;
           metadata?: any;
+          updated_at?: string;
         };
         Update: {
           id?: string;
@@ -411,6 +445,7 @@ export interface Database {
           ended_at?: string | null;
           message_count?: number;
           metadata?: any;
+          updated_at?: string;
         };
       };
       messages: {
@@ -510,8 +545,29 @@ export type Content = Database["public"]["Tables"]["content"]["Row"];
 export type Dataset = Database["public"]["Tables"]["datasets"]["Row"];
 export type ContentChunk =
   Database["public"]["Tables"]["content_chunks"]["Row"];
+export type DatasetChunk =
+  Database["public"]["Tables"]["dataset_chunks"]["Row"];
+
 export type Persona = Database["public"]["Tables"]["personas"]["Row"];
 export type Agent = Database["public"]["Tables"]["agents"]["Row"];
 export type Model = Database["public"]["Tables"]["models"]["Row"];
 export type ChatSession = Database["public"]["Tables"]["chat_sessions"]["Row"];
 export type Message = Database["public"]["Tables"]["messages"]["Row"];
+
+// Extended types for joined data
+export interface ChatSessionWithAgent extends ChatSession {
+  agent?: {
+    id: string;
+    name: string;
+    is_active: boolean;
+    persona?: {
+      name: string;
+      system_prompt: string;
+    };
+    model?: {
+      name: string;
+      provider: string;
+      engine: string;
+    };
+  };
+}
