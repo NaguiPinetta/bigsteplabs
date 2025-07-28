@@ -1,6 +1,13 @@
-import { writable } from "svelte/store";
+import { writable, get } from "svelte/store";
 import { supabase } from "$lib/supabase";
 import type { Model } from "$lib/types/database";
+import {
+  setLoadingState,
+  setDataError,
+  setDataLoaded,
+  shouldRefreshData,
+  canLoadData,
+} from "./data-manager";
 
 interface ModelsState {
   models: Model[];
@@ -21,7 +28,35 @@ export const modelsStore = writable<ModelsState>(initialState);
 /**
  * Load all models from Supabase
  */
-export async function loadModels() {
+export async function loadModels(forceRefresh = false) {
+  // Check if we should load data
+  const loadCheck = get(canLoadData);
+  if (!loadCheck.shouldLoad) {
+    console.log(
+      "⏸️ Skipping models load - auth not ready or user cannot manage"
+    );
+    return { data: null, error: "Not authorized or auth not ready" };
+  }
+
+  // Check if data is already loading
+  const currentState = get(modelsStore);
+  if (currentState.loading) {
+    console.log("⏸️ Models already loading, skipping...");
+    return { data: currentState.models, error: null };
+  }
+
+  // Check if we need to refresh data
+  if (
+    !forceRefresh &&
+    !shouldRefreshData("models") &&
+    currentState.models.length > 0
+  ) {
+    console.log("⏸️ Models data is fresh, skipping load...");
+    return { data: currentState.models, error: null };
+  }
+
+  console.log("🔄 Loading models from Supabase...");
+  setLoadingState("models", true);
   modelsStore.update((state) => ({ ...state, loading: true, error: null }));
 
   try {
@@ -38,6 +73,7 @@ export async function loadModels() {
       loading: false,
     }));
 
+    setDataLoaded("models");
     console.log("✅ Models loaded from database:", data?.length || 0);
     return { data: data || [], error: null };
   } catch (error) {
@@ -49,6 +85,7 @@ export async function loadModels() {
       loading: false,
       error: errorMessage,
     }));
+    setDataError("models", errorMessage);
     return { data: null, error: errorMessage };
   }
 }

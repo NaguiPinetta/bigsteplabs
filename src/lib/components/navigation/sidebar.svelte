@@ -35,10 +35,8 @@
   $: loading = authState.loading;
   $: currentPath = $page.url.pathname;
 
-  // Initialize auth on component mount
-  onMount(() => {
-    initAuth();
-  });
+  // Auth is already initialized in root layout
+  // No need to initialize here
 
   // Log auth state changes for debugging
   $: {
@@ -159,9 +157,7 @@
     // Don't filter admin section while loading
     if (loading) return true;
 
-    return (
-      isAdmin(user) && adminItems.some((item) => canAccessItem(item.roles))
-    );
+    return isAdmin() && adminItems.some((item) => canAccessItem(item.roles));
   }
 
   function closeMobileNav() {

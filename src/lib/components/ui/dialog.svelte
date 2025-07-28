@@ -51,7 +51,7 @@
     <!-- Dialog Content -->
     <div
       class={cn(
-        "relative z-50 grid w-full max-w-lg gap-4 border bg-background p-6 shadow-lg duration-200 sm:rounded-lg",
+        "relative z-50 grid w-full max-w-lg gap-4 border bg-background p-4 lg:p-6 shadow-lg duration-200 sm:rounded-lg mx-4",
         className
       )}
     >

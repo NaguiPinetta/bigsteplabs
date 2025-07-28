@@ -1,6 +1,13 @@
-import { writable } from "svelte/store";
+import { writable, get } from "svelte/store";
 import { supabase } from "$lib/supabase";
 import type { Persona } from "$lib/types/database";
+import {
+  setLoadingState,
+  setDataError,
+  setDataLoaded,
+  shouldRefreshData,
+  canLoadData,
+} from "./data-manager";
 
 interface PersonasState {
   personas: Persona[];
@@ -21,7 +28,35 @@ export const personasStore = writable<PersonasState>(initialState);
 /**
  * Load all personas from Supabase
  */
-export async function loadPersonas() {
+export async function loadPersonas(forceRefresh = false) {
+  // Check if we should load data
+  const loadCheck = get(canLoadData);
+  if (!loadCheck.shouldLoad) {
+    console.log(
+      "⏸️ Skipping personas load - auth not ready or user cannot manage"
+    );
+    return { data: null, error: "Not authorized or auth not ready" };
+  }
+
+  // Check if data is already loading
+  const currentState = get(personasStore);
+  if (currentState.loading) {
+    console.log("⏸️ Personas already loading, skipping...");
+    return { data: currentState.personas, error: null };
+  }
+
+  // Check if we need to refresh data
+  if (
+    !forceRefresh &&
+    !shouldRefreshData("personas") &&
+    currentState.personas.length > 0
+  ) {
+    console.log("⏸️ Personas data is fresh, skipping load...");
+    return { data: currentState.personas, error: null };
+  }
+
+  console.log("🔄 Loading personas from Supabase...");
+  setLoadingState("personas", true);
   personasStore.update((state) => ({ ...state, loading: true, error: null }));
 
   try {
@@ -38,6 +73,7 @@ export async function loadPersonas() {
       loading: false,
     }));
 
+    setDataLoaded("personas");
     console.log("✅ Personas loaded from database:", data?.length || 0);
     return { data: data || [], error: null };
   } catch (error) {
@@ -49,6 +85,7 @@ export async function loadPersonas() {
       loading: false,
       error: errorMessage,
     }));
+    setDataError("personas", errorMessage);
     return { data: null, error: errorMessage };
   }
 }
@@ -59,9 +96,13 @@ export async function loadPersonas() {
 export async function createPersona(
   persona: Omit<Persona, "id" | "created_at" | "updated_at">
 ) {
+  console.log("🔍 createPersona called with:", persona);
+  
   personasStore.update((state) => ({ ...state, loading: true, error: null }));
 
   try {
+    console.log("🔍 Inserting persona into Supabase...");
+    
     const { data, error } = await supabase
       .from("personas")
       .insert({
@@ -74,7 +115,12 @@ export async function createPersona(
       .select()
       .single();
 
-    if (error) throw error;
+    console.log("🔍 Supabase response - data:", data, "error:", error);
+
+    if (error) {
+      console.error("❌ Supabase error:", error);
+      throw error;
+    }
 
     // Update local store
     personasStore.update((state) => ({
@@ -89,6 +135,7 @@ export async function createPersona(
     const errorMessage =
       error instanceof Error ? error.message : "Failed to create persona";
     console.error("❌ Error creating persona:", errorMessage);
+    console.error("❌ Full error object:", error);
     personasStore.update((state) => ({
       ...state,
       loading: false,
@@ -193,6 +240,8 @@ export function validatePersona(persona: Partial<Persona>): {
   valid: boolean;
   errors: string[];
 } {
+  console.log("🔍 validatePersona called with:", persona);
+  
   const errors: string[] = [];
 
   if (!persona.name || persona.name.trim().length < 2) {
@@ -215,10 +264,13 @@ export function validatePersona(persona: Partial<Persona>): {
     errors.push("Description must be less than 500 characters");
   }
 
-  return {
+  const result = {
     valid: errors.length === 0,
     errors,
   };
+  
+  console.log("🔍 Validation result:", result);
+  return result;
 }
 
 /**

@@ -17,6 +17,8 @@
     Mic,
     MicOff,
     Square,
+    AlertTriangle,
+    ChevronLeft,
   } from "lucide-svelte";
 
   import { authStore } from "$lib/stores/auth";
@@ -51,6 +53,10 @@
   let messagesContainer: HTMLElement;
   let newChatDialogOpen = false;
   let selectedAgentId = "";
+
+  // Delete confirmation dialog state
+  let deleteDialogOpen = false;
+  let sessionToDelete: any = null;
 
   // Voice recording state
   let isRecording = false;
@@ -126,12 +132,34 @@
     // Shift+Enter should create new line (default behavior)
   }
 
-  async function handleDeleteSession(session: any) {
-    if (!confirm(`Are you sure you want to delete this conversation?`)) {
+  function handleDeleteSession(session: any) {
+    console.log("🗑️ Delete button clicked for session:", session);
+    sessionToDelete = session;
+    deleteDialogOpen = true;
+  }
+
+  async function confirmDeleteSession() {
+    if (!sessionToDelete) {
+      console.warn("⚠️ No session to delete");
       return;
     }
 
-    await deleteChatSession(session.id);
+    console.log("🗑️ Confirming delete for session:", sessionToDelete.id);
+    const result = await deleteChatSession(sessionToDelete.id);
+
+    if (result.error) {
+      console.error("❌ Delete failed:", result.error);
+    } else {
+      console.log("✅ Delete successful");
+    }
+
+    deleteDialogOpen = false;
+    sessionToDelete = null;
+  }
+
+  function cancelDeleteSession() {
+    deleteDialogOpen = false;
+    sessionToDelete = null;
   }
 
   async function handleEndSession(session: any) {
@@ -154,12 +182,25 @@
         hour12: true,
       });
     } else if (diffInHours < 48) {
-      return "Yesterday";
+      return `Yesterday at ${date.toLocaleTimeString("en-US", {
+        hour: "numeric",
+        minute: "2-digit",
+        hour12: true,
+      })}`;
     } else {
-      return date.toLocaleDateString("en-US", {
-        month: "short",
-        day: "numeric",
-      });
+      return (
+        date.toLocaleDateString("en-US", {
+          month: "short",
+          day: "numeric",
+          year: "numeric",
+        }) +
+        " at " +
+        date.toLocaleTimeString("en-US", {
+          hour: "numeric",
+          minute: "2-digit",
+          hour12: true,
+        })
+      );
     }
   }
 
@@ -283,7 +324,7 @@
 
 <div class="h-[calc(100vh-4rem)] flex bg-background">
   <!-- Sessions Sidebar -->
-  <div class="w-80 border-r border-border bg-card flex flex-col">
+  <div class="w-full md:w-80 border-r border-border bg-card flex flex-col">
     <!-- Sidebar Header -->
     <div class="p-4 border-b border-border">
       <div class="flex items-center justify-between mb-4">
@@ -360,7 +401,7 @@
   </div>
 
   <!-- Main Chat Area -->
-  <div class="flex-1 flex flex-col">
+  <div class="hidden md:flex flex-1 flex-col">
     {#if !currentSession}
       <!-- Welcome Screen -->
       <div class="flex-1 flex items-center justify-center">
@@ -617,6 +658,240 @@
       </div>
     {/if}
   </div>
+
+  <!-- Mobile Chat View -->
+  {#if currentSession}
+    <div class="md:hidden flex flex-col h-[calc(100vh-4rem)]">
+      <!-- Mobile Chat Header -->
+      <div class="p-4 border-b border-border bg-card">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center space-x-3">
+            <button
+              on:click={() => setCurrentSession(null)}
+              class="p-2 hover:bg-accent rounded-md"
+            >
+              <ChevronLeft class="w-5 h-5" />
+            </button>
+            <div
+              class="w-8 h-8 bg-primary/10 rounded-full flex items-center justify-center text-sm"
+            >
+              {getAgentIcon(currentSession.agent)}
+            </div>
+            <div>
+              <h3 class="font-semibold text-foreground">
+                {currentSession.agent?.name || "AI Assistant"}
+              </h3>
+              <p class="text-xs text-muted-foreground">
+                {currentSession.status}
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Mobile Messages -->
+      <div class="flex-1 flex flex-col p-4 min-h-0">
+        {#if loading}
+          <div class="flex items-center justify-center py-8">
+            <Loader2 class="w-6 h-6 animate-spin text-primary" />
+            <span class="ml-2 text-muted-foreground">Loading messages...</span>
+          </div>
+        {:else}
+          <div class="flex-1 space-y-4 overflow-y-auto min-h-0">
+            {#if messages.length === 0}
+              <div class="flex items-center justify-center h-full">
+                <div class="text-center">
+                  <MessageSquare
+                    class="w-12 h-12 text-muted-foreground mx-auto mb-3"
+                  />
+                  <p class="text-muted-foreground">
+                    Start the conversation! Send a message to {currentSession
+                      .agent?.name || "your assistant"}.
+                  </p>
+                </div>
+              </div>
+            {:else}
+              {#each messages as message (message.id)}
+                <div
+                  class={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}
+                >
+                  <div
+                    class={`${message.role === "user" ? "max-w-[85%]" : "max-w-[90%]"} ${
+                      message.role === "user"
+                        ? "bg-primary text-primary-foreground"
+                        : "bg-muted text-muted-foreground"
+                    } rounded-lg px-3 py-2`}
+                  >
+                    <p class="whitespace-pre-wrap text-sm">{message.content}</p>
+
+                    <!-- Audio Playback for Voice Messages -->
+                    {#if message.metadata?.audio_url}
+                      <div
+                        class="mt-2 p-2 bg-background/50 rounded-md border border-border/50"
+                      >
+                        <div class="flex items-center space-x-2 mb-1">
+                          <Mic class="w-3 h-3 text-muted-foreground" />
+                          <span
+                            class="text-xs font-medium text-muted-foreground"
+                            >Voice Message</span
+                          >
+                        </div>
+                        <audio
+                          controls
+                          src={message.metadata.audio_url}
+                          class="w-full h-8"
+                          preload="none"
+                        ></audio>
+                      </div>
+                    {/if}
+
+                    <p
+                      class={`text-xs mt-1 ${
+                        message.role === "user"
+                          ? "text-primary-foreground/70"
+                          : "text-muted-foreground/70"
+                      }`}
+                    >
+                      {formatMessageTime(message.created_at)}
+                    </p>
+                  </div>
+                </div>
+              {/each}
+            {/if}
+
+            <!-- Typing Indicator -->
+            {#if typingIndicator}
+              <div class="flex justify-start">
+                <div
+                  class="bg-muted text-muted-foreground rounded-lg px-3 py-2"
+                >
+                  <div class="flex items-center space-x-1">
+                    <div class="flex space-x-1">
+                      <div
+                        class="w-2 h-2 bg-current rounded-full animate-pulse"
+                      ></div>
+                      <div
+                        class="w-2 h-2 bg-current rounded-full animate-pulse"
+                        style="animation-delay: 0.2s"
+                      ></div>
+                      <div
+                        class="w-2 h-2 bg-current rounded-full animate-pulse"
+                        style="animation-delay: 0.4s"
+                      ></div>
+                    </div>
+                    <span class="text-xs ml-2">
+                      {currentSession.agent?.name || "Assistant"} is typing...
+                    </span>
+                  </div>
+                </div>
+              </div>
+            {/if}
+          </div>
+        {/if}
+      </div>
+
+      <!-- Mobile Message Input -->
+      <div class="p-4 border-t border-border bg-background flex-shrink-0">
+        <div class="flex space-x-2">
+          <textarea
+            bind:value={messageInput}
+            placeholder="Type your message..."
+            disabled={sendingMessage ||
+              currentSession.status !== "active" ||
+              isRecording}
+            on:keydown={handleKeyPress}
+            class="flex-1 min-h-[40px] max-h-24 resize-none border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 rounded-md"
+            rows="1"
+          ></textarea>
+
+          <!-- Voice Recording Button -->
+          <Button
+            variant={isRecording ? "destructive" : "outline"}
+            size="sm"
+            on:click={isRecording ? stopRecording : startRecording}
+            disabled={sendingMessage ||
+              currentSession.status !== "active" ||
+              isTranscribing}
+            class="self-end"
+            title={isRecording ? "Stop recording" : "Start voice recording"}
+          >
+            {#if isTranscribing}
+              <Loader2 class="w-4 h-4 animate-spin" />
+            {:else if isRecording}
+              <Square class="w-4 h-4" />
+            {:else}
+              <Mic class="w-4 h-4" />
+            {/if}
+          </Button>
+
+          <Button
+            on:click={handleSendMessage}
+            disabled={!messageInput.trim() ||
+              sendingMessage ||
+              currentSession.status !== "active" ||
+              isRecording}
+            class="self-end"
+          >
+            {#if sendingMessage}
+              <Loader2 class="w-4 h-4 animate-spin" />
+            {:else}
+              <Send class="w-4 h-4" />
+            {/if}
+          </Button>
+        </div>
+
+        <!-- Recording Status and Error Messages -->
+        {#if isRecording}
+          <div
+            class="flex items-center space-x-2 mt-2 text-sm text-muted-foreground"
+          >
+            <div class="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
+            <span>Recording... Tap to stop</span>
+          </div>
+        {/if}
+
+        {#if isTranscribing}
+          <div
+            class="flex items-center space-x-2 mt-2 text-sm text-muted-foreground"
+          >
+            <Loader2 class="w-4 h-4 animate-spin" />
+            <span>Transcribing audio...</span>
+          </div>
+        {/if}
+
+        {#if recordingError}
+          <div class="mt-2 text-sm text-destructive">
+            {recordingError}
+          </div>
+        {/if}
+
+        {#if currentSession.status !== "active"}
+          <p class="text-sm text-muted-foreground mt-2">
+            This conversation has ended. Start a new conversation to continue
+            chatting.
+          </p>
+        {/if}
+      </div>
+    </div>
+  {:else}
+    <!-- Mobile Welcome Screen -->
+    <div class="md:hidden flex-1 flex items-center justify-center p-4">
+      <div class="text-center max-w-sm">
+        <Bot class="w-16 h-16 text-muted-foreground mx-auto mb-4" />
+        <h3 class="text-xl font-semibold text-foreground mb-2">
+          Welcome to BigStepLabs Chat
+        </h3>
+        <p class="text-muted-foreground mb-6 text-sm">
+          Select a conversation from the list or start a new chat with one of
+          our AI learning assistants.
+        </p>
+        <Button on:click={() => (newChatDialogOpen = true)} class="w-full">
+          <Plus class="w-4 h-4 mr-2" />
+          Start New Conversation
+        </Button>
+      </div>
+    </div>
+  {/if}
 </div>
 
 <!-- New Chat Dialog -->
@@ -692,5 +967,40 @@
         </Button>
       </div>
     {/if}
+  </div>
+</Dialog>
+
+<!-- Delete Confirmation Dialog -->
+<Dialog bind:open={deleteDialogOpen} title="Delete Conversation">
+  <div class="space-y-4">
+    <div class="flex items-start space-x-3">
+      <AlertTriangle class="w-5 h-5 text-destructive mt-0.5 flex-shrink-0" />
+      <div>
+        <p class="text-foreground font-medium">
+          Are you sure you want to delete this conversation?
+        </p>
+        <p class="text-sm text-muted-foreground mt-1">
+          This action cannot be undone. All messages in this conversation will
+          be permanently deleted.
+        </p>
+        {#if sessionToDelete}
+          <div class="mt-3 p-3 bg-muted rounded-lg">
+            <p class="text-sm font-medium">
+              {sessionToDelete.agent?.name || "AI Assistant"}
+            </p>
+            <p class="text-xs text-muted-foreground">
+              {sessionToDelete.message_count || 0} messages
+            </p>
+          </div>
+        {/if}
+      </div>
+    </div>
+
+    <div class="flex justify-end space-x-3">
+      <Button variant="outline" on:click={cancelDeleteSession}>Cancel</Button>
+      <Button variant="destructive" on:click={confirmDeleteSession}>
+        Delete Conversation
+      </Button>
+    </div>
   </div>
 </Dialog>

@@ -1,6 +1,13 @@
-import { writable } from "svelte/store";
+import { writable, get } from "svelte/store";
 import { supabase } from "../supabase";
 import type { Dataset } from "../types";
+import {
+  setLoadingState,
+  setDataError,
+  setDataLoaded,
+  shouldRefreshData,
+  canLoadData,
+} from "./data-manager";
 
 interface DatasetsState {
   datasets: Dataset[];
@@ -20,7 +27,35 @@ const initialState: DatasetsState = {
 
 export const datasetsStore = writable<DatasetsState>(initialState);
 
-export async function loadDatasets(): Promise<void> {
+export async function loadDatasets(forceRefresh = false): Promise<void> {
+  // Check if we should load data
+  const loadCheck = get(canLoadData);
+  if (!loadCheck.shouldLoad) {
+    console.log(
+      "⏸️ Skipping datasets load - auth not ready or user cannot manage"
+    );
+    return;
+  }
+
+  // Check if data is already loading
+  const currentState = get(datasetsStore);
+  if (currentState.loading) {
+    console.log("⏸️ Datasets already loading, skipping...");
+    return;
+  }
+
+  // Check if we need to refresh data
+  if (
+    !forceRefresh &&
+    !shouldRefreshData("datasets") &&
+    currentState.datasets.length > 0
+  ) {
+    console.log("⏸️ Datasets data is fresh, skipping load...");
+    return;
+  }
+
+  console.log("🔄 Loading datasets from Supabase...");
+  setLoadingState("datasets", true);
   datasetsStore.update((state) => ({ ...state, loading: true, error: null }));
 
   try {
@@ -38,13 +73,19 @@ export async function loadDatasets(): Promise<void> {
       datasets: data || [],
       loading: false,
     }));
+
+    setDataLoaded("datasets");
+    console.log("✅ Datasets loaded from database:", data?.length || 0);
   } catch (error) {
     console.error("Error loading datasets:", error);
+    const errorMessage =
+      error instanceof Error ? error.message : "Failed to load datasets";
     datasetsStore.update((state) => ({
       ...state,
       loading: false,
-      error: error instanceof Error ? error.message : "Failed to load datasets",
+      error: errorMessage,
     }));
+    setDataError("datasets", errorMessage);
   }
 }
 
@@ -57,7 +98,7 @@ export async function createDataset(
       name: dataset.name,
       description: dataset.description,
       user_id: dataset.user_id,
-      content_type: dataset.content_type || 'file',
+      content_type: dataset.content_type || "file",
       text_content: dataset.text_content,
       text_format: dataset.text_format,
       file_url: dataset.file_url,
@@ -65,7 +106,7 @@ export async function createDataset(
       file_size: dataset.file_size,
       file_type: dataset.file_type,
       total_chunks: dataset.total_chunks || 0,
-      processing_status: dataset.processing_status || 'pending',
+      processing_status: dataset.processing_status || "pending",
       metadata: dataset.metadata || {},
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),

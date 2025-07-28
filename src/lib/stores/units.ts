@@ -1,6 +1,13 @@
 import { writable, get } from "svelte/store";
 import { supabase } from "$lib/supabase";
 import type { Unit } from "$lib/types/database";
+import { 
+  setLoadingState, 
+  setDataError, 
+  setDataLoaded, 
+  shouldRefreshData,
+  canLoadData 
+} from "./data-manager";
 
 interface UnitsState {
   units: Unit[];
@@ -31,8 +38,29 @@ function generateSlug(title: string): string {
 /**
  * Load all units, optionally filtered by module
  */
-export async function loadUnits(moduleId?: string) {
-  console.log("🔍 Loading units from Supabase...");
+export async function loadUnits(moduleId?: string, forceRefresh = false) {
+  // Check if we should load data
+  const loadCheck = get(canLoadData);
+  if (!loadCheck.shouldLoad) {
+    console.log("⏸️ Skipping units load - auth not ready or user cannot manage");
+    return { data: null, error: "Not authorized or auth not ready" };
+  }
+
+  // Check if data is already loading
+  const currentState = get(unitsStore);
+  if (currentState.loading) {
+    console.log("⏸️ Units already loading, skipping...");
+    return { data: currentState.units, error: null };
+  }
+
+  // Check if we need to refresh data (only for non-filtered loads)
+  if (!moduleId && !forceRefresh && !shouldRefreshData("units") && currentState.units.length > 0) {
+    console.log("⏸️ Units data is fresh, skipping load...");
+    return { data: currentState.units, error: null };
+  }
+
+  console.log("🔄 Loading units from Supabase...");
+  setLoadingState("units", true);
   unitsStore.update((state) => ({ ...state, loading: true, error: null }));
 
   try {
@@ -49,6 +77,7 @@ export async function loadUnits(moduleId?: string) {
 
     if (error) {
       console.error("❌ Error loading units:", error);
+      setDataError("units", error.message);
       unitsStore.update((state) => ({
         ...state,
         loading: false,
@@ -64,11 +93,18 @@ export async function loadUnits(moduleId?: string) {
       loading: false,
     }));
 
+    // Only mark as loaded if this was a full load (not filtered)
+    if (!moduleId) {
+      setDataLoaded("units");
+    }
+
     return { data: units, error: null };
   } catch (error) {
     console.error("❌ Unexpected error loading units:", error);
     const errorMessage =
       error instanceof Error ? error.message : "Failed to load units";
+    
+    setDataError("units", errorMessage);
     unitsStore.update((state) => ({
       ...state,
       loading: false,

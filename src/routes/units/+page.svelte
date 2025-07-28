@@ -14,6 +14,8 @@
   import Input from "$lib/components/ui/input.svelte";
   import Textarea from "$lib/components/ui/textarea.svelte";
   import Select from "$lib/components/ui/select.svelte";
+  import LoadingOptimizer from "$lib/components/ui/loading-optimizer.svelte";
+  import CrudTips from "$lib/components/ui/crud-tips.svelte";
   import {
     Layers3,
     Plus,
@@ -27,7 +29,7 @@
   } from "lucide-svelte";
 
   $: user = $authStore.user;
-  $: canManage = canManageContent(user);
+  $: canManage = $canManageContent;
   $: unitState = $unitsStore;
   $: moduleState = $modulesStore;
   $: units = unitState.units;
@@ -52,6 +54,21 @@
     console.log("  - Can manage:", canManage);
     console.log("  - Auth store state:", $authStore);
 
+    // Wait for auth to be ready
+    if ($authStore.loading) {
+      console.log("⏳ Waiting for auth to initialize...");
+      const unsubscribe = authStore.subscribe((auth) => {
+        if (!auth.loading && auth.initialized) {
+          unsubscribe();
+          loadData();
+        }
+      });
+    } else {
+      loadData();
+    }
+  });
+
+  async function loadData() {
     if (canManage) {
       console.log("✅ Loading units and modules...");
       // Load both units and modules
@@ -65,7 +82,7 @@
     } else {
       console.log("❌ Cannot manage content - not loading data");
     }
-  });
+  }
 
   function openCreateDialog() {
     newUnit = {
@@ -243,6 +260,17 @@
         </Card>
       {/each}
     </div>
+
+    <!-- Tips -->
+    <CrudTips
+      title="Unit Management Tips"
+      tips={[
+        "Organize units within modules to create a logical learning flow",
+        "Set realistic estimated durations to help students plan their study time",
+        "Use descriptive titles and descriptions for better content organization",
+        "Create units in draft mode before publishing to students"
+      ]}
+    />
   {/if}
 </div>
 
@@ -289,12 +317,17 @@
       <label for="estimated-duration" class="block text-sm font-medium mb-2"
         >Estimated Duration (minutes)</label
       >
-      <Input
+      <input
         id="estimated-duration"
         type="number"
-        bind:value={newUnit.estimated_duration_minutes}
+        class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+        value={newUnit.estimated_duration_minutes.toString()}
         min="1"
         max="1440"
+        on:input={(e) => {
+          const target = e.target as HTMLInputElement;
+          newUnit.estimated_duration_minutes = parseInt(target.value) || 30;
+        }}
       />
     </div>
   </div>

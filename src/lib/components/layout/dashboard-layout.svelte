@@ -1,8 +1,8 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import Sidebar from "../navigation/sidebar.svelte";
-  import { authStore, initAuth } from "$lib/stores/auth";
-  import { signOut } from "$lib/auth";
+import Sidebar from "../navigation/sidebar.svelte";
+import { authStore } from "$lib/stores/auth";
+import { signOut } from "$lib/auth";
   import { goto } from "$app/navigation";
   import { LogOut } from "lucide-svelte";
   import {
@@ -37,7 +37,7 @@
       console.log("🔍 Dashboard: Starting sign out process...");
 
       // Clear the auth store first
-      authStore.set({ session: null, user: null, loading: false });
+      authStore.set({ session: null, user: null, loading: false, initialized: true });
 
       // Call the main sign out function
       await signOut();
@@ -129,7 +129,7 @@
   <Sidebar />
 
   <!-- Main Content -->
-  <main class="lg:ml-64 min-h-screen">
+  <main class="lg:ml-64 min-h-screen pt-16 lg:pt-0">
     <!-- Top Bar -->
     <header
       class="sticky top-0 z-20 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60"
@@ -173,7 +173,7 @@
     </header>
 
     <!-- Content Area -->
-    <div class="p-4 lg:p-8">
+    <div class="p-4 lg:p-8 max-w-7xl mx-auto">
       <slot />
     </div>
   </main>

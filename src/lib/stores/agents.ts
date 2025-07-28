@@ -1,6 +1,13 @@
-import { writable } from "svelte/store";
+import { writable, get } from "svelte/store";
 import { supabase } from "$lib/supabase";
 import type { Agent } from "$lib/types/database";
+import { 
+  setLoadingState, 
+  setDataError, 
+  setDataLoaded, 
+  shouldRefreshData,
+  canLoadData 
+} from "./data-manager";
 
 interface AgentsState {
   agents: Agent[];
@@ -21,7 +28,29 @@ export const agentsStore = writable<AgentsState>(initialState);
 /**
  * Load all agents from Supabase with populated relationships
  */
-export async function loadAgents() {
+export async function loadAgents(forceRefresh = false) {
+  // Check if we should load data
+  const loadCheck = get(canLoadData);
+  if (!loadCheck.shouldLoad) {
+    console.log("⏸️ Skipping agents load - auth not ready or user cannot manage");
+    return { data: null, error: "Not authorized or auth not ready" };
+  }
+
+  // Check if data is already loading
+  const currentState = get(agentsStore);
+  if (currentState.loading) {
+    console.log("⏸️ Agents already loading, skipping...");
+    return { data: currentState.agents, error: null };
+  }
+
+  // Check if we need to refresh data
+  if (!forceRefresh && !shouldRefreshData("agents") && currentState.agents.length > 0) {
+    console.log("⏸️ Agents data is fresh, skipping load...");
+    return { data: currentState.agents, error: null };
+  }
+
+  console.log("🔄 Loading agents from Supabase...");
+  setLoadingState("agents", true);
   agentsStore.update((state) => ({ ...state, loading: true, error: null }));
 
   try {
@@ -64,6 +93,7 @@ export async function loadAgents() {
       loading: false,
     }));
 
+    setDataLoaded("agents");
     console.log(
       "✅ Agents loaded with populated relationships:",
       enrichedAgents.length
@@ -73,6 +103,8 @@ export async function loadAgents() {
     const errorMessage =
       error instanceof Error ? error.message : "Failed to load agents";
     console.error("❌ Error loading agents:", errorMessage);
+    
+    setDataError("agents", errorMessage);
     agentsStore.update((state) => ({
       ...state,
       loading: false,

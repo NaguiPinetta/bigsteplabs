@@ -18,6 +18,7 @@
   import Input from "$lib/components/ui/input.svelte";
   import Textarea from "$lib/components/ui/textarea.svelte";
   import Card from "$lib/components/ui/card.svelte";
+  import CrudTips from "$lib/components/ui/crud-tips.svelte";
   import {
     FileText,
     Edit,
@@ -51,7 +52,7 @@
   let selectedUnitFilter = "";
 
   $: user = $authStore.user;
-  $: canManage = canManageContent(user);
+  $: canManage = $canManageContent;
   $: unitState = $unitsStore;
   $: moduleState = $modulesStore;
   $: contentState = $contentStore;
@@ -513,6 +514,17 @@
         </Card>
       {/each}
     </div>
+
+    <!-- Tips -->
+    <CrudTips
+      title="Content Management Tips"
+      tips={[
+        "Create diverse content types to engage different learning styles",
+        "Use clear titles and descriptions to help students navigate content",
+        "Set realistic time estimates to help students plan their study sessions",
+        "Organize content within units to maintain a logical learning flow",
+      ]}
+    />
   {/if}
 </div>
 

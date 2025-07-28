@@ -1,7 +1,14 @@
-import { writable } from "svelte/store";
+import { writable, get } from "svelte/store";
 import { supabase } from "$lib/supabase";
 import type { ChatSession, Message } from "$lib/types/database";
 import { generateAIResponse } from "$lib/services/openai";
+import {
+  setLoadingState,
+  setDataError,
+  setDataLoaded,
+  shouldRefreshData,
+  canLoadData,
+} from "./data-manager";
 
 interface ChatState {
   sessions: ChatSession[];
@@ -30,7 +37,35 @@ export const chatStore = writable<ChatState>(initialState);
 /**
  * Load user's chat sessions from Supabase
  */
-export async function loadChatSessions() {
+export async function loadChatSessions(forceRefresh = false) {
+  // Check if we should load data
+  const loadCheck = get(canLoadData);
+  if (!loadCheck.shouldLoad) {
+    console.log(
+      "⏸️ Skipping chat sessions load - auth not ready or user cannot manage"
+    );
+    return { data: null, error: "Not authorized or auth not ready" };
+  }
+
+  // Check if data is already loading
+  const currentState = get(chatStore);
+  if (currentState.loading) {
+    console.log("⏸️ Chat sessions already loading, skipping...");
+    return { data: currentState.sessions, error: null };
+  }
+
+  // Check if we need to refresh data
+  if (
+    !forceRefresh &&
+    !shouldRefreshData("chatSessions") &&
+    currentState.sessions.length > 0
+  ) {
+    console.log("⏸️ Chat sessions data is fresh, skipping load...");
+    return { data: currentState.sessions, error: null };
+  }
+
+  console.log("🔄 Loading chat sessions from Supabase...");
+  setLoadingState("chatSessions", true);
   chatStore.update((state) => ({ ...state, loading: true, error: null }));
 
   try {
@@ -56,6 +91,7 @@ export async function loadChatSessions() {
       loading: false,
     }));
 
+    setDataLoaded("chatSessions");
     console.log("✅ Chat sessions loaded from database:", data?.length || 0);
     return { data, error: null };
   } catch (error) {
@@ -67,6 +103,7 @@ export async function loadChatSessions() {
       loading: false,
       error: errorMessage,
     }));
+    setDataError("chatSessions", errorMessage);
     return { data: null, error: errorMessage };
   }
 }
@@ -377,23 +414,49 @@ export async function sendMessage(
  */
 export async function deleteChatSession(sessionId: string) {
   try {
-    // Delete messages first (cascade should handle this, but being explicit)
-    const { error: messagesError } = await supabase
-      .from("messages")
-      .delete()
-      .eq("session_id", sessionId);
+    console.log("🗑️ Starting delete process for session:", sessionId);
 
-    if (messagesError) {
-      console.warn("⚠️ Error deleting messages:", messagesError);
+    // Check if user is authenticated
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser();
+    if (userError || !user) {
+      throw new Error("User not authenticated");
     }
 
-    // Delete session
+    console.log("👤 Current user:", user.id);
+
+    // Verify the session belongs to the current user
+    const { data: session, error: sessionCheckError } = await supabase
+      .from("chat_sessions")
+      .select("id, user_id")
+      .eq("id", sessionId)
+      .single();
+
+    if (sessionCheckError || !session) {
+      throw new Error("Session not found");
+    }
+
+    if (session.user_id !== user.id) {
+      throw new Error("Unauthorized: Session does not belong to current user");
+    }
+
+    console.log("✅ Session ownership verified");
+
+    // Delete session (cascade will handle messages)
+    console.log("🗑️ Deleting chat session:", sessionId);
     const { error: sessionError } = await supabase
       .from("chat_sessions")
       .delete()
       .eq("id", sessionId);
 
-    if (sessionError) throw sessionError;
+    if (sessionError) {
+      console.error("❌ Error deleting session:", sessionError);
+      throw sessionError;
+    }
+
+    console.log("✅ Chat session deleted successfully");
 
     // Update local state
     chatStore.update((state) => ({

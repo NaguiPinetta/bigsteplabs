@@ -18,6 +18,7 @@
   import Input from "$lib/components/ui/input.svelte";
   import Textarea from "$lib/components/ui/textarea.svelte";
   import FileUpload from "$lib/components/ui/file-upload.svelte";
+  import CrudTips from "$lib/components/ui/crud-tips.svelte";
   import {
     Database,
     Plus,
@@ -59,7 +60,7 @@
   };
 
   $: user = $authStore.user;
-  $: canManage = canManageContent();
+  $: canManage = $canManageContent;
   $: state = $datasetsStore;
   $: datasets = state.datasets;
   $: selectedDataset = state.selectedDataset;
@@ -349,6 +350,17 @@
         </Card>
       {/each}
     </div>
+
+    <!-- Tips -->
+    <CrudTips
+      title="Dataset Management Tips"
+      tips={[
+        "Create diverse datasets to provide comprehensive knowledge to your AI agents",
+        "Use clear naming conventions to organize your datasets effectively",
+        "Upload files or input text directly depending on your content format",
+        "Monitor dataset processing status to ensure successful chunking and indexing",
+      ]}
+    />
   {/if}
 </div>
 

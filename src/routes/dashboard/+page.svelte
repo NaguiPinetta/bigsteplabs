@@ -16,7 +16,7 @@
     hasUser: !!$authStore.user,
     userRole: $authStore.user?.role,
     isAdmin: isAdmin(),
-    canManageContent: canManageContent(),
+    canManageContent: $canManageContent,
   });
 
   onMount(() => {
@@ -31,9 +31,11 @@
 </svelte:head>
 
 <!-- Page Header -->
-<div class="mb-8">
-  <h1 class="text-2xl font-bold text-foreground">Dashboard</h1>
-  <p class="text-muted-foreground">Welcome to BigStepLabs 2.0</p>
+<div class="mb-6 lg:mb-8">
+  <h1 class="text-xl lg:text-2xl font-bold text-foreground">Dashboard</h1>
+  <p class="text-muted-foreground text-sm lg:text-base">
+    Welcome to BigStepLabs 2.0
+  </p>
 </div>
 
 <!-- Debug Panel -->
@@ -49,7 +51,7 @@
       <p><strong>Has User:</strong> {!!$authStore.user}</p>
       <p><strong>User Role:</strong> {$authStore.user?.role || "None"}</p>
       <p><strong>Is Admin:</strong> {isAdmin()}</p>
-      <p><strong>Can Manage:</strong> {canManageContent()}</p>
+      <p><strong>Can Manage:</strong> {$canManageContent}</p>
       <p>
         <strong>User Object:</strong>
         {JSON.stringify($authStore.user, null, 2)}
@@ -67,17 +69,19 @@
       <span class="ml-3 text-muted-foreground">Loading user data...</span>
     </div>
   {:else if user}
-    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 lg:gap-6">
       <!-- Student Dashboard -->
       {#if isCollaborator() || isStudent()}
-        <div class="bg-card p-6 rounded-lg border shadow-sm">
-          <h2 class="text-lg font-semibold mb-2">📚 My Learning</h2>
+        <div class="bg-card p-4 lg:p-6 rounded-lg border shadow-sm">
+          <h2 class="text-base lg:text-lg font-semibold mb-2">
+            📚 My Learning
+          </h2>
           <p class="text-muted-foreground text-sm mb-4">
             Access your modules and track progress
           </p>
           <a
             href="/modules"
-            class="block w-full bg-primary text-primary-foreground py-2 px-4 rounded-md hover:bg-primary/90 transition-colors text-center"
+            class="block w-full bg-primary text-primary-foreground py-2 px-4 rounded-md hover:bg-primary/90 transition-colors text-center text-sm"
           >
             Browse Modules
           </a>
@@ -85,194 +89,163 @@
       {/if}
 
       <!-- Content Management (Admin/Collaborator) -->
-      {#if canManageContent()}
-        <div class="bg-card p-6 rounded-lg border shadow-sm">
-          <h2 class="text-lg font-semibold mb-2">📝 Content</h2>
+      {#if $canManageContent}
+        <div class="bg-card p-4 lg:p-6 rounded-lg border shadow-sm">
+          <h2 class="text-base lg:text-lg font-semibold mb-2">📝 Content</h2>
           <p class="text-muted-foreground text-sm mb-4">
             Create and manage learning materials
           </p>
           <a
             href="/modules"
-            class="block w-full bg-primary text-primary-foreground py-2 px-4 rounded-md hover:bg-primary/90 transition-colors text-center"
+            class="block w-full bg-primary text-primary-foreground py-2 px-4 rounded-md hover:bg-primary/90 transition-colors text-center text-sm"
           >
             Manage Content
           </a>
         </div>
+      {/if}
 
-        <div class="bg-card p-6 rounded-lg border shadow-sm">
-          <h2 class="text-lg font-semibold mb-2">🤖 AI Agents</h2>
+      <!-- AI Agents (Admin/Collaborator) -->
+      {#if $canManageContent}
+        <div class="bg-card p-4 lg:p-6 rounded-lg border shadow-sm">
+          <h2 class="text-base lg:text-lg font-semibold mb-2">🤖 AI Agents</h2>
           <p class="text-muted-foreground text-sm mb-4">
-            Configure AI agents and datasets
+            Configure AI learning assistants
           </p>
           <a
             href="/agents"
-            class="block w-full bg-primary text-primary-foreground py-2 px-4 rounded-md hover:bg-primary/90 transition-colors text-center"
+            class="block w-full bg-primary text-primary-foreground py-2 px-4 rounded-md hover:bg-primary/90 transition-colors text-center text-sm"
           >
             Manage Agents
-          </a>
-        </div>
-
-        <div class="bg-card p-6 rounded-lg border shadow-sm">
-          <h2 class="text-lg font-semibold mb-2">📊 Datasets</h2>
-          <p class="text-muted-foreground text-sm mb-4">
-            Upload and manage AI training datasets
-          </p>
-          <a
-            href="/datasets"
-            class="block w-full bg-primary text-primary-foreground py-2 px-4 rounded-md hover:bg-primary/90 transition-colors text-center"
-          >
-            Manage Datasets
-          </a>
-        </div>
-
-        <div class="bg-card p-6 rounded-lg border shadow-sm">
-          <h2 class="text-lg font-semibold mb-2">🎭 Personas</h2>
-          <p class="text-muted-foreground text-sm mb-4">
-            Create AI personalities and teaching styles
-          </p>
-          <a
-            href="/personas"
-            class="block w-full bg-primary text-primary-foreground py-2 px-4 rounded-md hover:bg-primary/90 transition-colors text-center"
-          >
-            Manage Personas
-          </a>
-        </div>
-
-        <div class="bg-card p-6 rounded-lg border shadow-sm">
-          <h2 class="text-lg font-semibold mb-2">🖥️ Models</h2>
-          <p class="text-muted-foreground text-sm mb-4">
-            Configure AI models and providers
-          </p>
-          <a
-            href="/models"
-            class="block w-full bg-primary text-primary-foreground py-2 px-4 rounded-md hover:bg-primary/90 transition-colors text-center"
-          >
-            Manage Models
-          </a>
-        </div>
-
-        <div class="bg-card p-6 rounded-lg border shadow-sm">
-          <h2 class="text-lg font-semibold mb-2">📁 Files</h2>
-          <p class="text-muted-foreground text-sm mb-4">
-            Upload and organize content files
-          </p>
-          <a
-            href="/files"
-            class="block w-full bg-primary text-primary-foreground py-2 px-4 rounded-md hover:bg-primary/90 transition-colors text-center"
-          >
-            Manage Files
-          </a>
-        </div>
-      {/if}
-
-      <!-- Admin Only -->
-      {#if isAdmin()}
-        <div class="bg-card p-6 rounded-lg border shadow-sm">
-          <h2 class="text-lg font-semibold mb-2">⚙️ System</h2>
-          <p class="text-muted-foreground text-sm mb-4">
-            User management and system settings
-          </p>
-          <a
-            href="/admin/users"
-            class="block w-full bg-primary text-primary-foreground py-2 px-4 rounded-md hover:bg-primary/90 transition-colors text-center"
-          >
-            Admin Panel
           </a>
         </div>
       {/if}
 
       <!-- Chat (All Users) -->
-      <div class="bg-card p-6 rounded-lg border shadow-sm">
-        <h2 class="text-lg font-semibold mb-2">💬 Chat</h2>
+      <div class="bg-card p-4 lg:p-6 rounded-lg border shadow-sm">
+        <h2 class="text-base lg:text-lg font-semibold mb-2">💬 Chat</h2>
         <p class="text-muted-foreground text-sm mb-4">
-          Start a conversation with AI agents
+          Start conversations with AI assistants
         </p>
         <a
           href="/chat"
-          class="block w-full bg-primary text-primary-foreground py-2 px-4 rounded-md hover:bg-primary/90 transition-colors text-center"
+          class="block w-full bg-primary text-primary-foreground py-2 px-4 rounded-md hover:bg-primary/90 transition-colors text-center text-sm"
         >
-          Start Chatting
+          Start Chat
         </a>
       </div>
+
+      <!-- Admin Tools -->
+      {#if isAdmin()}
+        <div class="bg-card p-4 lg:p-6 rounded-lg border shadow-sm">
+          <h2 class="text-base lg:text-lg font-semibold mb-2">⚙️ Admin</h2>
+          <p class="text-muted-foreground text-sm mb-4">
+            Manage users and system settings
+          </p>
+          <a
+            href="/admin/users"
+            class="block w-full bg-primary text-primary-foreground py-2 px-4 rounded-md hover:bg-primary/90 transition-colors text-center text-sm"
+          >
+            Manage Users
+          </a>
+        </div>
+
+        <div class="bg-card p-4 lg:p-6 rounded-lg border shadow-sm">
+          <h2 class="text-base lg:text-lg font-semibold mb-2">🔧 Workbench</h2>
+          <p class="text-muted-foreground text-sm mb-4">
+            Test and debug AI agents
+          </p>
+          <a
+            href="/workbench"
+            class="block w-full bg-primary text-primary-foreground py-2 px-4 rounded-md hover:bg-primary/90 transition-colors text-center text-sm"
+          >
+            Open Workbench
+          </a>
+        </div>
+      {/if}
     </div>
 
-    <div class="mt-8 bg-muted/50 rounded-lg p-6">
-      <h2 class="text-lg font-semibold mb-2">🚀 Getting Started</h2>
-      <p class="text-muted-foreground mb-4">
-        BigStepLabs 2.0 is now ready for development! The core authentication
-        and database setup is complete.
-      </p>
-
-      <div class="space-y-2 text-sm mb-4">
-        <div class="flex items-center space-x-2">
-          <div class="w-2 h-2 bg-green-500 rounded-full"></div>
-          <span>Authentication system with role-based access</span>
-        </div>
-        <div class="flex items-center space-x-2">
-          <div class="w-2 h-2 bg-green-500 rounded-full"></div>
-          <span>Database schema with 12 tables and RLS policies</span>
-        </div>
-        <div class="flex items-center space-x-2">
-          <div class="w-2 h-2 bg-green-500 rounded-full"></div>
-          <span>Storage buckets for file management</span>
-        </div>
-        <div class="flex items-center space-x-2">
-          <div class="w-2 h-2 bg-green-500 rounded-full"></div>
-          <span>Collapsible sidebar navigation</span>
-        </div>
-        <div class="flex items-center space-x-2">
-          <div class="w-2 h-2 bg-green-500 rounded-full"></div>
-          <span>Content management system</span>
-        </div>
-        <div class="flex items-center space-x-2">
-          <div class="w-2 h-2 bg-green-500 rounded-full"></div>
-          <span>AI agent management with personas and datasets</span>
+    <!-- Quick Stats Section -->
+    <div
+      class="mt-8 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-6"
+    >
+      <div class="bg-card p-4 lg:p-6 rounded-lg border shadow-sm">
+        <div class="flex items-center justify-between">
+          <div>
+            <p class="text-sm font-medium text-muted-foreground">Role</p>
+            <p class="text-2xl font-bold text-foreground">{user.role}</p>
+          </div>
+          <div
+            class="w-8 h-8 bg-primary/10 rounded-full flex items-center justify-center"
+          >
+            <span class="text-primary text-sm font-medium">
+              {user.role.charAt(0)}
+            </span>
+          </div>
         </div>
       </div>
 
-      <div class="flex space-x-3 flex-wrap gap-2">
-        <a
-          href="/personas"
-          class="bg-purple-600 text-white px-4 py-2 rounded-md text-sm hover:bg-purple-700 transition-colors"
-        >
-          🎭 Create Personas
-        </a>
-        <a
-          href="/models"
-          class="bg-blue-600 text-white px-4 py-2 rounded-md text-sm hover:bg-blue-700 transition-colors"
-        >
-          🖥️ Configure Models
-        </a>
-        <a
-          href="/datasets"
-          class="bg-green-600 text-white px-4 py-2 rounded-md text-sm hover:bg-green-700 transition-colors"
-        >
-          📊 Upload Datasets
-        </a>
-        <a
-          href="/agents"
-          class="bg-red-600 text-white px-4 py-2 rounded-md text-sm hover:bg-red-700 transition-colors"
-        >
-          🤖 Build AI Agents
-        </a>
+      <div class="bg-card p-4 lg:p-6 rounded-lg border shadow-sm">
+        <div class="flex items-center justify-between">
+          <div>
+            <p class="text-sm font-medium text-muted-foreground">Status</p>
+            <p class="text-2xl font-bold text-foreground">Active</p>
+          </div>
+          <div
+            class="w-8 h-8 bg-green-500/10 rounded-full flex items-center justify-center"
+          >
+            <div class="w-3 h-3 bg-green-500 rounded-full"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="bg-card p-4 lg:p-6 rounded-lg border shadow-sm">
+        <div class="flex items-center justify-between">
+          <div>
+            <p class="text-sm font-medium text-muted-foreground">
+              Member Since
+            </p>
+            <p class="text-lg font-bold text-foreground">
+              {user.created_at
+                ? new Date(user.created_at).toLocaleDateString()
+                : "N/A"}
+            </p>
+          </div>
+          <div
+            class="w-8 h-8 bg-blue-500/10 rounded-full flex items-center justify-center"
+          >
+            <span class="text-blue-500 text-sm">📅</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="bg-card p-4 lg:p-6 rounded-lg border shadow-sm">
+        <div class="flex items-center justify-between">
+          <div>
+            <p class="text-sm font-medium text-muted-foreground">Email</p>
+            <p class="text-sm font-bold text-foreground truncate">
+              {user.email}
+            </p>
+          </div>
+          <div
+            class="w-8 h-8 bg-purple-500/10 rounded-full flex items-center justify-center"
+          >
+            <span class="text-purple-500 text-sm">📧</span>
+          </div>
+        </div>
       </div>
     </div>
   {:else}
     <div class="text-center py-12">
-      <p class="text-muted-foreground">No user data available</p>
-      <div
-        class="mt-4 p-4 bg-muted rounded-md text-sm text-left max-w-md mx-auto"
+      <h2 class="text-xl font-semibold mb-2">Not Authenticated</h2>
+      <p class="text-muted-foreground mb-4">
+        Please log in to access your dashboard.
+      </p>
+      <a
+        href="/auth/login"
+        class="inline-block bg-primary text-primary-foreground py-2 px-4 rounded-md hover:bg-primary/90 transition-colors"
       >
-        <p><strong>Debug Info:</strong></p>
-        <p>Loading: {$authStore.loading}</p>
-        <p>User: {JSON.stringify($authStore.user, null, 2)}</p>
-        <p>Session: {$authStore.session ? "Present" : "None"}</p>
-      </div>
-      <div class="mt-4">
-        <a href="/auth/login" class="text-primary hover:underline">
-          Return to Login
-        </a>
-      </div>
+        Go to Login
+      </a>
     </div>
   {/if}
 </div>

@@ -19,6 +19,7 @@
   import Input from "$lib/components/ui/input.svelte";
   import Textarea from "$lib/components/ui/textarea.svelte";
   import Select from "$lib/components/ui/select.svelte";
+  import CrudTips from "$lib/components/ui/crud-tips.svelte";
   import {
     Bot,
     Plus,
@@ -42,10 +43,6 @@
     name: "",
     description: "",
     system_prompt: "",
-    avatar_url: "",
-    personality_traits: "",
-    response_style: "friendly",
-    expertise_areas: "",
   };
 
   let editPersona = {
@@ -53,29 +50,29 @@
     name: "",
     description: "",
     system_prompt: "",
-    avatar_url: "",
-    personality_traits: "",
-    response_style: "friendly",
-    expertise_areas: "",
   };
 
   let validationErrors: string[] = [];
   let templates = getPersonaTemplates();
 
   $: user = $authStore.user;
-  $: canManage = canManageContent(user);
+  $: canManage = $canManageContent;
   $: state = $personasStore;
   $: personas = state.personas;
   $: selectedPersona = state.selectedPersona;
 
-  const responseStyles = [
-    { value: "friendly", label: "Friendly & Encouraging" },
-    { value: "professional", label: "Professional & Direct" },
-    { value: "casual", label: "Casual & Conversational" },
-    { value: "formal", label: "Formal & Academic" },
-    { value: "playful", label: "Playful & Humorous" },
-    { value: "supportive", label: "Supportive & Empathetic" },
-  ];
+  // Debug form state
+  $: {
+    console.log("🔍 Form state changed:", {
+      name: newPersona.name,
+      description: newPersona.description,
+      system_prompt: newPersona.system_prompt,
+      nameValid: newPersona.name.trim().length >= 2,
+      promptValid: newPersona.system_prompt.trim().length >= 10,
+      buttonDisabled:
+        !newPersona.name.trim() || !newPersona.system_prompt.trim(),
+    });
+  }
 
   onMount(() => {
     if (canManage) {
@@ -88,37 +85,49 @@
       name: "",
       description: "",
       system_prompt: "",
-      avatar_url: "",
-      personality_traits: "",
-      response_style: "friendly",
-      expertise_areas: "",
     };
     validationErrors = [];
   }
 
   async function handleCreatePersona() {
-    if (!user) return;
+    console.log("🔍 handleCreatePersona called");
+    console.log("🔍 User:", user);
+    console.log("🔍 New persona data:", newPersona);
 
-    const validation = validatePersona(newPersona);
-    if (!validation.valid) {
-      validationErrors = validation.errors;
+    if (!user) {
+      console.log("❌ No user found, returning");
       return;
     }
 
-    const result = await createPersona({
+    const validation = validatePersona(newPersona);
+    console.log("🔍 Validation result:", validation);
+
+    if (!validation.valid) {
+      validationErrors = validation.errors;
+      console.log("❌ Validation failed:", validationErrors);
+      return;
+    }
+
+    const personaData = {
       name: newPersona.name.trim(),
       description: newPersona.description.trim() || null,
       system_prompt: newPersona.system_prompt.trim(),
-      avatar_url: newPersona.avatar_url.trim() || null,
-      personality_traits: newPersona.personality_traits.trim() || null,
-      response_style: newPersona.response_style,
-      expertise_areas: newPersona.expertise_areas.trim() || null,
+      is_default: false,
       created_by: user.id,
-    });
+    };
+
+    console.log("🔍 Calling createPersona with:", personaData);
+
+    const result = await createPersona(personaData);
+
+    console.log("🔍 createPersona result:", result);
 
     if (result.data) {
+      console.log("✅ Persona created successfully:", result.data);
       resetNewPersona();
       createDialogOpen = false;
+    } else {
+      console.log("❌ Persona creation failed:", result.error);
     }
   }
 
@@ -133,10 +142,6 @@
       name: editPersona.name.trim(),
       description: editPersona.description.trim() || null,
       system_prompt: editPersona.system_prompt.trim(),
-      avatar_url: editPersona.avatar_url.trim() || null,
-      personality_traits: editPersona.personality_traits.trim() || null,
-      response_style: editPersona.response_style,
-      expertise_areas: editPersona.expertise_areas.trim() || null,
     });
 
     if (result.data) {
@@ -161,10 +166,6 @@
       name: persona.name,
       description: persona.description || "",
       system_prompt: persona.system_prompt,
-      avatar_url: persona.avatar_url || "",
-      personality_traits: persona.personality_traits || "",
-      response_style: persona.response_style,
-      expertise_areas: persona.expertise_areas || "",
     };
     validationErrors = [];
     editDialogOpen = true;
@@ -176,6 +177,7 @@
   }
 
   function openCreateDialog() {
+    console.log("🔍 openCreateDialog called");
     resetNewPersona();
     createDialogOpen = true;
   }
@@ -200,10 +202,6 @@
       name: `${persona.name} (Copy)`,
       description: persona.description || "",
       system_prompt: persona.system_prompt,
-      avatar_url: persona.avatar_url || "",
-      personality_traits: persona.personality_traits || "",
-      response_style: persona.response_style,
-      expertise_areas: persona.expertise_areas || "",
     };
     createDialogOpen = true;
   }
@@ -214,23 +212,6 @@
       month: "short",
       day: "numeric",
     });
-  }
-
-  function getPersonaIcon(responseStyle: string) {
-    switch (responseStyle) {
-      case "professional":
-        return "💼";
-      case "casual":
-        return "😊";
-      case "formal":
-        return "🎓";
-      case "playful":
-        return "🎭";
-      case "supportive":
-        return "🤝";
-      default:
-        return "😊";
-    }
   }
 
   function truncateText(text: string, maxLength: number = 100): string {
@@ -320,15 +301,13 @@
               <div
                 class="w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center text-2xl"
               >
-                {getPersonaIcon(persona.response_style)}
+                🤖
               </div>
               <div class="flex-1">
                 <h3 class="text-lg font-semibold text-foreground">
                   {persona.name}
                 </h3>
-                <p class="text-sm text-primary capitalize">
-                  {persona.response_style} Style
-                </p>
+                <p class="text-sm text-primary">AI Persona</p>
               </div>
             </div>
 
@@ -377,18 +356,6 @@
             System Prompt: {persona.system_prompt.length} characters
           </div>
 
-          {#if persona.expertise_areas}
-            <div class="flex flex-wrap gap-1 mb-3">
-              {#each persona.expertise_areas.split(",").slice(0, 3) as area}
-                <span
-                  class="px-2 py-1 bg-accent text-accent-foreground text-xs rounded-md"
-                >
-                  {area.trim()}
-                </span>
-              {/each}
-            </div>
-          {/if}
-
           <div
             class="text-xs text-muted-foreground pt-2 border-t border-border"
           >
@@ -397,6 +364,17 @@
         </Card>
       {/each}
     </div>
+
+    <!-- Tips -->
+    <CrudTips
+      title="Persona Management Tips"
+      tips={[
+        "Create diverse personas to match different teaching styles and student needs",
+        "Write clear system prompts that define the AI's behavior and expertise",
+        "Use personality traits and expertise areas to make personas more specific",
+        "Test personas with different types of questions to ensure they work well",
+      ]}
+    />
   {/if}
 </div>
 
@@ -463,29 +441,17 @@
       </div>
     {/if}
 
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-      <div>
-        <label for="name" class="block text-sm font-medium mb-2"
-          >Persona Name *</label
-        >
-        <Input
-          id="name"
-          bind:value={newPersona.name}
-          placeholder="e.g., Friendly Tutor, Grammar Expert"
-          required
-        />
-      </div>
-
-      <div>
-        <label for="response-style" class="block text-sm font-medium mb-2"
-          >Response Style</label
-        >
-        <Select
-          id="response-style"
-          bind:value={newPersona.response_style}
-          options={responseStyles}
-        />
-      </div>
+    <div>
+      <label for="name" class="block text-sm font-medium mb-2"
+        >Persona Name *</label
+      >
+      <Input
+        id="name"
+        bind:value={newPersona.name}
+        placeholder="e.g., Friendly Tutor, Grammar Expert"
+        required
+        on:input={() => console.log("🔍 Name input changed:", newPersona.name)}
+      />
     </div>
 
     <div>
@@ -510,47 +476,16 @@
         placeholder="Define how this AI persona should behave, respond, and interact with students..."
         rows={8}
         class="font-mono text-sm"
+        on:input={() =>
+          console.log(
+            "🔍 System prompt input changed:",
+            newPersona.system_prompt
+          )}
       />
       <div class="flex justify-between text-xs text-muted-foreground mt-1">
         <span>This defines how the AI will behave and respond</span>
         <span>{newPersona.system_prompt.length}/4000 characters</span>
       </div>
-    </div>
-
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-      <div>
-        <label for="personality-traits" class="block text-sm font-medium mb-2"
-          >Personality Traits</label
-        >
-        <Input
-          id="personality-traits"
-          bind:value={newPersona.personality_traits}
-          placeholder="patient, encouraging, detail-oriented"
-        />
-      </div>
-
-      <div>
-        <label for="expertise-areas" class="block text-sm font-medium mb-2"
-          >Expertise Areas</label
-        >
-        <Input
-          id="expertise-areas"
-          bind:value={newPersona.expertise_areas}
-          placeholder="grammar, vocabulary, conversation"
-        />
-      </div>
-    </div>
-
-    <div>
-      <label for="avatar-url" class="block text-sm font-medium mb-2"
-        >Avatar URL (Optional)</label
-      >
-      <Input
-        id="avatar-url"
-        bind:value={newPersona.avatar_url}
-        placeholder="https://example.com/avatar.jpg"
-        type="url"
-      />
     </div>
   </div>
 
@@ -559,10 +494,16 @@
       Cancel
     </Button>
     <Button
-      on:click={handleCreatePersona}
+      on:click={() => {
+        console.log("🔍 Create Persona button clicked");
+        handleCreatePersona();
+      }}
       disabled={!newPersona.name.trim() || !newPersona.system_prompt.trim()}
     >
       Create Persona
+      {#if !newPersona.name.trim() || !newPersona.system_prompt.trim()}
+        (Disabled - missing required fields)
+      {/if}
     </Button>
   </div>
 </Dialog>
@@ -591,24 +532,11 @@
       </div>
     {/if}
 
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-      <div>
-        <label for="edit-name" class="block text-sm font-medium mb-2"
-          >Persona Name *</label
-        >
-        <Input id="edit-name" bind:value={editPersona.name} required />
-      </div>
-
-      <div>
-        <label for="edit-response-style" class="block text-sm font-medium mb-2"
-          >Response Style</label
-        >
-        <Select
-          id="edit-response-style"
-          bind:value={editPersona.response_style}
-          options={responseStyles}
-        />
-      </div>
+    <div>
+      <label for="edit-name" class="block text-sm font-medium mb-2"
+        >Persona Name *</label
+      >
+      <Input id="edit-name" bind:value={editPersona.name} required />
     </div>
 
     <div>
@@ -637,40 +565,6 @@
         <span>{editPersona.system_prompt.length}/4000 characters</span>
       </div>
     </div>
-
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-      <div>
-        <label
-          for="edit-personality-traits"
-          class="block text-sm font-medium mb-2">Personality Traits</label
-        >
-        <Input
-          id="edit-personality-traits"
-          bind:value={editPersona.personality_traits}
-        />
-      </div>
-
-      <div>
-        <label for="edit-expertise-areas" class="block text-sm font-medium mb-2"
-          >Expertise Areas</label
-        >
-        <Input
-          id="edit-expertise-areas"
-          bind:value={editPersona.expertise_areas}
-        />
-      </div>
-    </div>
-
-    <div>
-      <label for="edit-avatar-url" class="block text-sm font-medium mb-2"
-        >Avatar URL (Optional)</label
-      >
-      <Input
-        id="edit-avatar-url"
-        bind:value={editPersona.avatar_url}
-        type="url"
-      />
-    </div>
   </div>
 
   <div slot="footer" class="flex justify-end space-x-2">
@@ -695,54 +589,19 @@
         <div
           class="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center text-3xl"
         >
-          {getPersonaIcon(selectedPersona.response_style)}
+          🤖
         </div>
         <div class="flex-1">
           <h3 class="text-xl font-semibold text-foreground mb-1">
             {selectedPersona.name}
           </h3>
-          <p class="text-primary capitalize mb-2">
-            {selectedPersona.response_style} Style
-          </p>
+          <p class="text-primary mb-2">AI Persona</p>
           {#if selectedPersona.description}
             <p class="text-muted-foreground">
               {selectedPersona.description}
             </p>
           {/if}
         </div>
-      </div>
-
-      <!-- Details Grid -->
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {#if selectedPersona.personality_traits}
-          <div>
-            <h4 class="font-medium text-foreground mb-2">Personality Traits</h4>
-            <div class="flex flex-wrap gap-2">
-              {#each selectedPersona.personality_traits.split(",") as trait}
-                <span
-                  class="px-2 py-1 bg-accent text-accent-foreground text-sm rounded-md"
-                >
-                  {trait.trim()}
-                </span>
-              {/each}
-            </div>
-          </div>
-        {/if}
-
-        {#if selectedPersona.expertise_areas}
-          <div>
-            <h4 class="font-medium text-foreground mb-2">Expertise Areas</h4>
-            <div class="flex flex-wrap gap-2">
-              {#each selectedPersona.expertise_areas.split(",") as area}
-                <span
-                  class="px-2 py-1 bg-primary/10 text-primary text-sm rounded-md"
-                >
-                  {area.trim()}
-                </span>
-              {/each}
-            </div>
-          </div>
-        {/if}
       </div>
 
       <!-- System Prompt -->

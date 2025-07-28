@@ -1,6 +1,13 @@
-import { writable } from "svelte/store";
+import { writable, get } from "svelte/store";
 import { supabase } from "$lib/supabase";
 import type { Module } from "$lib/types/database";
+import {
+  setLoadingState,
+  setDataError,
+  setDataLoaded,
+  shouldRefreshData,
+  canLoadData,
+} from "./data-manager";
 
 interface ModulesState {
   modules: Module[];
@@ -21,8 +28,35 @@ export const modulesStore = writable<ModulesState>(initialState);
 /**
  * Load all modules from Supabase
  */
-export async function loadModules() {
+export async function loadModules(forceRefresh = false) {
+  // Check if we should load data
+  const loadCheck = get(canLoadData);
+  if (!loadCheck.shouldLoad) {
+    console.log(
+      "⏸️ Skipping modules load - auth not ready or user cannot manage"
+    );
+    return { data: null, error: "Not authorized or auth not ready" };
+  }
+
+  // Check if data is already loading
+  const currentState = get(modulesStore);
+  if (currentState.loading) {
+    console.log("⏸️ Modules already loading, skipping...");
+    return { data: currentState.modules, error: null };
+  }
+
+  // Check if we need to refresh data
+  if (
+    !forceRefresh &&
+    !shouldRefreshData("modules") &&
+    currentState.modules.length > 0
+  ) {
+    console.log("⏸️ Modules data is fresh, skipping load...");
+    return { data: currentState.modules, error: null };
+  }
+
   console.log("🔍 Loading modules from Supabase...");
+  setLoadingState("modules", true);
   modulesStore.update((state) => ({ ...state, loading: true, error: null }));
 
   try {
@@ -38,6 +72,7 @@ export async function loadModules() {
         loading: false,
         error: error.message,
       }));
+      setDataError("modules", error.message);
       return { data: null, error };
     }
 
@@ -52,6 +87,7 @@ export async function loadModules() {
       loading: false,
     }));
 
+    setDataLoaded("modules");
     return { data: modules, error: null };
   } catch (error) {
     console.error("❌ Unexpected error loading modules:", error);
@@ -62,6 +98,7 @@ export async function loadModules() {
       loading: false,
       error: errorMessage,
     }));
+    setDataError("modules", errorMessage);
     return { data: null, error: errorMessage };
   }
 }

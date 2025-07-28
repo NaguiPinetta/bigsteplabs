@@ -21,6 +21,7 @@
   import Dialog from "$lib/components/ui/dialog.svelte";
   import Input from "$lib/components/ui/input.svelte";
   import Textarea from "$lib/components/ui/textarea.svelte";
+  import CrudTips from "$lib/components/ui/crud-tips.svelte";
   import {
     BookOpen,
     Plus,
@@ -65,7 +66,7 @@
   let loadingStats: Record<string, boolean> = {};
 
   $: user = $authStore.user;
-  $: canManage = canManageContent(user);
+  $: canManage = $canManageContent;
   $: state = $modulesStore;
   $: modules = state.modules;
   $: selectedModule = state.selectedModule;
@@ -431,35 +432,15 @@
     </div>
 
     <!-- Tips -->
-    <Card class="p-6 mt-8 bg-muted/50">
-      <h3 class="font-semibold text-foreground mb-2">
-        💡 Module Management Tips
-      </h3>
-      <div
-        class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-muted-foreground"
-      >
-        <div class="flex items-start space-x-2">
-          <CheckCircle class="w-4 h-4 text-green-600 mt-0.5 flex-shrink-0" />
-          <span>Drag modules to reorder them in your course structure</span>
-        </div>
-        <div class="flex items-start space-x-2">
-          <CheckCircle class="w-4 h-4 text-green-600 mt-0.5 flex-shrink-0" />
-          <span>Use draft status to prepare modules before publishing</span>
-        </div>
-        <div class="flex items-start space-x-2">
-          <CheckCircle class="w-4 h-4 text-green-600 mt-0.5 flex-shrink-0" />
-          <span
-            >Create descriptive titles and descriptions for better organization</span
-          >
-        </div>
-        <div class="flex items-start space-x-2">
-          <CheckCircle class="w-4 h-4 text-green-600 mt-0.5 flex-shrink-0" />
-          <span
-            >Duplicate existing modules to quickly create similar content</span
-          >
-        </div>
-      </div>
-    </Card>
+    <CrudTips
+      title="Module Management Tips"
+      tips={[
+        "Drag modules to reorder them in your course structure",
+        "Create descriptive titles and descriptions for better organization",
+        "Use draft status to prepare modules before publishing",
+        "Duplicate existing modules to quickly create similar content",
+      ]}
+    />
   {/if}
 </div>
 

@@ -424,14 +424,18 @@
   </Card>
 {:else}
   <!-- Page Header -->
-  <div class="mb-8 flex items-center justify-between">
+  <div
+    class="mb-6 lg:mb-8 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4"
+  >
     <div>
-      <h1 class="text-2xl font-bold text-foreground">User Management</h1>
-      <p class="text-muted-foreground">
+      <h1 class="text-xl lg:text-2xl font-bold text-foreground">
+        User Management
+      </h1>
+      <p class="text-sm lg:text-base text-muted-foreground">
         Manage user accounts, roles, and allowlist access
       </p>
     </div>
-    <Button on:click={openCreateDialog}>
+    <Button on:click={openCreateDialog} class="w-full sm:w-auto">
       <Plus class="w-4 h-4 mr-2" />
       Add User
     </Button>
@@ -460,7 +464,8 @@
 
   <!-- Users List -->
   <Card class="overflow-hidden">
-    <div class="overflow-x-auto">
+    <!-- Desktop Table View -->
+    <div class="hidden lg:block overflow-x-auto">
       <table class="w-full">
         <thead class="bg-muted/50">
           <tr>
@@ -595,49 +600,161 @@
         </tbody>
       </table>
     </div>
+
+    <!-- Mobile Card View -->
+    <div class="lg:hidden">
+      {#if loading}
+        <div class="p-6 text-center">
+          <Loader2 class="w-6 h-6 text-primary animate-spin mx-auto mb-2" />
+          <span class="text-muted-foreground">Loading users...</span>
+        </div>
+      {:else if error}
+        <div class="p-6 text-center text-destructive">
+          {error}
+        </div>
+      {:else}
+        <div class="space-y-3 p-4">
+          {#each filteredUsers as user (user.id)}
+            <Card class="p-4">
+              <div class="flex items-start justify-between mb-3">
+                <div class="flex items-center space-x-3">
+                  <div
+                    class="w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center"
+                  >
+                    <span class="text-sm font-medium text-primary">
+                      {user.email.charAt(0).toUpperCase()}
+                    </span>
+                  </div>
+                  <div class="flex-1 min-w-0">
+                    <h3 class="text-sm font-medium text-foreground truncate">
+                      {user.email}
+                    </h3>
+                    <p class="text-xs text-muted-foreground">
+                      ID: {user.id}
+                    </p>
+                  </div>
+                </div>
+                <div class="flex items-center space-x-1">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    on:click={() => openEditDialog(user)}
+                    class="h-8 w-8 p-0"
+                  >
+                    <Edit class="w-4 h-4" />
+                  </Button>
+                  {#if user.email !== "jdpinetta@gmail.com"}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      on:click={() => openDeleteDialog(user)}
+                      class="h-8 w-8 p-0 text-destructive hover:text-destructive"
+                    >
+                      <Trash2 class="w-4 h-4" />
+                    </Button>
+                  {/if}
+                </div>
+              </div>
+
+              <div class="space-y-2">
+                <div class="flex items-center justify-between">
+                  <span class="text-xs text-muted-foreground">Role:</span>
+                  <span
+                    class={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getRoleColor(user.role)}`}
+                  >
+                    <svelte:component
+                      this={getRoleIcon(user.role)}
+                      class="w-3 h-3 mr-1"
+                    />
+                    {user.role}
+                  </span>
+                </div>
+
+                <div class="flex items-center justify-between">
+                  <span class="text-xs text-muted-foreground">Created:</span>
+                  <span class="text-xs text-foreground">
+                    {formatDate(user.created_at)}
+                  </span>
+                </div>
+
+                <div class="flex items-center justify-between">
+                  <span class="text-xs text-muted-foreground">Last Login:</span>
+                  <span class="text-xs text-foreground">
+                    {user.last_login ? formatDate(user.last_login) : "Never"}
+                  </span>
+                </div>
+
+                <div class="flex items-center justify-between">
+                  <span class="text-xs text-muted-foreground">Status:</span>
+                  <span
+                    class={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                      user.is_allowlisted
+                        ? "bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-300"
+                        : user.status === "active"
+                          ? "bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-300"
+                          : "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-300"
+                    }`}
+                  >
+                    {user.is_allowlisted ? "Allowlisted" : user.status}
+                  </span>
+                </div>
+              </div>
+            </Card>
+          {/each}
+        </div>
+      {/if}
+    </div>
   </Card>
 
   <!-- Summary Stats -->
-  <div class="grid grid-cols-1 md:grid-cols-5 gap-4 mt-6">
-    <Card class="p-4">
+  <div
+    class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 lg:gap-4 mt-6"
+  >
+    <Card class="p-3 lg:p-4">
       <div class="flex items-center">
-        <Users class="w-8 h-8 text-blue-600" />
-        <div class="ml-4">
-          <div class="text-2xl font-bold text-foreground">{users.length}</div>
-          <div class="text-sm text-muted-foreground">Total Users</div>
+        <Users class="w-6 h-6 lg:w-8 lg:h-8 text-blue-600" />
+        <div class="ml-3 lg:ml-4">
+          <div class="text-lg lg:text-2xl font-bold text-foreground">
+            {users.length}
+          </div>
+          <div class="text-xs lg:text-sm text-muted-foreground">
+            Total Users
+          </div>
         </div>
       </div>
     </Card>
-    <Card class="p-4">
+    <Card class="p-3 lg:p-4">
       <div class="flex items-center">
-        <Shield class="w-8 h-8 text-red-600" />
-        <div class="ml-4">
-          <div class="text-2xl font-bold text-foreground">
+        <Shield class="w-6 h-6 lg:w-8 lg:h-8 text-red-600" />
+        <div class="ml-3 lg:ml-4">
+          <div class="text-lg lg:text-2xl font-bold text-foreground">
             {users.filter((u) => u.role === "Admin").length}
           </div>
-          <div class="text-sm text-muted-foreground">Admins</div>
+          <div class="text-xs lg:text-sm text-muted-foreground">Admins</div>
         </div>
       </div>
     </Card>
-    <Card class="p-4">
+    <Card class="p-3 lg:p-4">
       <div class="flex items-center">
-        <UserCheck class="w-8 h-8 text-blue-600" />
-        <div class="ml-4">
-          <div class="text-2xl font-bold text-foreground">
+        <UserCheck class="w-6 h-6 lg:w-8 lg:h-8 text-blue-600" />
+        <div class="ml-3 lg:ml-4">
+          <div class="text-lg lg:text-2xl font-bold text-foreground">
             {users.filter((u) => u.role === "Collaborator").length}
           </div>
-          <div class="text-sm text-muted-foreground">Collaborators</div>
+          <div class="text-xs lg:text-sm text-muted-foreground">
+            Collaborators
+          </div>
         </div>
       </div>
     </Card>
-    <Card class="p-4">
+    <Card class="p-3 lg:p-4">
       <div class="flex items-center">
-        <User class="w-8 h-8 text-green-600" />
-        <div class="ml-4">
-          <div class="text-2xl font-bold text-foreground">
+        <User class="w-6 h-6 lg:w-8 lg:h-8 text-green-600" />
+        <div class="ml-3 lg:ml-4">
+          <div class="text-lg lg:text-2xl font-bold text-foreground">
             {users.filter((u) => u.role === "Student").length}
           </div>
-          <div class="text-sm text-muted-foreground">Students</div>
+          <div class="text-xs lg:text-sm text-muted-foreground">Students</div>
         </div>
       </div>
     </Card>
@@ -710,15 +827,20 @@
 
       <!-- Magic Link Info (when magic link method is selected) -->
       {#if newUser.createWithPassword}
-        <div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-md p-4">
+        <div
+          class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-md p-4"
+        >
           <div class="flex">
-            <Mail class="w-5 h-5 text-blue-600 dark:text-blue-400 flex-shrink-0" />
+            <Mail
+              class="w-5 h-5 text-blue-600 dark:text-blue-400 flex-shrink-0"
+            />
             <div class="ml-3">
               <h4 class="text-sm font-medium text-blue-800 dark:text-blue-200">
                 Magic Link Authentication
               </h4>
               <p class="mt-1 text-sm text-blue-700 dark:text-blue-300">
-                The user will receive a magic link via email to sign in. No password required.
+                The user will receive a magic link via email to sign in. No
+                password required.
               </p>
             </div>
           </div>

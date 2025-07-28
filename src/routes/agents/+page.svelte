@@ -25,6 +25,7 @@
   import Input from "$lib/components/ui/input.svelte";
   import Textarea from "$lib/components/ui/textarea.svelte";
   import Select from "$lib/components/ui/select.svelte";
+  import CrudTips from "$lib/components/ui/crud-tips.svelte";
   import {
     Bot,
     Plus,
@@ -101,7 +102,7 @@
   ];
 
   $: user = $authStore.user;
-  $: canManage = canManageContent();
+  $: canManage = $canManageContent;
   $: state = $agentsStore;
   $: agents = state.agents;
   $: selectedAgent = state.selectedAgent;
@@ -122,7 +123,28 @@
   $: statusOptions = statuses.map((s) => ({ value: s.value, label: s.label }));
 
   onMount(async () => {
+    console.log("🔍 Agents page onMount - Debug info:");
+    console.log("  - User:", user);
+    console.log("  - Can manage:", canManage);
+    console.log("  - Auth store state:", $authStore);
+
+    // Wait for auth to be ready
+    if ($authStore.loading) {
+      console.log("⏳ Waiting for auth to initialize...");
+      const unsubscribe = authStore.subscribe((auth) => {
+        if (!auth.loading && auth.initialized) {
+          unsubscribe();
+          loadData();
+        }
+      });
+    } else {
+      loadData();
+    }
+  });
+
+  async function loadData() {
     if (canManage) {
+      console.log("✅ Loading agents and related data...");
       // Load all required data in parallel
       await Promise.all([
         loadAgents(),
@@ -130,8 +152,11 @@
         loadModels(),
         loadDatasets(),
       ]);
+      console.log("📋 Load complete - Agents:", agents.length, "Personas:", personas.length, "Models:", models.length, "Datasets:", datasets.length);
+    } else {
+      console.log("❌ Cannot manage content - not loading data");
     }
-  });
+  }
 
   function resetNewAgent() {
     newAgent = {
@@ -576,6 +601,17 @@
         </Card>
       {/each}
     </div>
+
+    <!-- Tips -->
+    <CrudTips
+      title="AI Agent Management Tips"
+      tips={[
+        "Choose appropriate personas to define your agent's personality and expertise",
+        "Select models based on your performance and cost requirements",
+        "Configure voice recognition language to match your target audience",
+        "Test agents thoroughly before deploying them to students"
+      ]}
+    />
   {/if}
 </div>
 

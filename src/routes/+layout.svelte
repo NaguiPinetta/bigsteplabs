@@ -4,8 +4,9 @@
   import { page } from "$app/stores";
   import { initAuth, authStore } from "$lib/stores/auth";
 
-  // Initialize auth state on app load
+  // Initialize auth state on app load - only once
   onMount(() => {
+    console.log("🔄 Root layout: Initializing auth...");
     initAuth();
   });
 
@@ -17,6 +18,7 @@
       session: data.session,
       user: data.user,
       loading: false,
+      initialized: true,
     });
   }
 </script>

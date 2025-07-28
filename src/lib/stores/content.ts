@@ -1,6 +1,13 @@
-import { writable } from "svelte/store";
+import { writable, get } from "svelte/store";
 import { supabase } from "$lib/supabase";
 import type { Content } from "$lib/types/database";
+import {
+  setLoadingState,
+  setDataError,
+  setDataLoaded,
+  shouldRefreshData,
+  canLoadData,
+} from "./data-manager";
 
 interface ContentState {
   content: Content[];
@@ -31,8 +38,35 @@ function generateSlug(title: string): string {
 /**
  * Load all content from Supabase
  */
-export async function loadContent(unitId?: string) {
+export async function loadContent(unitId?: string, forceRefresh = false) {
+  // Check if we should load data
+  const loadCheck = get(canLoadData);
+  if (!loadCheck.shouldLoad) {
+    console.log(
+      "⏸️ Skipping content load - auth not ready or user cannot manage"
+    );
+    return { data: null, error: "Not authorized or auth not ready" };
+  }
+
+  // Check if data is already loading
+  const currentState = get(contentStore);
+  if (currentState.loading) {
+    console.log("⏸️ Content already loading, skipping...");
+    return { data: currentState.content, error: null };
+  }
+
+  // Check if we need to refresh data
+  if (
+    !forceRefresh &&
+    !shouldRefreshData("content") &&
+    currentState.content.length > 0
+  ) {
+    console.log("⏸️ Content data is fresh, skipping load...");
+    return { data: currentState.content, error: null };
+  }
+
   console.log("🔍 Loading content from Supabase...");
+  setLoadingState("content", true);
   contentStore.update((state) => ({ ...state, loading: true, error: null }));
 
   try {
@@ -54,6 +88,7 @@ export async function loadContent(unitId?: string) {
         loading: false,
         error: error.message,
       }));
+      setDataError("content", error.message);
       return { data: null, error };
     }
 
@@ -68,6 +103,7 @@ export async function loadContent(unitId?: string) {
       loading: false,
     }));
 
+    setDataLoaded("content");
     return { data: content, error: null };
   } catch (error) {
     console.error("❌ Unexpected error loading content:", error);
@@ -78,6 +114,7 @@ export async function loadContent(unitId?: string) {
       loading: false,
       error: errorMessage,
     }));
+    setDataError("content", errorMessage);
     return { data: null, error: errorMessage };
   }
 }

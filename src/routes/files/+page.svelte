@@ -23,6 +23,7 @@
   import Card from "$lib/components/ui/card.svelte";
   import Dialog from "$lib/components/ui/dialog.svelte";
   import Input from "$lib/components/ui/input.svelte";
+  import CrudTips from "$lib/components/ui/crud-tips.svelte";
   import {
     Upload,
     FolderPlus,
@@ -70,7 +71,7 @@
   let moveTargetFolder = "/";
 
   $: user = $authStore.user;
-  $: canManage = canManageContent(user);
+  $: canManage = $canManageContent;
   $: state = $filesStore;
   $: filteredFiles = state.searchQuery
     ? state.files.filter(
@@ -242,21 +243,27 @@
 </svelte:head>
 
 <!-- Page Header -->
-<div class="mb-8 flex items-center justify-between">
+<div
+  class="mb-6 lg:mb-8 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4"
+>
   <div>
-    <h1 class="text-2xl font-bold text-foreground">File Manager</h1>
-    <p class="text-muted-foreground">
+    <h1 class="text-xl lg:text-2xl font-bold text-foreground">File Manager</h1>
+    <p class="text-sm lg:text-base text-muted-foreground">
       Upload, organize, and manage your course files and learning materials
     </p>
   </div>
 
   {#if canManage}
-    <div class="flex items-center space-x-2">
-      <Button variant="outline" on:click={() => (createFolderOpen = true)}>
+    <div class="flex flex-col sm:flex-row gap-2">
+      <Button
+        variant="outline"
+        on:click={() => (createFolderOpen = true)}
+        class="w-full sm:w-auto"
+      >
         <FolderPlus class="w-4 h-4 mr-2" />
         New Folder
       </Button>
-      <Button on:click={() => fileInput.click()}>
+      <Button on:click={() => fileInput.click()} class="w-full sm:w-auto">
         <Upload class="w-4 h-4 mr-2" />
         Upload Files
       </Button>
@@ -280,12 +287,14 @@
   {:else}
     <!-- Toolbar -->
     <Card class="p-4 mb-6">
-      <div class="flex items-center justify-between">
+      <div
+        class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4"
+      >
         <div class="flex items-center space-x-4">
           <!-- Breadcrumbs -->
-          <div class="flex items-center space-x-2 text-sm">
+          <div class="flex items-center space-x-2 text-sm overflow-x-auto">
             <button
-              class="text-primary hover:underline"
+              class="text-primary hover:underline whitespace-nowrap"
               on:click={() => navigateToFolder("/")}
             >
               Home
@@ -293,7 +302,7 @@
             {#each getBreadcrumbs(state.currentFolder).slice(1) as folder, index}
               <span class="text-muted-foreground">/</span>
               <button
-                class="text-primary hover:underline"
+                class="text-primary hover:underline whitespace-nowrap"
                 on:click={() =>
                   navigateToFolder(
                     "/" +
@@ -308,7 +317,9 @@
           </div>
         </div>
 
-        <div class="flex items-center space-x-4">
+        <div
+          class="flex flex-col sm:flex-row items-stretch sm:items-center gap-3"
+        >
           <!-- Search -->
           <div class="relative">
             <Search
@@ -316,14 +327,16 @@
             />
             <Input
               placeholder="Search files..."
-              class="pl-10 w-64"
+              class="pl-10 w-full sm:w-64"
               value={state.searchQuery}
               on:input={(e) => searchFiles(e.target.value)}
             />
           </div>
 
           <!-- View Toggle -->
-          <div class="flex border border-border rounded-md">
+          <div
+            class="flex border border-border rounded-md self-start sm:self-auto"
+          >
             <button
               class="p-2 {state.viewMode === 'grid' ? 'bg-accent' : ''}"
               on:click={() => setViewMode("grid")}
@@ -343,17 +356,20 @@
       <!-- Selection Actions -->
       {#if state.selectedFiles.length > 0}
         <div
-          class="flex items-center justify-between mt-4 pt-4 border-t border-border"
+          class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mt-4 pt-4 border-t border-border"
         >
           <span class="text-sm text-muted-foreground">
             {state.selectedFiles.length} file(s) selected
           </span>
 
-          <div class="flex items-center space-x-2">
+          <div
+            class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2"
+          >
             <Button
               variant="outline"
               size="sm"
               on:click={() => (moveDialogOpen = true)}
+              class="w-full sm:w-auto"
             >
               <Move class="w-4 h-4 mr-2" />
               Move
@@ -362,11 +378,17 @@
               variant="outline"
               size="sm"
               on:click={() => (deleteDialogOpen = true)}
+              class="w-full sm:w-auto"
             >
               <Trash2 class="w-4 h-4 mr-2" />
               Delete
             </Button>
-            <Button variant="outline" size="sm" on:click={clearSelection}>
+            <Button
+              variant="outline"
+              size="sm"
+              on:click={clearSelection}
+              class="w-full sm:w-auto"
+            >
               <X class="w-4 h-4 mr-2" />
               Clear
             </Button>
@@ -527,37 +549,100 @@
         {/each}
       </div>
     {:else}
-      <!-- List View -->
-      <Card class="overflow-hidden">
-        <div class="p-4 border-b border-border bg-muted">
-          <div class="flex items-center space-x-4">
-            <div class="flex items-center space-x-2">
-              <input
-                type="checkbox"
-                class="rounded border-input"
-                checked={state.selectedFiles.length === filteredFiles.length}
-                on:change={(e) =>
-                  e.target.checked ? selectAllFiles() : clearSelection()}
-              />
-              <span class="text-sm font-medium">Name</span>
+      <!-- Desktop List View -->
+      <div class="hidden lg:block">
+        <Card class="overflow-hidden">
+          <div class="p-4 border-b border-border bg-muted">
+            <div class="flex items-center space-x-4">
+              <div class="flex items-center space-x-2">
+                <input
+                  type="checkbox"
+                  class="rounded border-input"
+                  checked={state.selectedFiles.length === filteredFiles.length}
+                  on:change={(e) =>
+                    e.target.checked ? selectAllFiles() : clearSelection()}
+                />
+                <span class="text-sm font-medium">Name</span>
+              </div>
+              <div class="w-20 text-sm font-medium">Size</div>
+              <div class="w-32 text-sm font-medium">Modified</div>
+              <div class="w-20 text-sm font-medium">Actions</div>
             </div>
-            <div class="w-20 text-sm font-medium">Size</div>
-            <div class="w-32 text-sm font-medium">Modified</div>
-            <div class="w-20 text-sm font-medium">Actions</div>
           </div>
-        </div>
 
-        <div class="divide-y divide-border">
+          <div class="divide-y divide-border">
+            {#each filteredFiles as file (file.id)}
+              {@const FileIcon = getFileTypeIcon(file.type)}
+              <div
+                class="p-4 hover:bg-accent transition-colors {state.selectedFiles.includes(
+                  file.id
+                )
+                  ? 'bg-primary/5'
+                  : ''}"
+              >
+                <div class="flex items-center space-x-4">
+                  <div class="flex items-center space-x-3 flex-1 min-w-0">
+                    <input
+                      type="checkbox"
+                      class="rounded border-input"
+                      checked={state.selectedFiles.includes(file.id)}
+                      on:change={() => toggleFileSelection(file.id)}
+                    />
+                    <FileIcon
+                      class="w-5 h-5 text-muted-foreground flex-shrink-0"
+                    />
+                    <span class="text-sm font-medium truncate">{file.name}</span
+                    >
+                  </div>
+                  <div class="w-20 text-sm text-muted-foreground">
+                    {formatFileSize(file.size)}
+                  </div>
+                  <div class="w-32 text-sm text-muted-foreground">
+                    {formatDate(file.uploaded_at)}
+                  </div>
+                  <div class="w-20">
+                    <div class="flex items-center space-x-1">
+                      <button
+                        class="p-1 hover:bg-background rounded"
+                        on:click={() => openPreviewDialog(file)}
+                        title="Preview"
+                      >
+                        <Eye class="w-4 h-4" />
+                      </button>
+                      <button
+                        class="p-1 hover:bg-background rounded"
+                        on:click={() => downloadFile(file)}
+                        title="Download"
+                      >
+                        <Download class="w-4 h-4" />
+                      </button>
+                      <button
+                        class="p-1 hover:bg-background rounded"
+                        on:click={() => openRenameDialog(file)}
+                        title="Rename"
+                      >
+                        <Edit class="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            {/each}
+          </div>
+        </Card>
+      </div>
+
+      <!-- Mobile List View -->
+      <div class="lg:hidden">
+        <div class="space-y-3">
           {#each filteredFiles as file (file.id)}
             {@const FileIcon = getFileTypeIcon(file.type)}
-            <div
-              class="p-4 hover:bg-accent transition-colors {state.selectedFiles.includes(
-                file.id
-              )
-                ? 'bg-primary/5'
+            <Card
+              class="p-4 {state.selectedFiles.includes(file.id)
+                ? 'bg-primary/5 border-primary/20'
                 : ''}"
             >
-              <div class="flex items-center space-x-4">
+              <div class="flex items-start justify-between mb-3">
                 <div class="flex items-center space-x-3 flex-1 min-w-0">
                   <input
                     type="checkbox"
@@ -566,46 +651,58 @@
                     on:change={() => toggleFileSelection(file.id)}
                   />
                   <FileIcon
-                    class="w-5 h-5 text-muted-foreground flex-shrink-0"
+                    class="w-6 h-6 text-muted-foreground flex-shrink-0"
                   />
-                  <span class="text-sm font-medium truncate">{file.name}</span>
-                </div>
-                <div class="w-20 text-sm text-muted-foreground">
-                  {formatFileSize(file.size)}
-                </div>
-                <div class="w-32 text-sm text-muted-foreground">
-                  {formatDate(file.uploaded_at)}
-                </div>
-                <div class="w-20">
-                  <div class="flex items-center space-x-1">
-                    <button
-                      class="p-1 hover:bg-background rounded"
-                      on:click={() => openPreviewDialog(file)}
-                      title="Preview"
-                    >
-                      <Eye class="w-4 h-4" />
-                    </button>
-                    <button
-                      class="p-1 hover:bg-background rounded"
-                      on:click={() => downloadFile(file)}
-                      title="Download"
-                    >
-                      <Download class="w-4 h-4" />
-                    </button>
-                    <button
-                      class="p-1 hover:bg-background rounded"
-                      on:click={() => openRenameDialog(file)}
-                      title="Rename"
-                    >
-                      <Edit class="w-4 h-4" />
-                    </button>
+                  <div class="flex-1 min-w-0">
+                    <h3 class="text-sm font-medium text-foreground truncate">
+                      {file.name}
+                    </h3>
+                    <p class="text-xs text-muted-foreground">
+                      {formatFileSize(file.size)} • {formatDate(
+                        file.uploaded_at
+                      )}
+                    </p>
                   </div>
                 </div>
+                <div class="flex items-center space-x-1">
+                  <button
+                    class="p-2 hover:bg-accent rounded-md"
+                    on:click={() => openPreviewDialog(file)}
+                    title="Preview"
+                  >
+                    <Eye class="w-4 h-4" />
+                  </button>
+                  <button
+                    class="p-2 hover:bg-accent rounded-md"
+                    on:click={() => downloadFile(file)}
+                    title="Download"
+                  >
+                    <Download class="w-4 h-4" />
+                  </button>
+                  <button
+                    class="p-2 hover:bg-accent rounded-md"
+                    on:click={() => openRenameDialog(file)}
+                    title="Rename"
+                  >
+                    <Edit class="w-4 h-4" />
+                  </button>
+                </div>
               </div>
-            </div>
+            </Card>
           {/each}
         </div>
-      </Card>
+      </div>
+
+      <!-- Tips -->
+      <CrudTips
+        title="File Management Tips"
+        tips={[
+          "Organize files into folders to maintain a clean and structured file system",
+          "Use descriptive file names to make content easier to find and manage",
+          "Upload files in supported formats for optimal compatibility",
+          "Use the search function to quickly locate specific files or content",
+        ]}
+      />
     {/if}
   {/if}
 </div>

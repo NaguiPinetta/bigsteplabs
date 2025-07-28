@@ -21,6 +21,7 @@
   import Input from "$lib/components/ui/input.svelte";
   import Textarea from "$lib/components/ui/textarea.svelte";
   import Select from "$lib/components/ui/select.svelte";
+  import CrudTips from "$lib/components/ui/crud-tips.svelte";
   import {
     Bot,
     Plus,
@@ -79,7 +80,7 @@
   let presets = getModelPresets();
 
   $: user = $authStore.user;
-  $: canManage = canManageContent(user);
+  $: canManage = $canManageContent;
 
   // Debug logging
   $: if (user) {
@@ -641,6 +642,17 @@
         </Card>
       {/each}
     </div>
+
+    <!-- Tips -->
+    <CrudTips
+      title="Model Management Tips"
+      tips={[
+        "Choose models based on your performance requirements and budget constraints",
+        "Test model connections before deploying them to production",
+        "Configure appropriate temperature and max tokens for your use case",
+        "Keep API keys secure and monitor usage to control costs",
+      ]}
+    />
   {/if}
 </div>
 

@@ -1,5 +1,12 @@
-import { writable } from "svelte/store";
+import { writable, get } from "svelte/store";
 import { supabase } from "$lib/supabase";
+import {
+  setLoadingState,
+  setDataError,
+  setDataLoaded,
+  shouldRefreshData,
+  canLoadData,
+} from "./data-manager";
 
 interface FileItem {
   id: string;
@@ -49,7 +56,35 @@ export const filesStore = writable<FilesState>(initialState);
 /**
  * Load files from the current folder
  */
-export async function loadFiles(folder: string = "/") {
+export async function loadFiles(folder: string = "/", forceRefresh = false) {
+  // Check if we should load data
+  const loadCheck = get(canLoadData);
+  if (!loadCheck.shouldLoad) {
+    console.log(
+      "⏸️ Skipping files load - auth not ready or user cannot manage"
+    );
+    return { files: [], error: "Not authorized or auth not ready" };
+  }
+
+  // Check if data is already loading
+  const currentState = get(filesStore);
+  if (currentState.loading) {
+    console.log("⏸️ Files already loading, skipping...");
+    return { files: currentState.files, error: null };
+  }
+
+  // Check if we need to refresh data
+  if (
+    !forceRefresh &&
+    !shouldRefreshData("files") &&
+    currentState.files.length > 0
+  ) {
+    console.log("⏸️ Files data is fresh, skipping load...");
+    return { files: currentState.files, error: null };
+  }
+
+  console.log("🔄 Loading files from folder:", folder);
+  setLoadingState("files", true);
   filesStore.update((state) => ({ ...state, loading: true, error: null }));
 
   try {
@@ -95,15 +130,19 @@ export async function loadFiles(folder: string = "/") {
       loading: false,
     }));
 
+    setDataLoaded("files");
+    console.log("✅ Files loaded successfully:", fileItems.length, "files");
     return { files: fileItems, error: null };
   } catch (error) {
     const errorMessage =
       error instanceof Error ? error.message : "Failed to load files";
+    console.error("❌ Error loading files:", errorMessage);
     filesStore.update((state) => ({
       ...state,
       loading: false,
       error: errorMessage,
     }));
+    setDataError("files", errorMessage);
     return { files: [], error: errorMessage };
   }
 }
