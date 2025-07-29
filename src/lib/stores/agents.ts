@@ -135,29 +135,53 @@ export async function createAgent(agent: any) {
         whisper_language: agent.whisper_language || "en",
         created_by: agent.created_by,
       })
-      .select(
-        `
-        *,
-        persona:personas!inner(id, name, system_prompt),
-        model:models!inner(id, name, provider, engine)
-      `
-      )
+      .select("*")
       .single();
 
     if (error) throw error;
 
-    // Load datasets if any
+    // Load related data (persona, model, datasets)
+    let persona = null;
+    let model = null;
     let datasets: any[] = [];
-    if (data.dataset_ids && data.dataset_ids.length > 0) {
-      const { data: datasetData } = await supabase
-        .from("datasets")
-        .select("id, name, description")
-        .in("id", data.dataset_ids);
-      datasets = datasetData || [];
+
+    try {
+      // Load persona
+      if (data.persona_id) {
+        const { data: personaData } = await supabase
+          .from("personas")
+          .select("id, name, system_prompt")
+          .eq("id", data.persona_id)
+          .single();
+        persona = personaData;
+      }
+
+      // Load model
+      if (data.model_id) {
+        const { data: modelData } = await supabase
+          .from("models")
+          .select("id, name, provider, engine")
+          .eq("id", data.model_id)
+          .single();
+        model = modelData;
+      }
+
+      // Load datasets if any
+      if (data.dataset_ids && data.dataset_ids.length > 0) {
+        const { data: datasetData } = await supabase
+          .from("datasets")
+          .select("id, name, description")
+          .in("id", data.dataset_ids);
+        datasets = datasetData || [];
+      }
+    } catch (relationError) {
+      console.warn("⚠️ Warning: Could not load some related data:", relationError);
     }
 
     const enrichedAgent = {
       ...data,
+      persona,
+      model,
       datasets,
       dataset: datasets[0] || null,
     };

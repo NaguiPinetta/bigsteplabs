@@ -2,6 +2,7 @@
   import { onMount } from "svelte";
   import { authStore, isAdmin } from "$lib/stores/auth";
   import { supabase } from "$lib/supabase";
+  import { toastStore } from "$lib/stores/toast";
   import Button from "$lib/components/ui/button.svelte";
   import Card from "$lib/components/ui/card.svelte";
   import Dialog from "$lib/components/ui/dialog.svelte";
@@ -118,15 +119,6 @@
 
       users = [...existingUsersFormatted, ...uniqueAllowlistedUsers];
       filterUsers();
-      console.log(
-        "✅ Users loaded:",
-        users.length,
-        "(existing:",
-        existingUsersFormatted.length,
-        "allowlisted:",
-        uniqueAllowlistedUsers.length,
-        ")"
-      );
     } catch (err) {
       console.error("❌ Error loading users:", err);
       error = err instanceof Error ? err.message : "Failed to load users";
@@ -170,36 +162,42 @@
       };
 
       // Show success message
-      alert(
+      toastStore.success(
         `${newUser.email} has been added to the allowlist. They can now sign up directly.`
       );
     } catch (err) {
       console.error("❌ Error adding user to allowlist:", err);
       error =
         err instanceof Error ? err.message : "Failed to add user to allowlist";
+      toastStore.error(error);
     }
   }
 
   async function createUserWithPassword() {
     try {
-      if (!newUser.email.trim()) {
-        error = "Email is required";
+      if (!newUser.email.trim() || !newUser.password.trim()) {
+        error = "Email and password are required";
         return;
       }
 
-      // For now, use magic link creation since password creation is failing
-      console.log("🔍 Creating user with magic link:", {
+      if (newUser.password.length < 8) {
+        error = "Password must be at least 8 characters long";
+        return;
+      }
+
+      console.log("🔍 Creating user with password:", {
         email: newUser.email,
         role: newUser.role,
       });
 
-      const response = await fetch("/api/admin/create-user-magic-link", {
+      const response = await fetch("/api/admin/create-user", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
           email: newUser.email,
+          password: newUser.password,
           role: newUser.role,
         }),
       });
@@ -225,12 +223,13 @@
       };
 
       // Show success message
-      alert(
-        `${newUser.email} has been created successfully. They can sign in using magic link.`
+      toastStore.success(
+        `${newUser.email} has been created successfully. They can sign in with their email and password.`
       );
     } catch (err) {
       console.error("❌ Error creating user:", err);
       error = err instanceof Error ? err.message : "Failed to create user";
+      toastStore.error(error);
     }
   }
 
@@ -282,11 +281,19 @@
       // Reload users
       await loadUsers();
 
+      // Show success message before clearing the password
+      const hadPassword = editUser.newPassword.trim().length > 0;
+      const message = hadPassword
+        ? `${editUser.email} has been updated successfully. Password has been reset.`
+        : `${editUser.email} has been updated successfully.`;
+      toastStore.success(message);
+
       editDialogOpen = false;
       editUser.newPassword = "";
     } catch (err) {
       console.error("❌ Error updating user:", err);
       error = err instanceof Error ? err.message : "Failed to update user";
+      toastStore.error(error);
     }
   }
 
@@ -319,9 +326,15 @@
 
       deleteDialogOpen = false;
       userToDelete = null;
+
+      // Show success message
+      toastStore.success(
+        `${userToDelete.email} has been deleted successfully.`
+      );
     } catch (err) {
       console.error("❌ Error deleting user:", err);
       error = err instanceof Error ? err.message : "Failed to delete user";
+      toastStore.error(error);
     }
   }
 
@@ -819,14 +832,30 @@
               : 'text-muted-foreground hover:text-foreground'}"
             on:click={() => (newUser.createWithPassword = true)}
           >
-            <Mail class="w-4 h-4 inline mr-2" />
-            Magic Link
+            <User class="w-4 h-4 inline mr-2" />
+            User + Password
           </button>
         </div>
       </div>
 
-      <!-- Magic Link Info (when magic link method is selected) -->
+      <!-- Password Field (when password method is selected) -->
       {#if newUser.createWithPassword}
+        <div>
+          <label for="user-password" class="block text-sm font-medium mb-2"
+            >Password *</label
+          >
+          <Input
+            id="user-password"
+            bind:value={newUser.password}
+            type="password"
+            placeholder="Enter password"
+            required
+          />
+        </div>
+      {/if}
+
+      <!-- Magic Link Info (when magic link method is selected) -->
+      {#if !newUser.createWithPassword}
         <div
           class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-md p-4"
         >
@@ -841,6 +870,30 @@
               <p class="mt-1 text-sm text-blue-700 dark:text-blue-300">
                 The user will receive a magic link via email to sign in. No
                 password required.
+              </p>
+            </div>
+          </div>
+        </div>
+      {/if}
+
+      <!-- Password Info (when password method is selected) -->
+      {#if newUser.createWithPassword}
+        <div
+          class="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-md p-4"
+        >
+          <div class="flex">
+            <User
+              class="w-5 h-5 text-green-600 dark:text-green-400 flex-shrink-0"
+            />
+            <div class="ml-3">
+              <h4
+                class="text-sm font-medium text-green-800 dark:text-green-200"
+              >
+                Password Authentication
+              </h4>
+              <p class="mt-1 text-sm text-green-700 dark:text-green-300">
+                The user will be created with the specified password and can
+                sign in directly.
               </p>
             </div>
           </div>
@@ -870,9 +923,9 @@
       {#if newUser.createWithPassword}
         <Button
           on:click={createUserWithPassword}
-          disabled={!newUser.email.trim()}
+          disabled={!newUser.email.trim() || !newUser.password.trim()}
         >
-          Create User with Magic Link
+          Create User with Password
         </Button>
       {:else}
         <Button on:click={addToAllowlist} disabled={!newUser.email.trim()}>

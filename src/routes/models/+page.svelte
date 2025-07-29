@@ -78,6 +78,8 @@
     { success: boolean; error?: string; response?: string }
   > = {};
   let hasLoadedModels = false; // Flag to prevent infinite loop
+  let syncingModels = false; // Flag for sync operation
+  let syncResult: { success?: boolean; message?: string; error?: string } = {};
 
   let providers = getModelProviders();
   let presets = getModelPresets();
@@ -149,24 +151,72 @@
       return;
     }
 
+    // If API key is provided, validate it first
+    if (newModel.api_key.trim()) {
+      const syncResult = await syncModels(
+        newModel.api_key.trim(),
+        newModel.provider
+      );
+      if (!syncResult.success) {
+        validationErrors = [syncResult.error || "Failed to validate API key"];
+        return;
+      }
+    }
+
     const result = await createModel({
       name: newModel.name.trim(),
       provider: newModel.provider,
       engine: newModel.engine.trim(),
-      // api_key: newModel.api_key.trim(),
-      // api_endpoint: newModel.api_endpoint.trim() || null,
+      api_key_id: newModel.api_key.trim() || null, // Store API key directly for now
+      api_endpoint: newModel.api_endpoint.trim() || null,
+      description: newModel.description.trim() || null,
       max_tokens: newModel.max_tokens,
       temperature: newModel.temperature,
-      api_key_id: null,
       is_active: true,
-      // description: newModel.description.trim() || null,
-      // created_by: user.id,
     });
 
     if (result.data) {
       resetNewModel();
       createDialogOpen = false;
+    } else {
+      validationErrors = [result.error || "Failed to create model"];
     }
+  }
+
+  async function syncModels(apiKey: string, provider: string) {
+    syncingModels = true;
+    syncResult = {};
+
+    try {
+      const response = await fetch("/api/models/sync", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ apiKey, provider }),
+      });
+
+      const result = await response.json();
+
+      if (response.ok) {
+        syncResult = { success: true, message: result.message };
+        console.log(
+          "✅ Models synced successfully:",
+          result.availableModels?.length || 0,
+          "models available"
+        );
+      } else {
+        syncResult = { success: false, error: result.error || "Sync failed" };
+        console.error("❌ Sync failed:", result.error);
+      }
+    } catch (error) {
+      syncResult = { success: false, error: "Network error during sync" };
+      console.error("❌ Network error during sync:", error);
+    } finally {
+      syncingModels = false;
+    }
+
+    return syncResult;
   }
 
   async function handleUpdateModel() {
@@ -180,11 +230,10 @@
       name: editModel.name.trim(),
       provider: editModel.provider,
       engine: editModel.engine.trim(),
-      // api_key: editModel.api_key.trim(),
-      // api_endpoint: editModel.api_endpoint.trim() || null,
+      api_endpoint: editModel.api_endpoint.trim() || null,
+      description: editModel.description.trim() || null,
       max_tokens: editModel.max_tokens,
       temperature: editModel.temperature,
-      // description: editModel.description.trim() || null,
     });
 
     if (result.data) {
@@ -239,7 +288,7 @@
       name: model.name,
       provider: model.provider,
       engine: model.engine,
-      api_key: model.api_key,
+      api_key: model.api_key_id || "", // Use api_key_id from database
       api_endpoint: model.api_endpoint || "",
       max_tokens: model.max_tokens,
       temperature: model.temperature,
@@ -271,7 +320,6 @@
       engine: preset.engine,
       max_tokens: preset.max_tokens,
       temperature: preset.temperature,
-      description: preset.description,
     };
     presetsDialogOpen = false;
     createDialogOpen = true;
@@ -336,32 +384,204 @@
   <meta name="description" content="Manage AI models and configurations" />
 </svelte:head>
 
-<!-- Page Header -->
-<div class="mb-8 flex items-center justify-between">
-  <div>
-    <h1 class="text-2xl font-bold text-foreground">AI Models</h1>
-    <p class="text-muted-foreground">
-      Configure AI models and API connections for your agents
-    </p>
+<div class="container mx-auto p-6">
+  <!-- Page Header -->
+  <div class="mb-8 flex items-center justify-between">
+    <div>
+      <h1 class="text-2xl font-bold text-foreground">AI Models</h1>
+      <p class="text-muted-foreground">
+        Configure AI models and API connections for your agents
+      </p>
+    </div>
+
+    {#if canManage}
+      <div class="flex space-x-2">
+        <Button variant="outline" on:click={openPresetsDialog}>
+          <Zap class="w-4 h-4 mr-2" />
+          Presets
+        </Button>
+        <Button
+          variant="outline"
+          on:click={() => syncModels("", "OpenAI")}
+          disabled={syncingModels}
+        >
+          {#if syncingModels}
+            <Loader2 class="w-4 h-4 mr-2 animate-spin" />
+            Syncing...
+          {:else}
+            <Settings class="w-4 h-4 mr-2" />
+            Sync Models
+          {/if}
+        </Button>
+        <Button on:click={openCreateDialog}>
+          <Plus class="w-4 h-4 mr-2" />
+          Add Model
+        </Button>
+      </div>
+    {/if}
   </div>
 
-  {#if canManage}
-    <div class="flex space-x-2">
-      <Button variant="outline" on:click={openPresetsDialog}>
-        <Zap class="w-4 h-4 mr-2" />
-        Presets
-      </Button>
-      <Button on:click={openCreateDialog}>
-        <Plus class="w-4 h-4 mr-2" />
-        Add Model
-      </Button>
-    </div>
-  {/if}
-</div>
+  <div class="max-w-7xl mx-auto">
+    {#if user && canManage}
+      {#if state.loading}
+        <div class="flex items-center justify-center py-12">
+          <Loader2 class="w-8 h-8 animate-spin text-primary" />
+          <span class="ml-2 text-muted-foreground">Loading models...</span>
+        </div>
+      {:else if state.error}
+        <Card class="p-6 border-destructive">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center">
+              <AlertCircle class="w-5 h-5 text-destructive mr-2" />
+              <span class="text-destructive font-medium"
+                >Error: {state.error}</span
+              >
+            </div>
+            <Button variant="outline" on:click={clearModelsError}
+              >Dismiss</Button
+            >
+          </div>
+        </Card>
+      {:else if models.length === 0}
+        <Card class="p-12 text-center">
+          <Cpu class="w-16 h-16 text-muted-foreground mx-auto mb-4" />
+          <h2 class="text-xl font-semibold mb-2">No Models Configured</h2>
+          <p class="text-muted-foreground mb-6">
+            Add AI models to power your intelligent agents and chat features.
+          </p>
+          <div class="flex justify-center space-x-3">
+            <Button variant="outline" on:click={openPresetsDialog}>
+              <Zap class="w-4 h-4 mr-2" />
+              Browse Presets
+            </Button>
+            <Button on:click={openCreateDialog}>
+              <Plus class="w-4 h-4 mr-2" />
+              Add Your First Model
+            </Button>
+          </div>
+        </Card>
+      {:else}
+        <!-- Models Grid -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {#each models as model (model.id)}
+            <Card class="p-6 hover:shadow-md transition-shadow">
+              <div class="flex items-start justify-between mb-4">
+                <div class="flex items-center space-x-3">
+                  <div
+                    class="w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center text-2xl"
+                  >
+                    {getProviderIcon(model.provider)}
+                  </div>
+                  <div class="flex-1">
+                    <h3 class="text-lg font-semibold text-foreground">
+                      {model.name}
+                    </h3>
+                    <p class="text-sm text-primary capitalize">
+                      {model.provider} • {model.engine}
+                    </p>
+                  </div>
+                </div>
 
-<div class="max-w-7xl mx-auto">
-  {#if user && canManage}
-    {#if state.loading}
+                <div class="flex items-center space-x-1">
+                  <button
+                    on:click={() => handleTestModel(model)}
+                    disabled={testingModel === model.id}
+                    class="p-2 hover:bg-accent rounded-md text-muted-foreground hover:text-foreground disabled:opacity-50"
+                    title="Test connection"
+                  >
+                    {#if testingModel === model.id}
+                      <Loader2 class="w-4 h-4 animate-spin" />
+                    {:else}
+                      <Zap class="w-4 h-4" />
+                    {/if}
+                  </button>
+
+                  <button
+                    on:click={() => openViewDialog(model)}
+                    class="p-2 hover:bg-accent rounded-md text-muted-foreground hover:text-foreground"
+                    title="View details"
+                  >
+                    <Eye class="w-4 h-4" />
+                  </button>
+
+                  <button
+                    on:click={() => openEditDialog(model)}
+                    class="p-2 hover:bg-accent rounded-md text-muted-foreground hover:text-foreground"
+                    title="Edit model"
+                  >
+                    <Pencil class="w-4 h-4" />
+                  </button>
+
+                  <button
+                    on:click={() => handleDeleteModel(model)}
+                    class="p-2 hover:bg-destructive/20 hover:text-destructive rounded-md text-muted-foreground"
+                    title="Delete model"
+                  >
+                    <Trash2 class="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+
+              <div class="space-y-3">
+                <div
+                  class="flex items-center justify-between text-xs text-muted-foreground"
+                >
+                  <span>Max tokens: {model.max_tokens}</span>
+                  <span>Temp: {model.temperature}</span>
+                </div>
+
+                <div class="flex items-center justify-between">
+                  <div class="flex items-center space-x-2">
+                    <div class="flex items-center space-x-1">
+                      {#if model.is_active}
+                        <div class="w-2 h-2 bg-green-500 rounded-full"></div>
+                        <span class="text-xs text-green-600 dark:text-green-400"
+                          >Active</span
+                        >
+                      {:else}
+                        <div class="w-2 h-2 bg-gray-400 rounded-full"></div>
+                        <span class="text-xs text-muted-foreground"
+                          >Inactive</span
+                        >
+                      {/if}
+                    </div>
+                    {#if testResults[model.id]}
+                      <div class="flex items-center space-x-1">
+                        {#if testResults[model.id].success}
+                          <CheckCircle class="w-3 h-3 text-green-500" />
+                          <span
+                            class="text-xs text-green-600 dark:text-green-400"
+                            >Connected</span
+                          >
+                        {:else}
+                          <XCircle class="w-3 h-3 text-red-500" />
+                          <span class="text-xs text-red-600 dark:text-red-400"
+                            >Connection failed</span
+                          >
+                        {/if}
+                      </div>
+                    {/if}
+                  </div>
+                </div>
+              </div>
+
+              <div
+                class="text-xs text-muted-foreground pt-2 border-t border-border"
+              >
+                Created {formatDate(model.created_at)}
+              </div>
+            </Card>
+          {/each}
+        </div>
+      {/if}
+    {:else if user && !canManage}
+      <Card class="p-8 text-center">
+        <h2 class="text-xl font-semibold mb-2">Access Restricted</h2>
+        <p class="text-muted-foreground">
+          You need Admin or Collaborator privileges to manage AI models.
+        </p>
+      </Card>
+    {:else if state.loading}
       <div class="flex items-center justify-center py-12">
         <Loader2 class="w-8 h-8 animate-spin text-primary" />
         <span class="ml-2 text-muted-foreground">Loading models...</span>
@@ -428,7 +648,7 @@
                   {#if testingModel === model.id}
                     <Loader2 class="w-4 h-4 animate-spin" />
                   {:else}
-                    <Zap class="w-4 h-4" />
+                    <TestTube class="w-4 h-4" />
                   {/if}
                 </button>
 
@@ -445,12 +665,12 @@
                   class="p-2 hover:bg-accent rounded-md text-muted-foreground hover:text-foreground"
                   title="Edit model"
                 >
-                  <Pencil class="w-4 h-4" />
+                  <Edit class="w-4 h-4" />
                 </button>
 
                 <button
                   on:click={() => handleDeleteModel(model)}
-                  class="p-2 hover:bg-destructive/20 hover:text-destructive rounded-md text-muted-foreground"
+                  class="p-2 hover:bg-destructive/20 rounded-md text-muted-foreground hover:text-destructive"
                   title="Delete model"
                 >
                   <Trash2 class="w-4 h-4" />
@@ -458,46 +678,49 @@
               </div>
             </div>
 
-            <div class="space-y-3">
-              <div
-                class="flex items-center justify-between text-xs text-muted-foreground"
-              >
-                <span>Max tokens: {model.max_tokens}</span>
-                <span>Temp: {model.temperature}</span>
-              </div>
+            <!-- Description removed as it's not in the database schema -->
 
-              <div class="flex items-center justify-between">
-                <div class="flex items-center space-x-2">
-                  <div class="flex items-center space-x-1">
-                    {#if model.is_active}
-                      <div class="w-2 h-2 bg-green-500 rounded-full"></div>
-                      <span class="text-xs text-green-600 dark:text-green-400"
-                        >Active</span
-                      >
-                    {:else}
-                      <div class="w-2 h-2 bg-gray-400 rounded-full"></div>
-                      <span class="text-xs text-muted-foreground">Inactive</span
-                      >
-                    {/if}
-                  </div>
-                  {#if testResults[model.id]}
-                    <div class="flex items-center space-x-1">
-                      {#if testResults[model.id].success}
-                        <CheckCircle class="w-3 h-3 text-green-500" />
-                        <span class="text-xs text-green-600 dark:text-green-400"
-                          >Connected</span
-                        >
-                      {:else}
-                        <XCircle class="w-3 h-3 text-red-500" />
-                        <span class="text-xs text-red-600 dark:text-red-400"
-                          >Connection failed</span
-                        >
-                      {/if}
-                    </div>
-                  {/if}
-                </div>
+            <div class="space-y-2 mb-4">
+              <div class="flex justify-between text-sm">
+                <span class="text-muted-foreground">Max Tokens:</span>
+                <span class="font-medium"
+                  >{model.max_tokens.toLocaleString()}</span
+                >
+              </div>
+              <div class="flex justify-between text-sm">
+                <span class="text-muted-foreground">Temperature:</span>
+                <span class="font-medium">{model.temperature}</span>
+              </div>
+              <div class="flex justify-between text-sm">
+                <span class="text-muted-foreground">API Key:</span>
+                <span class="font-mono text-xs"
+                  >{maskApiKey(model.api_key_id || "")}</span
+                >
               </div>
             </div>
+
+            <!-- Test Status -->
+            {#if testResults[model.id]}
+              <div
+                class={`flex items-center space-x-2 p-2 rounded-md ${
+                  testResults[model.id].success
+                    ? "bg-green-50 dark:bg-green-900/20"
+                    : "bg-red-50 dark:bg-red-900/20"
+                }`}
+              >
+                {#if testResults[model.id].success}
+                  <CheckCircle class="w-4 h-4 text-green-600" />
+                  <span class="text-sm text-green-700 dark:text-green-300"
+                    >Connection OK</span
+                  >
+                {:else}
+                  <AlertCircle class="w-4 h-4 text-red-600" />
+                  <span class="text-sm text-red-700 dark:text-red-300"
+                    >Connection Failed</span
+                  >
+                {/if}
+              </div>
+            {/if}
 
             <div
               class="text-xs text-muted-foreground pt-2 border-t border-border"
@@ -507,175 +730,19 @@
           </Card>
         {/each}
       </div>
+
+      <!-- Tips -->
+      <CrudTips
+        title="Model Management Tips"
+        tips={[
+          "Choose models based on your performance requirements and budget constraints",
+          "Test model connections before deploying them to production",
+          "Configure appropriate temperature and max tokens for your use case",
+          "Keep API keys secure and monitor usage to control costs",
+        ]}
+      />
     {/if}
-  {:else if user && !canManage}
-    <Card class="p-8 text-center">
-      <h2 class="text-xl font-semibold mb-2">Access Restricted</h2>
-      <p class="text-muted-foreground">
-        You need Admin or Collaborator privileges to manage AI models.
-      </p>
-    </Card>
-  {:else if state.loading}
-    <div class="flex items-center justify-center py-12">
-      <Loader2 class="w-8 h-8 animate-spin text-primary" />
-      <span class="ml-2 text-muted-foreground">Loading models...</span>
-    </div>
-  {:else if state.error}
-    <Card class="p-6 border-destructive">
-      <div class="flex items-center justify-between">
-        <div class="flex items-center">
-          <AlertCircle class="w-5 h-5 text-destructive mr-2" />
-          <span class="text-destructive font-medium">Error: {state.error}</span>
-        </div>
-        <Button variant="outline" on:click={clearModelsError}>Dismiss</Button>
-      </div>
-    </Card>
-  {:else if models.length === 0}
-    <Card class="p-12 text-center">
-      <Cpu class="w-16 h-16 text-muted-foreground mx-auto mb-4" />
-      <h2 class="text-xl font-semibold mb-2">No Models Configured</h2>
-      <p class="text-muted-foreground mb-6">
-        Add AI models to power your intelligent agents and chat features.
-      </p>
-      <div class="flex justify-center space-x-3">
-        <Button variant="outline" on:click={openPresetsDialog}>
-          <Zap class="w-4 h-4 mr-2" />
-          Browse Presets
-        </Button>
-        <Button on:click={openCreateDialog}>
-          <Plus class="w-4 h-4 mr-2" />
-          Add Your First Model
-        </Button>
-      </div>
-    </Card>
-  {:else}
-    <!-- Models Grid -->
-    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-      {#each models as model (model.id)}
-        <Card class="p-6 hover:shadow-md transition-shadow">
-          <div class="flex items-start justify-between mb-4">
-            <div class="flex items-center space-x-3">
-              <div
-                class="w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center text-2xl"
-              >
-                {getProviderIcon(model.provider)}
-              </div>
-              <div class="flex-1">
-                <h3 class="text-lg font-semibold text-foreground">
-                  {model.name}
-                </h3>
-                <p class="text-sm text-primary capitalize">
-                  {model.provider} • {model.engine}
-                </p>
-              </div>
-            </div>
-
-            <div class="flex items-center space-x-1">
-              <button
-                on:click={() => handleTestModel(model)}
-                disabled={testingModel === model.id}
-                class="p-2 hover:bg-accent rounded-md text-muted-foreground hover:text-foreground disabled:opacity-50"
-                title="Test connection"
-              >
-                {#if testingModel === model.id}
-                  <Loader2 class="w-4 h-4 animate-spin" />
-                {:else}
-                  <TestTube class="w-4 h-4" />
-                {/if}
-              </button>
-
-              <button
-                on:click={() => openViewDialog(model)}
-                class="p-2 hover:bg-accent rounded-md text-muted-foreground hover:text-foreground"
-                title="View details"
-              >
-                <Eye class="w-4 h-4" />
-              </button>
-
-              <button
-                on:click={() => openEditDialog(model)}
-                class="p-2 hover:bg-accent rounded-md text-muted-foreground hover:text-foreground"
-                title="Edit model"
-              >
-                <Edit class="w-4 h-4" />
-              </button>
-
-              <button
-                on:click={() => handleDeleteModel(model)}
-                class="p-2 hover:bg-destructive/20 rounded-md text-muted-foreground hover:text-destructive"
-                title="Delete model"
-              >
-                <Trash2 class="w-4 h-4" />
-              </button>
-            </div>
-          </div>
-
-          {#if model.description}
-            <p class="text-sm text-muted-foreground mb-3">
-              {model.description}
-            </p>
-          {/if}
-
-          <div class="space-y-2 mb-4">
-            <div class="flex justify-between text-sm">
-              <span class="text-muted-foreground">Max Tokens:</span>
-              <span class="font-medium"
-                >{model.max_tokens.toLocaleString()}</span
-              >
-            </div>
-            <div class="flex justify-between text-sm">
-              <span class="text-muted-foreground">Temperature:</span>
-              <span class="font-medium">{model.temperature}</span>
-            </div>
-            <div class="flex justify-between text-sm">
-              <span class="text-muted-foreground">API Key:</span>
-              <span class="font-mono text-xs">{maskApiKey(model.api_key)}</span>
-            </div>
-          </div>
-
-          <!-- Test Status -->
-          {#if testResults[model.id]}
-            <div
-              class={`flex items-center space-x-2 p-2 rounded-md ${
-                testResults[model.id].success
-                  ? "bg-green-50 dark:bg-green-900/20"
-                  : "bg-red-50 dark:bg-red-900/20"
-              }`}
-            >
-              {#if testResults[model.id].success}
-                <CheckCircle class="w-4 h-4 text-green-600" />
-                <span class="text-sm text-green-700 dark:text-green-300"
-                  >Connection OK</span
-                >
-              {:else}
-                <AlertCircle class="w-4 h-4 text-red-600" />
-                <span class="text-sm text-red-700 dark:text-red-300"
-                  >Connection Failed</span
-                >
-              {/if}
-            </div>
-          {/if}
-
-          <div
-            class="text-xs text-muted-foreground pt-2 border-t border-border"
-          >
-            Created {formatDate(model.created_at)}
-          </div>
-        </Card>
-      {/each}
-    </div>
-
-    <!-- Tips -->
-    <CrudTips
-      title="Model Management Tips"
-      tips={[
-        "Choose models based on your performance requirements and budget constraints",
-        "Test model connections before deploying them to production",
-        "Configure appropriate temperature and max tokens for your use case",
-        "Keep API keys secure and monitor usage to control costs",
-      ]}
-    />
-  {/if}
+  </div>
 </div>
 
 <!-- Model Presets Dialog -->
@@ -796,13 +863,35 @@
         <label for="api-key" class="block text-sm font-medium mb-2"
           >API Key *</label
         >
-        <Input
-          id="api-key"
-          bind:value={newModel.api_key}
-          placeholder="sk-..."
-          type="password"
-          required
-        />
+        <div class="flex space-x-2">
+          <Input
+            id="api-key"
+            bind:value={newModel.api_key}
+            placeholder="sk-..."
+            type="password"
+            required
+          />
+          <Button
+            variant="outline"
+            on:click={() => syncModels(newModel.api_key, newModel.provider)}
+            disabled={syncingModels ||
+              !newModel.api_key.trim() ||
+              !newModel.provider}
+            size="sm"
+          >
+            {#if syncingModels}
+              <Loader2 class="w-4 h-4 animate-spin" />
+            {:else}
+              <Settings class="w-4 h-4" />
+            {/if}
+          </Button>
+        </div>
+        {#if syncResult.message}
+          <p class="text-xs text-green-600 mt-1">{syncResult.message}</p>
+        {/if}
+        {#if syncResult.error}
+          <p class="text-xs text-red-600 mt-1">{syncResult.error}</p>
+        {/if}
       </div>
     </div>
 
@@ -883,9 +972,7 @@
     </Button>
     <Button
       on:click={handleCreateModel}
-      disabled={!newModel.name.trim() ||
-        !newModel.provider ||
-        !newModel.api_key.trim()}
+      disabled={!newModel.name.trim() || !newModel.provider}
     >
       Add Model
     </Button>
@@ -1195,7 +1282,8 @@
           Are you sure you want to delete this model?
         </p>
         <p class="text-sm text-muted-foreground mt-1">
-          This action cannot be undone. All agents using this model will need to be reconfigured.
+          This action cannot be undone. All agents using this model will need to
+          be reconfigured.
         </p>
         {#if modelToDelete}
           <div class="mt-3 p-3 bg-muted rounded-lg">

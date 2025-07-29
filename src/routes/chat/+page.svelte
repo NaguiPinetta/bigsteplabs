@@ -4,6 +4,7 @@
   import Input from "$lib/components/ui/input.svelte";
   import Dialog from "$lib/components/ui/dialog.svelte";
   import Card from "$lib/components/ui/card.svelte";
+  import AudioPlayer from "$lib/components/ui/audio-player.svelte";
   import {
     Bot,
     MessageSquare,
@@ -662,22 +663,11 @@
 
                     <!-- Audio Playback for Voice Messages -->
                     {#if message.metadata?.audio_url}
-                      <div
-                        class="mt-2 p-2 bg-background/50 rounded-md border border-border/50"
-                      >
-                        <div class="flex items-center space-x-2 mb-1">
-                          <Mic class="w-3 h-3 text-muted-foreground" />
-                          <span
-                            class="text-xs font-medium text-muted-foreground"
-                            >Voice Message</span
-                          >
-                        </div>
-                        <audio
-                          controls
+                      <div class="mt-2">
+                        <AudioPlayer
                           src={message.metadata.audio_url}
-                          class="w-full h-8"
-                          preload="none"
-                        ></audio>
+                          title={message.content}
+                        />
                       </div>
                     {:else if message.metadata?.is_voice_message}
                       <!-- Debug: Show when voice message flag is set but no audio URL -->
@@ -892,22 +882,11 @@
 
                     <!-- Audio Playback for Voice Messages -->
                     {#if message.metadata?.audio_url}
-                      <div
-                        class="mt-2 p-2 bg-background/50 rounded-md border border-border/50"
-                      >
-                        <div class="flex items-center space-x-2 mb-1">
-                          <Mic class="w-3 h-3 text-muted-foreground" />
-                          <span
-                            class="text-xs font-medium text-muted-foreground"
-                            >Voice Message</span
-                          >
-                        </div>
-                        <audio
-                          controls
+                      <div class="mt-2">
+                        <AudioPlayer
                           src={message.metadata.audio_url}
-                          class="w-full h-8"
-                          preload="none"
-                        ></audio>
+                          title={message.content}
+                        />
                       </div>
                     {/if}
 

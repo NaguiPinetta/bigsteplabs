@@ -106,6 +106,8 @@ export async function createModel(
         name: model.name,
         engine: model.engine,
         api_key_id: model.api_key_id,
+        api_endpoint: model.api_endpoint,
+        description: model.description,
         max_tokens: model.max_tokens,
         temperature: model.temperature,
         is_active: model.is_active,

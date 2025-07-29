@@ -452,14 +452,14 @@ export async function getModuleStats(moduleId: string) {
     if (!unitIdsError && unitIds && unitIds.length > 0) {
       const unitIdArray = unitIds.map((u) => u.id);
       const { count: contentCountResult, error: contentError } = await supabase
-        .from("content")
+        .from("lessons")
         .select("*", { count: "exact", head: true })
         .in("unit_id", unitIdArray);
 
       if (!contentError) {
         contentCount = contentCountResult || 0;
       } else {
-        console.error("❌ Error getting content count:", contentError);
+        console.error("❌ Error getting lessons count:", contentError);
       }
     }
 

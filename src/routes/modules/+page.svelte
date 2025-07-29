@@ -15,6 +15,8 @@
     getModuleStats,
     duplicateModule,
   } from "$lib/stores/modules";
+  import { supabase } from "$lib/supabase";
+  import { toastStore } from "$lib/stores/toast";
 
   import Button from "$lib/components/ui/button.svelte";
   import Card from "$lib/components/ui/card.svelte";
@@ -22,6 +24,7 @@
   import Input from "$lib/components/ui/input.svelte";
   import Textarea from "$lib/components/ui/textarea.svelte";
   import CrudTips from "$lib/components/ui/crud-tips.svelte";
+  import Collapsible from "$lib/components/ui/collapsible.svelte";
   import {
     BookOpen,
     Plus,
@@ -40,13 +43,19 @@
     ArrowRight,
     CheckCircle,
     Clock,
+    ChevronDown,
+    ChevronRight,
+    Play,
+    Layers,
+    ExternalLink,
   } from "lucide-svelte";
 
+  // Dialog states
   let createDialogOpen = false;
   let editDialogOpen = false;
-  let viewDialogOpen = false;
   let deleteDialogOpen = false;
 
+  // Form data
   let newModule = {
     title: "",
     description: "",
@@ -65,6 +74,18 @@
   let moduleStats: Record<string, any> = {};
   let loadingStats: Record<string, boolean> = {};
 
+  // Hierarchical data
+  let unitsData: Record<string, any[]> = {};
+  let lessonsData: Record<string, any[]> = {};
+  let loadingUnits: Record<string, boolean> = {};
+  let loadingLessons: Record<string, boolean> = {};
+
+  // Collapsible states
+  let expandedModules: Record<string, boolean> = {};
+  let expandedUnits: Record<string, boolean> = {};
+  let expandedLessons: Record<string, boolean> = {};
+
+  // Auth and store state
   $: user = $authStore.user;
   $: canManage = $canManageContent;
   $: state = $modulesStore;
@@ -72,11 +93,87 @@
   $: selectedModule = state.selectedModule;
 
   onMount(async () => {
-    if (canManage) {
-      await loadModules();
-    }
+    await loadModules();
   });
 
+  // Load units for a module
+  async function loadUnits(moduleId: string) {
+    if (unitsData[moduleId]) return; // Already loaded
+
+    loadingUnits[moduleId] = true;
+    try {
+      const { data: units, error } = await supabase
+        .from("units")
+        .select("*")
+        .eq("module_id", moduleId)
+        .order("order_index", { ascending: true });
+
+      if (error) throw error;
+      unitsData[moduleId] = units || [];
+    } catch (err) {
+      console.error("Error loading units:", err);
+      toastStore.error("Failed to load units");
+      unitsData[moduleId] = [];
+    } finally {
+      loadingUnits[moduleId] = false;
+    }
+  }
+
+  // Load lessons for a unit
+  async function loadLessons(unitId: string) {
+    if (lessonsData[unitId]) return; // Already loaded
+
+    loadingLessons[unitId] = true;
+    try {
+      const { data: lessons, error } = await supabase
+        .from("lessons")
+        .select("*")
+        .eq("unit_id", unitId)
+        .order("created_at", { ascending: true });
+
+      if (error) throw error;
+      lessonsData[unitId] = lessons || [];
+    } catch (err) {
+      console.error("Error loading lessons:", err);
+      toastStore.error("Failed to load lessons");
+      lessonsData[unitId] = [];
+    } finally {
+      loadingLessons[unitId] = false;
+    }
+  }
+
+  // Toggle module expansion
+  function toggleModule(moduleId: string) {
+    expandedModules[moduleId] = !expandedModules[moduleId];
+    expandedModules = { ...expandedModules }; // Trigger reactivity
+
+    if (expandedModules[moduleId]) {
+      loadUnits(moduleId);
+    }
+  }
+
+  // Toggle unit expansion
+  function toggleUnit(unitId: string) {
+    expandedUnits[unitId] = !expandedUnits[unitId];
+    expandedUnits = { ...expandedUnits }; // Trigger reactivity
+
+    if (expandedUnits[unitId]) {
+      loadLessons(unitId);
+    }
+  }
+
+  // Toggle lesson expansion
+  function toggleLesson(lessonId: string) {
+    expandedLessons[lessonId] = !expandedLessons[lessonId];
+    expandedLessons = { ...expandedLessons }; // Trigger reactivity
+  }
+
+  // View lesson content (now expands inline)
+  function viewLesson(lesson: any) {
+    toggleLesson(lesson.id);
+  }
+
+  // Module management functions
   function resetNewModule() {
     newModule = {
       title: "",
@@ -102,72 +199,91 @@
     });
 
     if (result.data) {
-      resetNewModule();
       createDialogOpen = false;
+      resetNewModule();
+      toastStore.success("Module created successfully");
+    } else {
+      toastStore.error(String(result.error) || "Failed to create module");
     }
   }
 
   async function handleUpdateModule() {
+    console.log("🔍 handleUpdateModule called");
+    console.log("🔍 Current user:", user);
+    console.log("🔍 Edit module data:", editModule);
+
+    if (!user) {
+      console.log("❌ No user found, returning");
+      return;
+    }
+
     const validation = validateModule(editModule);
+    console.log("🔍 Validation result:", validation);
+
     if (!validation.valid) {
+      console.log("❌ Validation failed:", validation.errors);
       validationErrors = validation.errors;
       return;
     }
 
+    console.log("🔍 Calling updateModule with:", {
+      id: editModule.id,
+      updates: {
+        title: editModule.title.trim(),
+        description: editModule.description.trim() || "No description provided",
+        is_published: editModule.is_published,
+      },
+    });
+
     const result = await updateModule(editModule.id, {
       title: editModule.title.trim(),
-      description: editModule.description.trim() || null,
+      description: editModule.description.trim() || "No description provided",
       is_published: editModule.is_published,
     });
 
+    console.log("🔍 Update result:", result);
+
     if (result.data) {
-      validationErrors = [];
+      console.log("✅ Update successful, closing dialog");
       editDialogOpen = false;
+      toastStore.success("Module updated successfully");
+    } else {
+      console.log("❌ Update failed:", result.error);
+      toastStore.error(String(result.error) || "Failed to update module");
     }
   }
 
   async function handleDeleteModule() {
     if (!moduleToDelete) return;
 
-    await deleteModule(moduleToDelete.id);
-    moduleToDelete = null;
-    deleteDialogOpen = false;
-  }
-
-  async function handleTogglePublication(module: any) {
-    await toggleModulePublication(module.id);
-  }
-
-  async function handleDuplicateModule(module: any) {
-    await duplicateModule(module.id);
-  }
-
-  async function openEditDialog(module: any) {
-    editModule = {
-      id: module.id,
-      title: module.title,
-      description: module.description || "",
-      is_published: module.is_published,
-    };
-    validationErrors = [];
-    editDialogOpen = true;
-  }
-
-  async function openViewDialog(module: any) {
-    setSelectedModule(module);
-    viewDialogOpen = true;
-
-    // Load module statistics
-    if (!moduleStats[module.id]) {
-      loadingStats[module.id] = true;
-      moduleStats[module.id] = await getModuleStats(module.id);
-      loadingStats[module.id] = false;
+    const result = await deleteModule(moduleToDelete.id);
+    if (result.success) {
+      deleteDialogOpen = false;
+      moduleToDelete = null;
+      toastStore.success("Module deleted successfully");
+    } else {
+      toastStore.error(String(result.error) || "Failed to delete module");
     }
   }
 
-  function openDeleteDialog(module: any) {
-    moduleToDelete = module;
-    deleteDialogOpen = true;
+  async function handleTogglePublication(moduleId: string) {
+    const result = await toggleModulePublication(moduleId);
+    if (result.data) {
+      toastStore.success("Module publication status updated");
+    } else {
+      toastStore.error(
+        String(result.error) || "Failed to update publication status"
+      );
+    }
+  }
+
+  async function handleDuplicateModule(moduleId: string) {
+    const result = await duplicateModule(moduleId);
+    if (result.data) {
+      toastStore.success("Module duplicated successfully");
+    } else {
+      toastStore.error(String(result.error) || "Failed to duplicate module");
+    }
   }
 
   function openCreateDialog() {
@@ -175,263 +291,564 @@
     createDialogOpen = true;
   }
 
-  function formatDate(dateString: string): string {
-    return new Date(dateString).toLocaleDateString("en-US", {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
+  function openEditDialog(module: any) {
+    editModule = {
+      id: module.id,
+      title: module.title,
+      description: module.description,
+      is_published: module.is_published,
+    };
+    editDialogOpen = true;
+  }
+
+  function openDeleteDialog(module: any) {
+    moduleToDelete = module;
+    deleteDialogOpen = true;
+  }
+
+  function openViewDialog(module: any) {
+    setSelectedModule(module);
+  }
+
+  // Get module stats
+  async function loadModuleStats(moduleId: string) {
+    if (moduleStats[moduleId]) return;
+
+    loadingStats[moduleId] = true;
+    try {
+      const stats = await getModuleStats(moduleId);
+      moduleStats[moduleId] = stats;
+    } catch (err) {
+      console.error("Error loading module stats:", err);
+      moduleStats[moduleId] = { units: 0, content: 0, students: 0 };
+    } finally {
+      loadingStats[moduleId] = false;
+    }
+  }
+
+  // Load stats when modules change
+  $: if (modules.length > 0) {
+    modules.forEach((module) => {
+      if (!moduleStats[module.id]) {
+        loadModuleStats(module.id);
+      }
     });
-  }
-
-  function getStatusIcon(module: any) {
-    return module.is_published ? Globe : Lock;
-  }
-
-  function getStatusColor(module: any): string {
-    return module.is_published
-      ? "bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-300"
-      : "bg-gray-100 text-gray-800 dark:bg-gray-900/20 dark:text-gray-300";
-  }
-
-  function truncateText(text: string, maxLength: number = 100): string {
-    return text.length > maxLength
-      ? text.substring(0, maxLength) + "..."
-      : text;
-  }
-
-  // Simple drag and drop placeholder - would need a proper library for production
-  let draggedModule: any = null;
-
-  function handleDragStart(event: DragEvent, module: any) {
-    draggedModule = module;
-    if (event.dataTransfer) {
-      event.dataTransfer.effectAllowed = "move";
-    }
-  }
-
-  function handleDragOver(event: DragEvent) {
-    event.preventDefault();
-    if (event.dataTransfer) {
-      event.dataTransfer.dropEffect = "move";
-    }
-  }
-
-  async function handleDrop(event: DragEvent, targetModule: any) {
-    event.preventDefault();
-
-    if (!draggedModule || draggedModule.id === targetModule.id) return;
-
-    const modulesCopy = [...modules];
-    const draggedIndex = modulesCopy.findIndex(
-      (m) => m.id === draggedModule.id
-    );
-    const targetIndex = modulesCopy.findIndex((m) => m.id === targetModule.id);
-
-    // Reorder array
-    modulesCopy.splice(draggedIndex, 1);
-    modulesCopy.splice(targetIndex, 0, draggedModule);
-
-    // Update order in database
-    const moduleIds = modulesCopy.map((m) => m.id);
-    await reorderModules(moduleIds);
-
-    draggedModule = null;
   }
 </script>
 
 <svelte:head>
-  <title>Modules - BigStepLabs</title>
-  <meta
-    name="description"
-    content="Manage learning modules and course structure"
-  />
+  <title>Learning Modules - BigStepLabs</title>
 </svelte:head>
 
-<!-- Page Header -->
-<div class="mb-8 flex items-center justify-between">
-  <div>
-    <h1 class="text-2xl font-bold text-foreground">Learning Modules</h1>
-    <p class="text-muted-foreground">
-      Create and organize your course content into structured modules
-    </p>
+<div class="container mx-auto p-6">
+  <!-- Header -->
+  <div class="flex items-center justify-between mb-6">
+    <div>
+      <h1 class="text-3xl font-bold text-foreground">Learning Modules</h1>
+      <p class="text-muted-foreground">
+        Create and organize your course content into structured modules
+      </p>
+    </div>
+    {#if canManage}
+      <Button on:click={openCreateDialog}>
+        <Plus class="w-4 h-4 mr-2" />
+        Create Module
+      </Button>
+    {/if}
   </div>
 
-  {#if canManage}
-    <Button on:click={openCreateDialog}>
-      <Plus class="w-4 h-4 mr-2" />
-      Create Module
-    </Button>
-  {/if}
-</div>
-
-<div class="max-w-7xl mx-auto">
-  {#if !canManage}
-    <Card class="p-8 text-center">
-      <h2 class="text-xl font-semibold mb-2">Access Restricted</h2>
-      <p class="text-muted-foreground">
-        You need Admin or Collaborator privileges to manage learning modules.
-      </p>
-    </Card>
-  {:else if state.loading}
-    <div class="flex items-center justify-center py-12">
-      <Loader2 class="w-8 h-8 animate-spin text-primary" />
-      <span class="ml-2 text-muted-foreground">Loading modules...</span>
+  <!-- Loading State -->
+  {#if state.loading}
+    <div class="flex items-center justify-center p-8">
+      <Loader2 class="w-6 h-6 animate-spin mr-2" />
+      Loading modules...
     </div>
   {:else if state.error}
-    <Card class="p-6 border-destructive">
-      <div class="flex items-center justify-between">
-        <div class="flex items-center">
-          <AlertCircle class="w-5 h-5 text-destructive mr-2" />
-          <span class="text-destructive font-medium">Error: {state.error}</span>
-        </div>
-        <Button variant="outline" on:click={clearModulesError}>Dismiss</Button>
+    <Card class="p-6">
+      <div class="flex items-center text-destructive">
+        <AlertCircle class="w-5 h-5 mr-2" />
+        <span>{state.error}</span>
       </div>
     </Card>
   {:else if modules.length === 0}
-    <Card class="p-12 text-center">
-      <BookOpen class="w-16 h-16 text-muted-foreground mx-auto mb-4" />
-      <h2 class="text-xl font-semibold mb-2">No Modules Created</h2>
-      <p class="text-muted-foreground mb-6">
-        Start building your course by creating your first learning module.
-        Modules help organize related units and content into logical groups.
+    <Card class="p-8 text-center">
+      <BookOpen class="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+      <h3 class="text-lg font-semibold mb-2">No modules yet</h3>
+      <p class="text-muted-foreground mb-4">
+        {canManage
+          ? "Create your first module to get started"
+          : "No modules are available yet"}
       </p>
-      <Button on:click={openCreateDialog}>
-        <Plus class="w-4 h-4 mr-2" />
-        Create Your First Module
-      </Button>
+      {#if canManage}
+        <Button on:click={openCreateDialog}>
+          <Plus class="w-4 h-4 mr-2" />
+          Create Your First Module
+        </Button>
+      {/if}
     </Card>
   {:else}
     <!-- Modules List -->
     <div class="space-y-4">
       {#each modules as module (module.id)}
-        <Card
-          class="p-6 hover:shadow-md transition-shadow cursor-move"
-          draggable="true"
-          on:dragstart={(e) => handleDragStart(e, module)}
-          on:dragover={handleDragOver}
-          on:drop={(e) => handleDrop(e, module)}
-        >
-          <div class="flex items-start justify-between">
-            <div class="flex items-start space-x-4 flex-1">
-              <!-- Drag Handle -->
-              <div
-                class="mt-1 text-muted-foreground hover:text-foreground cursor-grab"
-              >
-                <GripVertical class="w-5 h-5" />
-              </div>
-
-              <!-- Module Icon -->
-              <div
-                class="w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center flex-shrink-0"
-              >
-                <BookOpen class="w-6 h-6 text-primary" />
-              </div>
-
-              <!-- Module Content -->
-              <div class="flex-1 min-w-0">
-                <div class="flex items-center space-x-3 mb-2">
-                  <h3 class="text-lg font-semibold text-foreground">
-                    {module.title}
-                  </h3>
-                  <span
-                    class={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(module)}`}
-                  >
-                    <svelte:component
-                      this={getStatusIcon(module)}
-                      class="w-3 h-3 mr-1"
-                    />
-                    {module.is_published ? "Published" : "Draft"}
-                  </span>
-                </div>
-
-                {#if module.description}
-                  <p class="text-muted-foreground text-sm mb-3">
-                    {truncateText(module.description, 200)}
-                  </p>
-                {/if}
-
-                <!-- Module Stats -->
+        <!-- Module Card -->
+        <Card class="overflow-hidden">
+          <div class="p-6">
+            <!-- Module Header -->
+            <div class="flex items-start justify-between mb-4">
+              <div class="flex items-start gap-4 flex-1">
+                <!-- Module Icon -->
                 <div
-                  class="flex items-center space-x-6 text-sm text-muted-foreground"
+                  class="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center"
                 >
-                  <div class="flex items-center space-x-1">
-                    <FileText class="w-4 h-4" />
-                    <span>{module.units?.length || 0} units</span>
+                  <BookOpen class="w-5 h-5 text-primary" />
+                </div>
+
+                <!-- Module Info -->
+                <div class="flex-1 min-w-0">
+                  <div class="flex items-center gap-3 mb-2">
+                    <h3 class="text-lg font-semibold text-foreground">
+                      {module.title}
+                    </h3>
+                    <span
+                      class={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                        module.is_published
+                          ? "bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-300"
+                          : "bg-gray-100 text-gray-800 dark:bg-gray-900/20 dark:text-gray-300"
+                      }`}
+                    >
+                      {module.is_published ? "Published" : "Draft"}
+                    </span>
                   </div>
-                  <div class="flex items-center space-x-1">
-                    <Clock class="w-4 h-4" />
-                    <span>Updated {formatDate(module.updated_at)}</span>
-                  </div>
-                  <div class="flex items-center space-x-1">
-                    <Users class="w-4 h-4" />
-                    <span>Order #{module.order_index}</span>
+
+                  <p class="text-sm text-muted-foreground mb-3">
+                    {module.description || "No description provided"}
+                  </p>
+
+                  <!-- Module Stats -->
+                  <div
+                    class="flex items-center gap-4 text-sm text-muted-foreground"
+                  >
+                    <div class="flex items-center gap-1">
+                      <Layers class="w-4 h-4" />
+                      <span>
+                        {#if loadingStats[module.id]}
+                          <Loader2 class="w-3 h-3 animate-spin inline" />
+                        {:else}
+                          {moduleStats[module.id]?.units || 0} units
+                        {/if}
+                      </span>
+                    </div>
+                    <div class="flex items-center gap-1">
+                      <FileText class="w-4 h-4" />
+                      <span>
+                        {#if loadingStats[module.id]}
+                          <Loader2 class="w-3 h-3 animate-spin inline" />
+                        {:else}
+                          {moduleStats[module.id]?.content || 0} lessons
+                        {/if}
+                      </span>
+                    </div>
+                    <div class="flex items-center gap-1">
+                      <Users class="w-4 h-4" />
+                      <span>
+                        {#if loadingStats[module.id]}
+                          <Loader2 class="w-3 h-3 animate-spin inline" />
+                        {:else}
+                          {moduleStats[module.id]?.students || 0} students
+                        {/if}
+                      </span>
+                    </div>
+                    <span class="text-xs">
+                      Updated {new Date(module.updated_at).toLocaleDateString()}
+                    </span>
                   </div>
                 </div>
               </div>
+
+              <!-- Admin Actions -->
+              {#if canManage}
+                <div class="flex items-center gap-1">
+                  <button
+                    on:click={() => handleTogglePublication(module.id)}
+                    class="p-2 hover:bg-accent rounded-md text-muted-foreground hover:text-foreground"
+                    title={module.is_published ? "Unpublish" : "Publish"}
+                  >
+                    {#if module.is_published}
+                      <Globe class="w-4 h-4" />
+                    {:else}
+                      <Lock class="w-4 h-4" />
+                    {/if}
+                  </button>
+                  <button
+                    on:click={() => handleDuplicateModule(module.id)}
+                    class="p-2 hover:bg-accent rounded-md text-muted-foreground hover:text-foreground"
+                    title="Duplicate module"
+                  >
+                    <Copy class="w-4 h-4" />
+                  </button>
+                  <button
+                    on:click={() => openViewDialog(module)}
+                    class="p-2 hover:bg-accent rounded-md text-muted-foreground hover:text-foreground"
+                    title="View module"
+                  >
+                    <Eye class="w-4 h-4" />
+                  </button>
+                  <button
+                    on:click={() => openEditDialog(module)}
+                    class="p-2 hover:bg-accent rounded-md text-muted-foreground hover:text-foreground"
+                    title="Edit module"
+                  >
+                    <Edit class="w-4 h-4" />
+                  </button>
+                  <button
+                    on:click={() => openDeleteDialog(module)}
+                    class="p-2 hover:bg-accent rounded-md text-muted-foreground hover:text-foreground text-destructive"
+                    title="Delete module"
+                  >
+                    <Trash2 class="w-4 h-4" />
+                  </button>
+                </div>
+              {/if}
             </div>
 
-            <!-- Actions -->
-            <div class="flex items-center space-x-1">
-              <button
-                on:click={() => handleTogglePublication(module)}
-                class="p-2 hover:bg-accent rounded-md text-muted-foreground hover:text-foreground"
-                title={module.is_published ? "Unpublish" : "Publish"}
-              >
-                <svelte:component
-                  this={module.is_published ? Lock : Globe}
-                  class="w-4 h-4"
-                />
-              </button>
+            <!-- Collapsible Units Section -->
+            <Collapsible bind:open={expandedModules[module.id]}>
+              <div class="flex items-center justify-between">
+                <button
+                  on:click={() => toggleModule(module.id)}
+                  class="flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  {#if expandedModules[module.id]}
+                    <ChevronDown class="w-4 h-4" />
+                    Hide Units
+                  {:else}
+                    <ChevronRight class="w-4 h-4" />
+                    Show Units ({moduleStats[module.id]?.units || 0})
+                  {/if}
+                </button>
+              </div>
 
-              <button
-                on:click={() => handleDuplicateModule(module)}
-                class="p-2 hover:bg-accent rounded-md text-muted-foreground hover:text-foreground"
-                title="Duplicate module"
-              >
-                <Copy class="w-4 h-4" />
-              </button>
+              <div slot="content" class="mt-4">
+                {#if loadingUnits[module.id]}
+                  <div class="flex items-center justify-center p-4">
+                    <Loader2 class="w-4 h-4 animate-spin mr-2" />
+                    Loading units...
+                  </div>
+                {:else if unitsData[module.id]?.length === 0}
+                  <div class="text-center p-4 text-muted-foreground">
+                    <Layers class="w-8 h-8 mx-auto mb-2 opacity-50" />
+                    <p>No units in this module</p>
+                    {#if canManage}
+                      <Button variant="outline" size="sm" class="mt-2">
+                        <Plus class="w-3 h-3 mr-1" />
+                        Add Unit
+                      </Button>
+                    {/if}
+                  </div>
+                {:else}
+                  <div class="space-y-3">
+                    {#each unitsData[module.id] || [] as unit (unit.id)}
+                      <!-- Unit Card -->
+                      <Card class="p-4">
+                        <div class="flex items-start justify-between mb-3">
+                          <div class="flex items-start gap-3 flex-1">
+                            <!-- Unit Icon -->
+                            <div
+                              class="w-8 h-8 bg-blue-500/10 rounded-lg flex items-center justify-center"
+                            >
+                              <Layers class="w-4 h-4 text-blue-500" />
+                            </div>
 
-              <button
-                on:click={() => openViewDialog(module)}
-                class="p-2 hover:bg-accent rounded-md text-muted-foreground hover:text-foreground"
-                title="View details"
-              >
-                <Eye class="w-4 h-4" />
-              </button>
+                            <!-- Unit Info -->
+                            <div class="flex-1 min-w-0">
+                              <div class="flex items-center gap-2 mb-1">
+                                <h4 class="font-medium text-foreground">
+                                  {unit.title}
+                                </h4>
+                                <span
+                                  class={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+                                    unit.is_published
+                                      ? "bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-300"
+                                      : "bg-gray-100 text-gray-800 dark:bg-gray-900/20 dark:text-gray-300"
+                                  }`}
+                                >
+                                  {unit.is_published ? "Published" : "Draft"}
+                                </span>
+                              </div>
 
-              <button
-                on:click={() => openEditDialog(module)}
-                class="p-2 hover:bg-accent rounded-md text-muted-foreground hover:text-foreground"
-                title="Edit module"
-              >
-                <Edit class="w-4 h-4" />
-              </button>
+                              <p class="text-sm text-muted-foreground mb-2">
+                                {unit.description || "No description"}
+                              </p>
 
-              <button
-                on:click={() => openDeleteDialog(module)}
-                class="p-2 hover:bg-destructive/20 rounded-md text-muted-foreground hover:text-destructive"
-                title="Delete module"
-              >
-                <Trash2 class="w-4 h-4" />
-              </button>
+                              <!-- Unit Stats -->
+                              <div
+                                class="flex items-center gap-3 text-xs text-muted-foreground"
+                              >
+                                <span>
+                                  {#if loadingLessons[unit.id]}
+                                    <Loader2
+                                      class="w-3 h-3 animate-spin inline"
+                                    />
+                                  {:else}
+                                    {lessonsData[unit.id]?.length || 0} lessons
+                                  {/if}
+                                </span>
+                                <span>
+                                  Updated {new Date(
+                                    unit.updated_at
+                                  ).toLocaleDateString()}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
 
-              <Button
-                variant="outline"
-                size="sm"
-                class="ml-2"
-                on:click={() =>
-                  (window.location.href = `/units?module=${module.id}`)}
-              >
-                Manage Units
-                <ArrowRight class="w-4 h-4 ml-1" />
-              </Button>
-            </div>
+                          <!-- Unit Actions -->
+                          {#if canManage}
+                            <div class="flex items-center gap-1">
+                              <button
+                                on:click={() => openEditDialog(unit)}
+                                class="p-1 hover:bg-accent rounded-md text-muted-foreground hover:text-foreground"
+                                title="Edit unit"
+                              >
+                                <Edit class="w-3 h-3" />
+                              </button>
+                              <button
+                                on:click={() => openDeleteDialog(unit)}
+                                class="p-1 hover:bg-accent rounded-md text-muted-foreground hover:text-foreground text-destructive"
+                                title="Delete unit"
+                              >
+                                <Trash2 class="w-3 h-3" />
+                              </button>
+                            </div>
+                          {/if}
+                        </div>
+
+                        <!-- Collapsible Lessons Section -->
+                        <Collapsible bind:open={expandedUnits[unit.id]}>
+                          <div class="flex items-center justify-between">
+                            <button
+                              on:click={() => toggleUnit(unit.id)}
+                              class="flex items-center gap-2 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
+                            >
+                              {#if expandedUnits[unit.id]}
+                                <ChevronDown class="w-3 h-3" />
+                                Hide Lessons
+                              {:else}
+                                <ChevronRight class="w-3 h-3" />
+                                Show Lessons ({lessonsData[unit.id]?.length ||
+                                  0})
+                              {/if}
+                            </button>
+                          </div>
+
+                          <div slot="content" class="mt-3">
+                            {#if loadingLessons[unit.id]}
+                              <div class="flex items-center justify-center p-2">
+                                <Loader2 class="w-3 h-3 animate-spin mr-1" />
+                                Loading lessons...
+                              </div>
+                            {:else if lessonsData[unit.id]?.length === 0}
+                              <div
+                                class="text-center p-2 text-muted-foreground"
+                              >
+                                <FileText
+                                  class="w-6 h-6 mx-auto mb-1 opacity-50"
+                                />
+                                <p class="text-xs">No lessons in this unit</p>
+                                {#if canManage}
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    class="mt-1 text-xs"
+                                  >
+                                    <Plus class="w-3 h-3 mr-1" />
+                                    Add Lesson
+                                  </Button>
+                                {/if}
+                              </div>
+                            {:else}
+                              <div class="space-y-2">
+                                {#each lessonsData[unit.id] || [] as lesson (lesson.id)}
+                                  <!-- Lesson Card -->
+                                  <div
+                                    class="border rounded p-3 bg-muted/30 {expandedLessons[
+                                      lesson.id
+                                    ]
+                                      ? 'min-h-[300px]'
+                                      : 'min-h-[80px]'}"
+                                  >
+                                    <div
+                                      class="flex items-center justify-between"
+                                    >
+                                      <div
+                                        class="flex items-center gap-2 flex-1"
+                                      >
+                                        <!-- Lesson Icon -->
+                                        <div
+                                          class="w-6 h-6 bg-green-500/10 rounded flex items-center justify-center"
+                                        >
+                                          <FileText
+                                            class="w-3 h-3 text-green-500"
+                                          />
+                                        </div>
+
+                                        <!-- Lesson Info -->
+                                        <div class="flex-1 min-w-0">
+                                          <div class="flex items-center gap-2">
+                                            <h5
+                                              class="text-sm font-medium text-foreground truncate"
+                                            >
+                                              {lesson.title}
+                                            </h5>
+                                            <span
+                                              class={`inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium ${
+                                                lesson.is_published
+                                                  ? "bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-300"
+                                                  : "bg-gray-100 text-gray-800 dark:bg-gray-900/20 dark:text-gray-300"
+                                              }`}
+                                            >
+                                              {lesson.is_published
+                                                ? "Published"
+                                                : "Draft"}
+                                            </span>
+                                          </div>
+                                          <p
+                                            class="text-xs text-muted-foreground"
+                                          >
+                                            Created {new Date(
+                                              lesson.created_at
+                                            ).toLocaleDateString()}
+                                          </p>
+                                        </div>
+                                      </div>
+
+                                      <!-- Lesson Actions -->
+                                      <div class="flex items-center gap-1">
+                                        <Button
+                                          variant="outline"
+                                          size="sm"
+                                          on:click={() => viewLesson(lesson)}
+                                          class="text-xs"
+                                        >
+                                          {#if expandedLessons[lesson.id]}
+                                            <ChevronDown class="w-3 h-3 mr-1" />
+                                            Hide Content
+                                          {:else}
+                                            <Play class="w-3 h-3 mr-1" />
+                                            View Lesson
+                                          {/if}
+                                        </Button>
+                                        {#if canManage}
+                                          <button
+                                            on:click={() =>
+                                              openEditDialog(lesson)}
+                                            class="p-1 hover:bg-accent rounded-md text-muted-foreground hover:text-foreground"
+                                            title="Edit lesson"
+                                          >
+                                            <Edit class="w-3 h-3" />
+                                          </button>
+                                          <button
+                                            on:click={() =>
+                                              openDeleteDialog(lesson)}
+                                            class="p-1 hover:bg-accent rounded-md text-muted-foreground hover:text-foreground text-destructive"
+                                            title="Delete lesson"
+                                          >
+                                            <Trash2 class="w-3 h-3" />
+                                          </button>
+                                        {/if}
+                                      </div>
+                                    </div>
+
+                                    <!-- Expanded Lesson Content -->
+                                    {#if expandedLessons[lesson.id]}
+                                      <div
+                                        class="mt-3 pt-3 border-t border-border"
+                                      >
+                                        {#if lesson.embed_url}
+                                          <div
+                                            class="bg-background rounded border"
+                                          >
+                                            <iframe
+                                              src={lesson.embed_url}
+                                              style="width: 100%; height: 1200px; border: none;"
+                                              title={lesson.title}
+                                              loading="eager"
+                                              sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox allow-presentation allow-downloads allow-modals"
+                                              allow="fullscreen; autoplay; encrypted-media; picture-in-picture; microphone; camera"
+                                              referrerpolicy="no-referrer"
+                                            />
+                                          </div>
+                                        {:else if lesson.notion_url}
+                                          <div
+                                            class="text-center p-4 bg-muted rounded"
+                                          >
+                                            <FileText
+                                              class="w-8 h-8 text-muted-foreground mx-auto mb-2"
+                                            />
+                                            <h6 class="font-medium mb-1">
+                                              Notion Content
+                                            </h6>
+                                            <p
+                                              class="text-sm text-muted-foreground mb-3"
+                                            >
+                                              This lesson contains Notion
+                                              content that needs to be embedded.
+                                            </p>
+                                            <Button
+                                              variant="outline"
+                                              size="sm"
+                                              on:click={() =>
+                                                window.open(
+                                                  lesson.notion_url,
+                                                  "_blank"
+                                                )}
+                                            >
+                                              <ExternalLink
+                                                class="w-3 h-3 mr-1"
+                                              />
+                                              Open in Notion
+                                            </Button>
+                                          </div>
+                                        {:else}
+                                          <div
+                                            class="text-center p-4 bg-muted rounded"
+                                          >
+                                            <FileText
+                                              class="w-8 h-8 text-muted-foreground mx-auto mb-2"
+                                            />
+                                            <h6 class="font-medium mb-1">
+                                              No Content Available
+                                            </h6>
+                                            <p
+                                              class="text-sm text-muted-foreground"
+                                            >
+                                              This lesson doesn't have any
+                                              content configured yet.
+                                            </p>
+                                          </div>
+                                        {/if}
+                                      </div>
+                                    {/if}
+                                  </div>
+                                {/each}
+                              </div>
+                            {/if}
+                          </div>
+                        </Collapsible>
+                      </Card>
+                    {/each}
+                  </div>
+                {/if}
+              </div>
+            </Collapsible>
           </div>
         </Card>
       {/each}
     </div>
+  {/if}
 
-    <!-- Tips -->
+  <!-- Module Management Tips -->
+  {#if canManage}
     <CrudTips
       title="Module Management Tips"
       tips={[
@@ -577,125 +994,6 @@
     <Button on:click={handleUpdateModule} disabled={!editModule.title.trim()}>
       Save Changes
     </Button>
-  </div>
-</Dialog>
-
-<!-- View Module Dialog -->
-<Dialog bind:open={viewDialogOpen} title="Module Details" size="lg">
-  {#if selectedModule}
-    <div class="space-y-6">
-      <!-- Header -->
-      <div class="flex items-start space-x-4 pb-4 border-b border-border">
-        <div
-          class="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center"
-        >
-          <BookOpen class="w-8 h-8 text-primary" />
-        </div>
-        <div class="flex-1">
-          <h3 class="text-xl font-semibold text-foreground mb-2">
-            {selectedModule.title}
-          </h3>
-          <div class="flex items-center space-x-2 mb-2">
-            <span
-              class={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(selectedModule)}`}
-            >
-              <svelte:component
-                this={getStatusIcon(selectedModule)}
-                class="w-3 h-3 mr-1"
-              />
-              {selectedModule.is_published ? "Published" : "Draft"}
-            </span>
-          </div>
-          {#if selectedModule.description}
-            <p class="text-muted-foreground">
-              {selectedModule.description}
-            </p>
-          {/if}
-        </div>
-      </div>
-
-      <!-- Statistics -->
-      <div class="grid grid-cols-3 gap-4">
-        <div class="text-center p-4 bg-muted rounded-md">
-          <div class="text-2xl font-bold text-foreground">
-            {#if loadingStats[selectedModule.id]}
-              <Loader2 class="w-6 h-6 animate-spin mx-auto" />
-            {:else}
-              {moduleStats[selectedModule.id]?.units || 0}
-            {/if}
-          </div>
-          <div class="text-sm text-muted-foreground">Units</div>
-        </div>
-        <div class="text-center p-4 bg-muted rounded-md">
-          <div class="text-2xl font-bold text-foreground">
-            {#if loadingStats[selectedModule.id]}
-              <Loader2 class="w-6 h-6 animate-spin mx-auto" />
-            {:else}
-              {moduleStats[selectedModule.id]?.content || 0}
-            {/if}
-          </div>
-          <div class="text-sm text-muted-foreground">Content Items</div>
-        </div>
-        <div class="text-center p-4 bg-muted rounded-md">
-          <div class="text-2xl font-bold text-foreground">
-            {#if loadingStats[selectedModule.id]}
-              <Loader2 class="w-6 h-6 animate-spin mx-auto" />
-            {:else}
-              {moduleStats[selectedModule.id]?.students || 0}
-            {/if}
-          </div>
-          <div class="text-sm text-muted-foreground">Students</div>
-        </div>
-      </div>
-
-      <!-- Metadata -->
-      <div class="text-sm text-muted-foreground pt-4 border-t border-border">
-        <div class="grid grid-cols-2 gap-4">
-          <div>
-            <strong>Created:</strong>
-            {formatDate(selectedModule.created_at)}
-          </div>
-          <div>
-            <strong>Last Updated:</strong>
-            {formatDate(selectedModule.updated_at)}
-          </div>
-          <div>
-            <strong>Order:</strong> #{selectedModule.order_index}
-          </div>
-          <div>
-            <strong>Slug:</strong>
-            {selectedModule.slug || "Auto-generated"}
-          </div>
-        </div>
-      </div>
-    </div>
-  {/if}
-
-  <div slot="footer" class="flex justify-between">
-    <Button
-      variant="outline"
-      on:click={() => handleDuplicateModule(selectedModule)}
-    >
-      <Copy class="w-4 h-4 mr-2" />
-      Duplicate
-    </Button>
-    <div class="flex space-x-2">
-      <Button variant="outline" on:click={() => openEditDialog(selectedModule)}>
-        <Edit class="w-4 h-4 mr-2" />
-        Edit
-      </Button>
-      <Button
-        variant="outline"
-        on:click={() =>
-          (window.location.href = `/units?module=${selectedModule.id}`)}
-      >
-        Manage Units
-        <ArrowRight class="w-4 h-4 ml-1" />
-      </Button>
-      <Button variant="outline" on:click={() => (viewDialogOpen = false)}>
-        Close
-      </Button>
-    </div>
   </div>
 </Dialog>
 

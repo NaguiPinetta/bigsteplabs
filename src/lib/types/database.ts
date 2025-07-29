@@ -309,6 +309,8 @@ export interface Database {
           max_tokens: number;
           temperature: number;
           is_active: boolean;
+          description: string | null;
+          api_endpoint: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -321,6 +323,8 @@ export interface Database {
           max_tokens?: number;
           temperature?: number;
           is_active?: boolean;
+          description?: string | null;
+          api_endpoint?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -333,6 +337,8 @@ export interface Database {
           max_tokens?: number;
           temperature?: number;
           is_active?: boolean;
+          description?: string | null;
+          api_endpoint?: string | null;
           created_at?: string;
           updated_at?: string;
         };

@@ -365,8 +365,8 @@
                 style="width: 100%; height: 80vh; border: none;"
                 title={lesson.title}
                 loading="eager"
-                sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox allow-presentation"
-                allow="fullscreen"
+                sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox allow-presentation allow-downloads allow-modals"
+                allow="fullscreen; autoplay; encrypted-media; picture-in-picture; microphone; camera"
                 referrerpolicy="no-referrer"
               />
             {/if}

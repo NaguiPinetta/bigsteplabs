@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import Sidebar from "../navigation/sidebar.svelte";
+  import ToastContainer from "../ui/toast-container.svelte";
   import { authStore } from "$lib/stores/auth";
   import { signOut } from "$lib/auth";
   import { goto } from "$app/navigation";
@@ -184,4 +185,7 @@
       <slot />
     </div>
   </main>
+
+  <!-- Toast Container -->
+  <ToastContainer />
 </div>
