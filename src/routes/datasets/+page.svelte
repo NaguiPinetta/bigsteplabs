@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { authStore, canManageContent } from "$lib/stores/auth";
+  import { supabase } from "$lib/supabase";
   import {
     datasetsStore,
     loadDatasets,
@@ -9,7 +10,8 @@
     deleteDataset,
     loadDatasetChunks,
     createChunks,
-    processFileToChunks,
+    createStructuredChunks,
+    processFileToStructuredChunks,
     setSelectedDataset,
     clearDatasetsError,
   } from "$lib/stores/datasets";
@@ -33,6 +35,8 @@
     Loader2,
     AlertCircle,
     CheckCircle,
+    RefreshCw,
+    Bug,
   } from "lucide-svelte";
 
   let createDialogOpen = false;
@@ -41,6 +45,7 @@
   let viewDialogOpen = false;
   let deleteDialogOpen = false;
   let datasetToDelete: any = null;
+  let isCreatingDataset = false;
 
   let newDataset = {
     name: "",
@@ -72,9 +77,28 @@
     ? state.chunks[selectedDataset.id] || []
     : [];
 
+  // Reactive statement to load chunks when datasets change
+  $: if (datasets.length > 0 && canManage) {
+    // Load chunks for datasets that don't have chunks loaded yet
+    datasets.forEach(async (dataset) => {
+      if (!state.chunks[dataset.id]) {
+        console.log("🔍 Loading chunks for dataset:", dataset.name);
+        await loadDatasetChunks(dataset.id);
+      }
+    });
+  }
+
   onMount(() => {
     if (canManage) {
-      loadDatasets();
+      loadDatasets().then(() => {
+        // After datasets are loaded, load chunks for each dataset
+        if (datasets.length > 0) {
+          console.log("🔍 Loading chunks for existing datasets...");
+          datasets.forEach(async (dataset) => {
+            await loadDatasetChunks(dataset.id);
+          });
+        }
+      });
     }
   });
 
@@ -90,7 +114,51 @@
   async function handleCreateDataset() {
     if (!newDataset.name.trim() || !user) return;
 
+    console.log("🚀 Starting dataset creation process...");
+    isCreatingDataset = true;
+
     try {
+      let fileUrl: string | undefined;
+      let fileName: string | undefined;
+      let fileSize: number | undefined;
+      let fileType: string | undefined;
+
+      // Handle file upload if content type is file
+      if (newDataset.contentType === "file" && newDataset.file) {
+        console.log("📁 Starting file upload:", newDataset.file.name);
+
+        // Upload file to Supabase storage
+        const fileExt = newDataset.file.name.split(".").pop();
+        const fileNameWithTimestamp = `${Date.now()}-${newDataset.file.name}`;
+        const filePath = `datasets/${user.id}/${fileNameWithTimestamp}`;
+
+        console.log("📁 Upload path:", filePath);
+
+        const { data: uploadData, error: uploadError } = await supabase.storage
+          .from("datasets")
+          .upload(filePath, newDataset.file);
+
+        if (uploadError) {
+          console.error("❌ File upload error:", uploadError);
+          throw new Error(`Failed to upload file: ${uploadError.message}`);
+        }
+
+        console.log("✅ File upload successful, getting public URL...");
+
+        // Get the public URL
+        const { data: urlData } = supabase.storage
+          .from("datasets")
+          .getPublicUrl(filePath);
+
+        fileUrl = urlData.publicUrl;
+        fileName = newDataset.file.name;
+        fileSize = newDataset.file.size;
+        fileType = newDataset.file.type;
+
+        console.log("✅ File uploaded successfully:", fileUrl);
+      }
+
+      console.log("📝 Preparing dataset data...");
       const datasetData = {
         name: newDataset.name.trim(),
         description: newDataset.description.trim() || undefined,
@@ -104,15 +172,57 @@
           newDataset.contentType === "text"
             ? (newDataset.textFormat as "json" | "markdown" | "plain")
             : undefined,
-        file:
-          newDataset.contentType === "file" && newDataset.file
-            ? newDataset.file
-            : undefined,
+        file_url: fileUrl,
+        file_name: fileName,
+        file_size: fileSize,
+        file_type: fileType,
       };
+
+      console.log("📝 Dataset data prepared:", datasetData);
+      console.log("💾 Creating dataset in database...");
 
       const result = await createDataset(datasetData);
 
+      console.log("💾 Dataset creation result:", result);
+
       if (result) {
+        console.log("✅ Dataset created successfully, processing chunks...");
+        // Process content for chunks
+        if (result.id) {
+          if (newDataset.contentType === "file" && newDataset.file) {
+            console.log("🔧 Processing file for chunks...");
+            const chunkResult = await processFileToStructuredChunks(
+              result.id,
+              newDataset.file
+            );
+            console.log("🔧 File chunking result:", chunkResult);
+            if (chunkResult.error) {
+              console.warn(
+                "⚠️ Warning: File processed but chunking failed:",
+                chunkResult.error
+              );
+            }
+          } else if (
+            newDataset.contentType === "text" &&
+            newDataset.textContent
+          ) {
+            console.log("🔧 Processing text content for chunks...");
+            const chunkResult = await createStructuredChunks(
+              result.id,
+              newDataset.textContent,
+              "manual_input"
+            );
+            console.log("🔧 Text chunking result:", chunkResult);
+            if (chunkResult.error) {
+              console.warn(
+                "⚠️ Warning: Text processed but chunking failed:",
+                chunkResult.error
+              );
+            }
+          }
+        }
+
+        console.log("🔄 Resetting form and closing dialog...");
         newDataset = {
           name: "",
           description: "",
@@ -122,11 +232,18 @@
           file: null as File | null,
         };
         createDialogOpen = false;
+        console.log("✅ Dataset creation process completed successfully!");
+      } else {
+        console.error("❌ Dataset creation returned null result");
+        throw new Error("Failed to create dataset - no result returned");
       }
     } catch (error) {
-      console.error("Error creating dataset:", error);
+      console.error("❌ Error in handleCreateDataset:", error);
       // Show error to user
       alert("Failed to create dataset. Please check the console for details.");
+    } finally {
+      console.log("🏁 Finally block - resetting loading state");
+      isCreatingDataset = false;
     }
   }
 
@@ -171,8 +288,19 @@
   }
 
   async function openViewDialog(dataset: any) {
+    console.log("🔍 Opening view dialog for dataset:", dataset.name);
     setSelectedDataset(dataset);
-    await loadDatasetChunks(dataset.id);
+
+    // Ensure chunks are loaded
+    console.log("🔍 Loading chunks for dataset:", dataset.id);
+    const chunks = await loadDatasetChunks(dataset.id);
+    console.log(
+      "🔍 Loaded",
+      chunks.length,
+      "chunks for dataset:",
+      dataset.name
+    );
+
     viewDialogOpen = true;
   }
 
@@ -185,12 +313,10 @@
   async function handleCreateChunks() {
     if (!selectedDataset || !chunkInput.content.trim()) return;
 
-    const result = await createChunks(
+    const result = await createStructuredChunks(
       selectedDataset.id,
       chunkInput.content,
-      "manual_input",
-      parseInt(chunkInput.chunkSize),
-      parseInt(chunkInput.overlap)
+      "manual_input"
     );
 
     if (result.data) {
@@ -208,12 +334,7 @@
 
     if (!file) return;
 
-    await processFileToChunks(
-      datasetId,
-      file,
-      parseInt(chunkInput.chunkSize),
-      parseInt(chunkInput.overlap)
-    );
+    await processFileToStructuredChunks(datasetId, file);
     chunkDialogOpen = false;
   }
 
@@ -229,6 +350,302 @@
     return content.length > maxLength
       ? content.substring(0, maxLength) + "..."
       : content;
+  }
+
+  async function refreshAllChunks() {
+    console.log("🔄 Refreshing all chunks...");
+    if (canManage) {
+      datasets.forEach(async (dataset) => {
+        if (dataset.id) {
+          console.log("🔍 Loading chunks for dataset:", dataset.name);
+          await loadDatasetChunks(dataset.id);
+        }
+      });
+      console.log("✅ All chunks refreshed.");
+    } else {
+      console.warn("⚠️ Cannot refresh chunks: not authorized.");
+    }
+  }
+
+  async function debugDatasetState() {
+    console.log("🔍 Debugging dataset state...");
+    if (canManage && datasets.length > 0) {
+      for (const dataset of datasets) {
+        console.log(`🔍 Dataset: ${dataset.name} (${dataset.id})`);
+        console.log(`  - DB total_chunks: ${dataset.total_chunks}`);
+        console.log(
+          `  - Loaded chunks: ${(state.chunks[dataset.id] || []).length}`
+        );
+
+        // Check actual database state
+        const { data: actualChunks } = await supabase
+          .from("dataset_chunks")
+          .select("count")
+          .eq("dataset_id", dataset.id);
+
+        console.log(`  - Actual DB chunks: ${actualChunks?.[0]?.count || 0}`);
+
+        // Check dataset record
+        const { data: datasetRecord } = await supabase
+          .from("datasets")
+          .select("total_chunks")
+          .eq("id", dataset.id)
+          .single();
+
+        console.log(
+          `  - Dataset record total_chunks: ${datasetRecord?.total_chunks || 0}`
+        );
+      }
+    }
+  }
+
+  async function debugAgentLanguage() {
+    console.log("🔍 Debugging agent language configuration...");
+    try {
+      const { data: agents, error } = await supabase
+        .from("agents")
+        .select("id, name, whisper_language, dataset_ids")
+        .eq("name", "Agent Deutsch");
+
+      if (error) {
+        console.error("❌ Error fetching agents:", error);
+        return;
+      }
+
+      console.log("🔍 Found agents:", agents);
+
+      if (agents && agents.length > 0) {
+        const agent = agents[0];
+        console.log(`🔍 Agent Deutsch configuration:`);
+        console.log(`  - ID: ${agent.id}`);
+        console.log(`  - Name: ${agent.name}`);
+        console.log(
+          `  - Whisper Language: "${agent.whisper_language}" (type: ${typeof agent.whisper_language})`
+        );
+
+        // Map the language code to human readable
+        const languageMap: Record<string, string> = {
+          en: "English",
+          de: "German",
+          es: "Spanish",
+          fr: "French",
+          it: "Italian",
+          pt: "Portuguese",
+          ru: "Russian",
+          ja: "Japanese",
+          ko: "Korean",
+          zh: "Chinese",
+          ar: "Arabic",
+          auto: "Auto-detect",
+        };
+
+        const languageLabel = languageMap[agent.whisper_language] || "Unknown";
+        console.log(`  - Language Label: ${languageLabel}`);
+        console.log(`  - Dataset IDs: ${agent.dataset_ids}`);
+
+        // Check if it has the TEST DEUTSCH 2 dataset
+        if (
+          agent.dataset_ids &&
+          agent.dataset_ids.includes("c0ab366c-408e-4ff2-a63c-174843bdeea3")
+        ) {
+          console.log("✅ Agent has TEST DEUTSCH 2 dataset assigned");
+        } else {
+          console.log("❌ Agent does NOT have TEST DEUTSCH 2 dataset assigned");
+        }
+
+        // Check if language needs to be updated
+        if (agent.whisper_language !== "de") {
+          console.log(
+            "⚠️ Agent language is not set to German (de). Current:",
+            agent.whisper_language
+          );
+          console.log(
+            "💡 You may want to update the agent's language configuration in the Agents page."
+          );
+        } else {
+          console.log("✅ Agent language is correctly set to German (de)");
+        }
+      } else {
+        console.log("❌ No Agent Deutsch found");
+      }
+    } catch (error) {
+      console.error("❌ Error in debugAgentLanguage:", error);
+    }
+  }
+
+  async function debugDatasetParsing() {
+    console.log("🔍 Debugging dataset parsing...");
+    if (canManage && datasets.length > 0) {
+      for (const dataset of datasets) {
+        console.log(`🔍 Testing parsing for dataset: ${dataset.name}`);
+
+        // Get the dataset content
+        const { data: datasetRecord } = await supabase
+          .from("datasets")
+          .select("text_content, file_url")
+          .eq("id", dataset.id)
+          .single();
+
+        if (datasetRecord) {
+          console.log(
+            `🔍 Dataset content type: ${datasetRecord.text_content ? "text" : "file"}`
+          );
+
+          if (datasetRecord.text_content) {
+            console.log(
+              `🔍 Text content preview:`,
+              datasetRecord.text_content.substring(0, 200) + "..."
+            );
+
+            // Get the chunks from the database to see what was actually parsed
+            const { data: chunks } = await supabase
+              .from("dataset_chunks")
+              .select("content, metadata, index")
+              .eq("dataset_id", dataset.id)
+              .order("index", { ascending: true });
+
+            console.log(`🔍 Database chunks:`, chunks?.length || 0);
+            chunks?.forEach((chunk, index) => {
+              console.log(`  Chunk ${index}:`, {
+                type: chunk.metadata?.chunk_type,
+                exerciseNumber: chunk.metadata?.exercise_number,
+                prompt: chunk.metadata?.prompt?.substring(0, 50) + "...",
+                expectedResponse:
+                  chunk.metadata?.expected_response?.substring(0, 30) + "...",
+                variations: chunk.metadata?.variations?.length || 0,
+                contentLength: chunk.content.length,
+              });
+            });
+          }
+        }
+      }
+    }
+  }
+
+  async function debugAgentDataset() {
+    console.log("🔍 Debugging Agent Deutsch dataset...");
+    try {
+      // Get Agent Deutsch
+      const { data: agents, error } = await supabase
+        .from("agents")
+        .select("id, name, dataset_ids")
+        .eq("name", "Agent Deutsch");
+
+      if (error || !agents || agents.length === 0) {
+        console.error("❌ Agent Deutsch not found");
+        return;
+      }
+
+      const agent = agents[0];
+      console.log("🔍 Agent Deutsch:", agent);
+
+      if (!agent.dataset_ids || agent.dataset_ids.length === 0) {
+        console.log("❌ Agent has no datasets assigned");
+        return;
+      }
+
+      // Get the dataset content
+      for (const datasetId of agent.dataset_ids) {
+        console.log(`🔍 Checking dataset: ${datasetId}`);
+
+        const { data: dataset } = await supabase
+          .from("datasets")
+          .select("id, name, text_content")
+          .eq("id", datasetId)
+          .single();
+
+        if (dataset) {
+          console.log(`🔍 Dataset: ${dataset.name}`);
+          console.log(
+            `🔍 Content preview:`,
+            dataset.text_content?.substring(0, 300) + "..."
+          );
+
+          // Get the chunks
+          const { data: chunks } = await supabase
+            .from("dataset_chunks")
+            .select("content, metadata, index")
+            .eq("dataset_id", datasetId)
+            .order("index", { ascending: true });
+
+          console.log(`🔍 Chunks found:`, chunks?.length || 0);
+
+          // Show first few exercises
+          const exerciseChunks =
+            chunks?.filter(
+              (chunk) => chunk.metadata?.chunk_type === "exercise"
+            ) || [];
+          console.log(`🔍 Exercise chunks:`, exerciseChunks.length);
+
+          exerciseChunks.slice(0, 3).forEach((chunk, index) => {
+            console.log(`  Exercise ${index + 1}:`, {
+              exerciseNumber: chunk.metadata?.exercise_number,
+              prompt: chunk.metadata?.prompt,
+              expectedResponse: chunk.metadata?.expected_response,
+              variations: chunk.metadata?.variations?.length || 0,
+            });
+          });
+        }
+      }
+    } catch (error) {
+      console.error("❌ Error debugging agent dataset:", error);
+    }
+  }
+
+  async function reprocessDataset(datasetId: string) {
+    console.log("🔄 Reprocessing dataset:", datasetId);
+    try {
+      // Get the dataset content
+      const { data: dataset } = await supabase
+        .from("datasets")
+        .select("id, name, text_content")
+        .eq("id", datasetId)
+        .single();
+
+      if (!dataset || !dataset.text_content) {
+        console.error("❌ Dataset not found or has no content");
+        return;
+      }
+
+      console.log("🔍 Reprocessing dataset:", dataset.name);
+      console.log("🔍 Content length:", dataset.text_content.length);
+
+      // Delete existing chunks
+      const { error: deleteError } = await supabase
+        .from("dataset_chunks")
+        .delete()
+        .eq("dataset_id", datasetId);
+
+      if (deleteError) {
+        console.error("❌ Error deleting existing chunks:", deleteError);
+        return;
+      }
+
+      console.log("✅ Deleted existing chunks");
+
+      // Create new chunks with updated parsing logic
+      const chunkResult = await createStructuredChunks(
+        datasetId,
+        dataset.text_content,
+        "reprocessed"
+      );
+
+      if (chunkResult.error) {
+        console.error("❌ Error creating new chunks:", chunkResult.error);
+        return;
+      }
+
+      console.log(
+        "✅ Successfully reprocessed dataset with",
+        chunkResult.data?.length || 0,
+        "chunks"
+      );
+
+      // Refresh the chunks in the store
+      await loadDatasetChunks(datasetId);
+    } catch (error) {
+      console.error("❌ Error reprocessing dataset:", error);
+    }
   }
 </script>
 
@@ -246,12 +663,34 @@
     </p>
   </div>
 
-  {#if canManage}
-    <Button on:click={() => (createDialogOpen = true)}>
-      <Plus class="w-4 h-4 mr-2" />
-      Create Dataset
-    </Button>
-  {/if}
+  <div class="flex space-x-2">
+    {#if canManage}
+      <Button variant="outline" on:click={debugAgentDataset}>
+        <Bug class="w-4 h-4 mr-2" />
+        Debug Agent Dataset
+      </Button>
+      <Button variant="outline" on:click={debugDatasetParsing}>
+        <Bug class="w-4 h-4 mr-2" />
+        Debug Parsing
+      </Button>
+      <Button variant="outline" on:click={debugAgentLanguage}>
+        <Bug class="w-4 h-4 mr-2" />
+        Debug Agent
+      </Button>
+      <Button variant="outline" on:click={debugDatasetState}>
+        <Bug class="w-4 h-4 mr-2" />
+        Debug State
+      </Button>
+      <Button variant="outline" on:click={refreshAllChunks}>
+        <RefreshCw class="w-4 h-4 mr-2" />
+        Refresh Chunks
+      </Button>
+      <Button on:click={() => (createDialogOpen = true)}>
+        <Plus class="w-4 h-4 mr-2" />
+        Create Dataset
+      </Button>
+    {/if}
+  </div>
 </div>
 
 <div class="max-w-7xl mx-auto">
@@ -342,13 +781,23 @@
               >
                 <Trash2 class="w-4 h-4" />
               </button>
+
+              <button
+                on:click={() => reprocessDataset(dataset.id)}
+                class="p-2 hover:bg-info/20 rounded-md text-muted-foreground hover:text-info"
+                title="Reprocess dataset"
+              >
+                <RefreshCw class="w-4 h-4" />
+              </button>
             </div>
           </div>
 
           <div class="flex items-center justify-between text-sm">
             <span class="flex items-center text-muted-foreground">
               <FileText class="w-4 h-4 mr-1" />
-              {(state.chunks[dataset.id] || []).length} chunks
+              {dataset.total_chunks || 0} chunks (DB) • {(
+                state.chunks[dataset.id] || []
+              ).length} loaded
             </span>
             <Button
               variant="ghost"
@@ -487,12 +936,18 @@
     </Button>
     <Button
       on:click={handleCreateDataset}
-      disabled={!newDataset.name.trim() ||
+      disabled={isCreatingDataset ||
+        !newDataset.name.trim() ||
         (newDataset.contentType === "text" &&
           !newDataset.textContent?.trim()) ||
         (newDataset.contentType === "file" && !newDataset.file)}
     >
-      Create Dataset
+      {#if isCreatingDataset}
+        <Loader2 class="w-4 h-4 mr-2 animate-spin" />
+        Creating...
+      {:else}
+        Create Dataset
+      {/if}
     </Button>
   </div>
 </Dialog>

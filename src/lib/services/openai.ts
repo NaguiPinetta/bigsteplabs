@@ -143,16 +143,16 @@ export async function buildAgentContext(
           datasets.map((d) => d.name)
         );
         systemPrompt +=
-          "You have access to the following knowledge bases. Use this information to inform your responses, but provide original, contextual answers rather than copying the source material verbatim:\n\n";
+          "You have access to structured learning exercises. Use this information to guide the conversation and provide accurate feedback:\n\n";
 
         // Fetch chunks for each dataset
         for (const dataset of datasets) {
-          systemPrompt += `Knowledge Base: ${dataset.name}\n`;
+          systemPrompt += `Learning Dataset: ${dataset.name}\n`;
           if (dataset.description) {
             systemPrompt += `Description: ${dataset.description}\n`;
           }
 
-          // Fetch dataset chunks
+          // Fetch dataset chunks with metadata
           const { data: chunks } = await supabase
             .from("dataset_chunks")
             .select("content, index, metadata")
@@ -161,37 +161,127 @@ export async function buildAgentContext(
 
           if (chunks && chunks.length > 0) {
             console.log(
-              `🔍 Found ${chunks.length} chunks for dataset: ${dataset.name}`
+              `🔍 Found ${chunks.length} structured chunks for dataset: ${dataset.name}`
             );
-            systemPrompt += `Available Information:\n`;
 
-            // Add chunks in a structured way that encourages understanding rather than copying
-            chunks.forEach((chunk, index) => {
-              // Clean and format the content
-              const cleanContent = chunk.content
-                .trim()
-                .replace(/\n+/g, " ")
-                .replace(/\s+/g, " ");
-              systemPrompt += `- ${cleanContent}\n`;
-            });
-            systemPrompt += "\n";
+            // Separate metadata and exercises
+            const metadataChunks = chunks.filter(
+              (chunk) => chunk.metadata?.chunk_type === "metadata"
+            );
+            const exerciseChunks = chunks.filter(
+              (chunk) => chunk.metadata?.chunk_type === "exercise"
+            );
+
+            console.log(
+              `🔍 Metadata chunks: ${metadataChunks.length}, Exercise chunks: ${exerciseChunks.length}`
+            );
+
+            // Add metadata/instructions
+            if (metadataChunks.length > 0) {
+              systemPrompt += `Instructions:\n${metadataChunks
+                .map((chunk) => chunk.content)
+                .join("\n")}\n\n`;
+            }
+
+            // Add exercises in structured format
+            if (exerciseChunks.length > 0) {
+              systemPrompt += `STRUCTURED EXERCISES - FOLLOW THESE EXACTLY:\n\n`;
+
+              // Sort exercises by exercise number
+              exerciseChunks.sort(
+                (a, b) =>
+                  (a.metadata?.exercise_number || 0) -
+                  (b.metadata?.exercise_number || 0)
+              );
+
+              exerciseChunks.forEach((chunk) => {
+                const exerciseNum = chunk.metadata?.exercise_number;
+                const prompt = chunk.metadata?.prompt;
+                const expected = chunk.metadata?.expected_response;
+                const variations = chunk.metadata?.variations || [];
+
+                if (exerciseNum && prompt && expected) {
+                  systemPrompt += `EXERCISE ${exerciseNum}:\n`;
+                  systemPrompt += `Prompt: "${prompt}"\n`;
+                  systemPrompt += `Expected Response: "${expected}"\n`;
+
+                  if (variations.length > 0) {
+                    systemPrompt += `Variations:\n`;
+                    variations.forEach((variation: string) => {
+                      systemPrompt += `- ${variation}\n`;
+                    });
+                  }
+                  systemPrompt += `\n`;
+                }
+              });
+
+              systemPrompt += `EXERCISE INSTRUCTIONS:\n`;
+              systemPrompt += `1. Start with Exercise 1 and progress sequentially\n`;
+              systemPrompt += `2. Present the Portuguese prompt to the user\n`;
+              systemPrompt += `3. Wait for their German translation\n`;
+              systemPrompt += `4. Evaluate against the expected response\n`;
+              systemPrompt += `5. Provide feedback and move to next exercise only after correct answer\n`;
+              systemPrompt += `6. Use variations to provide additional practice if needed\n`;
+              systemPrompt += `7. Do NOT create your own exercises - use only the ones above\n\n`;
+            } else {
+              console.warn(
+                `⚠️ No exercise chunks found for dataset: ${dataset.name}`
+              );
+              systemPrompt += `Status: No structured exercises available.\n\n`;
+            }
           } else {
             console.log(`⚠️ No chunks found for dataset: ${dataset.name}`);
             systemPrompt += `Status: No content available yet.\n\n`;
           }
         }
-        systemPrompt +=
-          "Instructions: Use the above information to provide accurate, helpful responses. Synthesize the knowledge into your own words and provide context-appropriate answers. Do not quote the source material directly unless specifically asked to do so.\n\n";
+
+        // Add conversation tracking instructions
+        systemPrompt += `CONVERSATION TRACKING INSTRUCTIONS:
+1. You are a German language tutor using structured exercises from the dataset above
+2. Track which exercise number the user is currently working on (start with Exercise 1)
+3. ONLY present exercises from the dataset - do not create your own
+4. Present the Portuguese prompt exactly as written in the dataset
+5. Wait for the user's German translation
+6. Compare their response to the expected response from the dataset
+7. If correct: acknowledge and move to the next exercise
+8. If incorrect: provide specific feedback and repeat the same exercise
+9. Use variations from the dataset for additional practice if needed
+10. Do NOT ask for random translations or create new exercises
+11. Stay within the structured format of the dataset
+
+Current Exercise State: [Track which exercise number the user is on, starting with 1]\n\n`;
       }
     } else {
       console.log("🔍 Agent has no datasets assigned");
     }
 
     // Add behavioral instructions
-    systemPrompt += `You are ${agent.name}, an AI assistant designed to help with learning and education. 
-    Always respond in a helpful, educational manner. 
-    If you're working with structured curriculum content, follow the provided instructions carefully.
-    Keep responses concise but informative.`;
+    systemPrompt += `CRITICAL INSTRUCTIONS:
+You are ${agent.name}, a German language tutor. You MUST follow these rules:
+
+1. ONLY use the structured exercises provided in the dataset above
+2. Start with Exercise 1 and progress sequentially
+3. Present the Portuguese prompt exactly as written
+4. Wait for the user's German translation
+5. Compare to the expected response from the dataset
+6. Do NOT create your own exercises or ask for random translations
+7. Do NOT deviate from the dataset format
+
+If no structured exercises are found in the dataset, inform the user that no exercises are available.
+
+Current Exercise State: [Track which exercise number the user is on, starting with 1]`;
+
+    console.log("🔍 Final system prompt length:", systemPrompt.length);
+    console.log(
+      "🔍 System prompt preview (first 500 chars):",
+      systemPrompt.substring(0, 500)
+    );
+    if (systemPrompt.length > 500) {
+      console.log(
+        "🔍 System prompt preview (last 500 chars):",
+        systemPrompt.substring(systemPrompt.length - 500)
+      );
+    }
 
     // Get conversation history (last 10 messages to maintain context)
     let conversationHistory: ChatMessage[] = [];
@@ -199,7 +289,7 @@ export async function buildAgentContext(
     if (recentMessages.length === 0) {
       const { data: messages } = await supabase
         .from("messages")
-        .select("role, content")
+        .select("role, content, metadata")
         .eq("session_id", sessionId)
         .order("created_at", { ascending: true })
         .limit(10);
@@ -213,6 +303,35 @@ export async function buildAgentContext(
     } else {
       conversationHistory = recentMessages.slice(-10); // Keep last 10 messages
     }
+
+    // Determine current exercise state from conversation history
+    let currentExerciseNumber = 1; // Default to exercise 1
+
+    // Look for exercise progression in the conversation
+    for (let i = conversationHistory.length - 1; i >= 0; i--) {
+      const message = conversationHistory[i];
+      if (message.role === "assistant") {
+        // Check if the assistant mentioned an exercise number
+        const exerciseMatch = message.content.match(/Exercise (\d+)/i);
+        if (exerciseMatch) {
+          currentExerciseNumber = parseInt(exerciseMatch[1]);
+          break;
+        }
+      }
+    }
+
+    console.log(
+      `🔍 Current exercise number determined: ${currentExerciseNumber}`
+    );
+    console.log(
+      `🔍 Conversation history length: ${conversationHistory.length}`
+    );
+
+    // Update the system prompt with current exercise state
+    systemPrompt = systemPrompt.replace(
+      /Current Exercise State: \[.*?\]/,
+      `Current Exercise State: [Currently on Exercise ${currentExerciseNumber}]`
+    );
 
     return {
       systemPrompt,

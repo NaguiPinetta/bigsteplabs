@@ -1,6 +1,10 @@
 import { writable, get } from "svelte/store";
 import { supabase } from "$lib/supabase";
-import type { ChatSession, Message, ChatSessionWithAgent } from "$lib/types/database";
+import type {
+  ChatSession,
+  Message,
+  ChatSessionWithAgent,
+} from "$lib/types/database";
 import { generateAIResponse } from "$lib/services/openai";
 import {
   setLoadingState,
@@ -19,6 +23,13 @@ interface ChatState {
   error: string | null;
   sendingMessage: boolean;
   typingIndicator: boolean;
+  // Add conversation state tracking
+  currentExercise: {
+    exerciseNumber: number;
+    prompt: string;
+    expectedResponse: string;
+    variations: string[];
+  } | null;
 }
 
 const initialState: ChatState = {
@@ -30,6 +41,7 @@ const initialState: ChatState = {
   error: null,
   sendingMessage: false,
   typingIndicator: false,
+  currentExercise: null,
 };
 
 export const chatStore = writable<ChatState>(initialState);
@@ -301,6 +313,17 @@ export async function sendMessage(
       messageMetadata.is_voice_message = true;
     }
 
+    // Add current exercise context
+    const currentExercise = getCurrentExercise();
+    if (currentExercise) {
+      messageMetadata.current_exercise = {
+        exercise_number: currentExercise.exerciseNumber,
+        prompt: currentExercise.prompt,
+        expected_response: currentExercise.expectedResponse,
+        variations: currentExercise.variations,
+      };
+    }
+
     // Create and save user message to database
     const { data: userMessage, error: userError } = await supabase
       .from("messages")
@@ -528,6 +551,68 @@ export function clearCurrentSession() {
     currentSession: null,
     messages: [],
   }));
+}
+
+/**
+ * Set the current exercise for conversation tracking
+ */
+export function setCurrentExercise(
+  exercise: {
+    exerciseNumber: number;
+    prompt: string;
+    expectedResponse: string;
+    variations: string[];
+  } | null
+) {
+  chatStore.update((state) => ({
+    ...state,
+    currentExercise: exercise,
+  }));
+
+  if (exercise) {
+    console.log(
+      `🎯 Set current exercise: ${exercise.exerciseNumber} - "${exercise.prompt}"`
+    );
+  } else {
+    console.log("🎯 Cleared current exercise");
+  }
+}
+
+/**
+ * Get the current exercise state
+ */
+export function getCurrentExercise() {
+  const state = get(chatStore);
+  return state.currentExercise;
+}
+
+/**
+ * Move to the next exercise
+ */
+export function moveToNextExercise(
+  exercises: Array<{
+    exerciseNumber: number;
+    prompt: string;
+    expectedResponse: string;
+    variations: string[];
+  }>
+) {
+  const currentState = get(chatStore);
+  const currentExerciseNumber =
+    currentState.currentExercise?.exerciseNumber || 0;
+
+  const nextExercise = exercises.find(
+    (ex) => ex.exerciseNumber > currentExerciseNumber
+  );
+
+  if (nextExercise) {
+    setCurrentExercise(nextExercise);
+    return nextExercise;
+  } else {
+    // No more exercises
+    setCurrentExercise(null);
+    return null;
+  }
 }
 
 // Helper functions

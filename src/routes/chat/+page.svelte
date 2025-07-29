@@ -228,25 +228,66 @@
   async function startRecording() {
     try {
       recordingError = "";
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      console.log("🎙️ Starting audio recording...");
 
-      mediaRecorder = new MediaRecorder(stream);
+      // Get microphone-only stream with strict constraints
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+          sampleRate: 16000, // Lower sample rate for better compatibility
+          channelCount: 1, // Mono recording
+        },
+        video: false, // Explicitly disable video
+      });
+
+      // Check available MIME types and use the best one
+      const mimeTypes = [
+        "audio/webm;codecs=opus",
+        "audio/webm",
+        "audio/mp4",
+        "audio/wav",
+      ];
+
+      let selectedMimeType = null;
+      for (const mimeType of mimeTypes) {
+        if (MediaRecorder.isTypeSupported(mimeType)) {
+          selectedMimeType = mimeType;
+          console.log(`✅ Using MIME type: ${mimeType}`);
+          break;
+        }
+      }
+
+      if (!selectedMimeType) {
+        throw new Error("No supported audio MIME type found");
+      }
+
+      mediaRecorder = new MediaRecorder(stream, {
+        mimeType: selectedMimeType,
+        audioBitsPerSecond: 128000, // Lower bitrate for better compatibility
+      });
       audioChunks = [];
 
       mediaRecorder.ondataavailable = (event) => {
         if (event.data.size > 0) {
           audioChunks.push(event.data);
+          console.log("📦 Audio chunk received:", event.data.size, "bytes");
         }
       };
 
       mediaRecorder.onstop = async () => {
+        console.log("⏹️ Recording stopped, processing audio...");
         await handleRecordingComplete();
         stream.getTracks().forEach((track) => track.stop());
       };
 
-      mediaRecorder.start();
+      mediaRecorder.start(1000); // Collect data every second
       isRecording = true;
-      console.log("🎙️ Recording started");
+      console.log(
+        "🎙️ Recording started successfully with MIME type:",
+        selectedMimeType
+      );
     } catch (error) {
       console.error("❌ Error starting recording:", error);
       recordingError = "Failed to access microphone. Please check permissions.";
@@ -268,22 +309,74 @@
     recordingError = "";
 
     try {
-      const audioBlob = new Blob(audioChunks, { type: "audio/wav" });
+      console.log("🔧 Processing audio chunks...");
+      console.log("📦 Total audio chunks:", audioChunks.length);
+      console.log(
+        "📊 Total audio size:",
+        audioChunks.reduce((sum, chunk) => sum + chunk.size, 0),
+        "bytes"
+      );
+
+      const audioBlob = new Blob(audioChunks, {
+        type: "audio/webm;codecs=opus",
+      });
+      console.log(
+        "🎵 Created audio blob:",
+        audioBlob.size,
+        "bytes, type:",
+        audioBlob.type
+      );
+
+      // Test the audio blob to ensure it's valid
+      if (audioBlob.size < 1000) {
+        throw new Error("Audio recording too small - may not contain speech");
+      }
+
+      // Create a test audio element to verify the blob
+      const testAudio = new Audio();
+      const testUrl = URL.createObjectURL(audioBlob);
+      testAudio.src = testUrl;
+
+      // Test if the audio can be loaded
+      await new Promise((resolve, reject) => {
+        testAudio.onloadedmetadata = resolve;
+        testAudio.onerror = () => reject(new Error("Audio blob is invalid"));
+        // Timeout after 5 seconds
+        setTimeout(() => reject(new Error("Audio loading timeout")), 5000);
+      });
+
+      console.log(
+        "✅ Audio blob validation passed - duration:",
+        testAudio.duration,
+        "seconds"
+      );
+      URL.revokeObjectURL(testUrl);
+
+      // Convert to WAV format for better Whisper compatibility
       const formData = new FormData();
-      formData.append("file", audioBlob, "recording.wav");
+      formData.append("file", audioBlob, "recording.webm");
       formData.append("sessionId", currentSession?.id || "default");
       formData.append("agentId", currentSession?.agent_id || "");
+
+      console.log("📤 Sending audio to transcription API...");
 
       const response = await fetch("/api/whisper-transcribe", {
         method: "POST",
         body: formData,
       });
 
+      console.log("📡 Transcription API response status:", response.status);
+
       if (!response.ok) {
-        throw new Error(`Transcription failed: ${response.statusText}`);
+        const errorText = await response.text();
+        console.error("❌ Transcription API error:", errorText);
+        throw new Error(
+          `Transcription failed: ${response.statusText} - ${errorText}`
+        );
       }
 
       const result = await response.json();
+      console.log("📋 Transcription API result:", result);
 
       if (result.text && result.text.trim()) {
         // Insert transcribed text into the input
@@ -300,6 +393,7 @@
         }
       } else {
         recordingError = "No speech detected. Please try again.";
+        console.warn("⚠️ No speech detected in audio");
       }
     } catch (error) {
       console.error("❌ Transcription error:", error);

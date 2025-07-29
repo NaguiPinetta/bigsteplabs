@@ -92,6 +92,8 @@ export async function loadDatasets(forceRefresh = false): Promise<void> {
 export async function createDataset(
   dataset: Omit<Dataset, "id" | "created_at" | "updated_at">
 ): Promise<Dataset | null> {
+  console.log("🔍 createDataset called with:", dataset);
+
   try {
     // Prepare the dataset data
     const datasetData = {
@@ -112,15 +114,23 @@ export async function createDataset(
       updated_at: new Date().toISOString(),
     };
 
+    console.log("🔍 Prepared dataset data for insertion:", datasetData);
+    console.log("🔍 Inserting into Supabase...");
+
     const { data, error } = await supabase
       .from("datasets")
       .insert(datasetData)
       .select()
       .single();
 
+    console.log("🔍 Supabase response - data:", data, "error:", error);
+
     if (error) {
+      console.error("❌ Supabase error:", error);
       throw error;
     }
+
+    console.log("✅ Dataset inserted successfully:", data);
 
     // Update store
     datasetsStore.update((state) => ({
@@ -128,9 +138,10 @@ export async function createDataset(
       datasets: [data, ...state.datasets],
     }));
 
+    console.log("✅ Store updated successfully");
     return data;
   } catch (error) {
-    console.error("Error creating dataset:", error);
+    console.error("❌ Error creating dataset:", error);
     datasetsStore.update((state) => ({
       ...state,
       error:
@@ -207,6 +218,7 @@ export async function deleteDataset(id: string): Promise<boolean> {
 
 export async function loadDatasetChunks(datasetId: string): Promise<any[]> {
   try {
+    console.log("🔍 Loading chunks for dataset:", datasetId);
     const { data, error } = await supabase
       .from("dataset_chunks")
       .select("*")
@@ -214,12 +226,29 @@ export async function loadDatasetChunks(datasetId: string): Promise<any[]> {
       .order("index", { ascending: true });
 
     if (error) {
+      console.error("❌ Error loading dataset chunks:", error);
       throw error;
     }
 
+    console.log(
+      "✅ Loaded",
+      data?.length || 0,
+      "chunks for dataset:",
+      datasetId
+    );
+
+    // Update the store with the loaded chunks
+    datasetsStore.update((state) => ({
+      ...state,
+      chunks: {
+        ...state.chunks,
+        [datasetId]: data || [],
+      },
+    }));
+
     return data || [];
   } catch (error) {
-    console.error("Error loading dataset chunks:", error);
+    console.error("❌ Error loading dataset chunks:", error);
     return [];
   }
 }
@@ -267,11 +296,11 @@ export async function createChunks(
     // Simple text chunking algorithm
     const chunks: any[] = [];
     let index = 0;
-    
+
     for (let i = 0; i < content.length; i += chunkSize - overlap) {
       const chunkContent = content.slice(i, i + chunkSize);
       const charCount = chunkContent.length;
-      
+
       chunks.push({
         dataset_id: datasetId,
         index: index,
@@ -283,10 +312,10 @@ export async function createChunks(
           chunk_size: chunkSize,
           overlap: overlap,
           start_position: i,
-          end_position: Math.min(i + chunkSize, content.length)
-        }
+          end_position: Math.min(i + chunkSize, content.length),
+        },
       });
-      
+
       index++;
     }
 
@@ -308,44 +337,350 @@ export async function createChunks(
     // Update dataset total_chunks count
     await supabase
       .from("datasets")
-      .update({ total_chunks: (data?.length || 0) })
+      .update({ total_chunks: data?.length || 0 })
       .eq("id", datasetId);
+
+    // Refresh the datasets store to reflect the updated total_chunks
+    const { data: updatedDataset } = await supabase
+      .from("datasets")
+      .select("*")
+      .eq("id", datasetId)
+      .single();
+
+    if (updatedDataset) {
+      datasetsStore.update((state) => ({
+        ...state,
+        datasets: state.datasets.map((dataset) =>
+          dataset.id === datasetId ? updatedDataset : dataset
+        ),
+      }));
+    }
 
     // Refresh chunks in store
     const updatedChunks = await loadDatasetChunks(datasetId);
-    datasetsStore.update((state) => ({
-      ...state,
-      chunks: {
-        ...state.chunks,
-        [datasetId]: updatedChunks
-      }
-    }));
 
     return { data: data || [], error: null };
   } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : "Failed to create chunks";
+    const errorMessage =
+      error instanceof Error ? error.message : "Failed to create chunks";
     console.error("❌ Error creating chunks:", errorMessage);
     return { data: null, error: errorMessage };
   }
 }
 
 /**
- * Process file and create chunks
+ * Process file and create structured chunks
  */
-export async function processFileToChunks(
+export async function processFileToStructuredChunks(
   datasetId: string,
-  file: File,
-  chunkSize: number = 1000,
-  overlap: number = 200
+  file: File
 ): Promise<{ data: any[] | null; error: string | null }> {
   try {
     console.log("🔍 Processing file:", file.name, "for dataset:", datasetId);
-    
+
     const text = await file.text();
-    return await createChunks(datasetId, text, `file:${file.name}`, chunkSize, overlap);
+    return await createStructuredChunks(datasetId, text, `file:${file.name}`);
   } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : "Failed to process file";
+    const errorMessage =
+      error instanceof Error ? error.message : "Failed to process file";
     console.error("❌ Error processing file:", errorMessage);
     return { data: null, error: errorMessage };
   }
+}
+
+/**
+ * Smart chunking for structured content (exercises, lessons, etc.)
+ * This respects semantic boundaries instead of arbitrary character limits
+ */
+export async function createStructuredChunks(
+  datasetId: string,
+  content: string,
+  source: string
+): Promise<{ data: any[] | null; error: string | null }> {
+  try {
+    console.log("🔍 createStructuredChunks called for dataset:", datasetId);
+    console.log("🔍 Content length:", content.length);
+    console.log("🔍 Source:", source);
+
+    // Parse content into structured chunks
+    console.log("🔍 Parsing structured content...");
+    const chunks = parseStructuredContent(content);
+    console.log("🔍 Parsed into", chunks.length, "structured chunks");
+
+    if (chunks.length === 0) {
+      console.warn("⚠️ No chunks created from content");
+      return { data: [], error: null };
+    }
+
+    // Prepare chunks for database insertion
+    console.log("🔍 Preparing chunks for database insertion...");
+    const dbChunks = chunks.map((chunk, index) => ({
+      dataset_id: datasetId,
+      index: index,
+      content: chunk.content,
+      char_count: chunk.content.length,
+      token_count: Math.ceil(chunk.content.length / 4), // Rough estimate
+      metadata: {
+        source: source,
+        chunk_type: chunk.type,
+        exercise_number: chunk.exerciseNumber,
+        prompt: chunk.prompt,
+        expected_response: chunk.expectedResponse,
+        variations: chunk.variations,
+        ...chunk.metadata,
+      },
+    }));
+
+    console.log("🔍 Prepared", dbChunks.length, "chunks for insertion");
+    console.log("🔍 Inserting chunks into database...");
+
+    // Insert chunks into database
+    const { data, error } = await supabase
+      .from("dataset_chunks")
+      .insert(dbChunks)
+      .select();
+
+    if (error) {
+      console.error("❌ Error inserting structured chunks:", error);
+      throw error;
+    }
+
+    console.log(
+      "✅ Successfully inserted",
+      data?.length || 0,
+      "structured chunks"
+    );
+
+    // Update dataset total_chunks count
+    console.log("🔍 Updating dataset total_chunks count...");
+    await supabase
+      .from("datasets")
+      .update({ total_chunks: data?.length || 0 })
+      .eq("id", datasetId);
+
+    console.log("✅ Dataset total_chunks updated successfully");
+
+    return { data, error: null };
+  } catch (error) {
+    const errorMessage =
+      error instanceof Error
+        ? error.message
+        : "Failed to create structured chunks";
+    console.error("❌ Error creating structured chunks:", errorMessage);
+    return { data: null, error: errorMessage };
+  }
+}
+
+/**
+ * Parse structured content into logical chunks
+ */
+function parseStructuredContent(content: string): Array<{
+  content: string;
+  type: "metadata" | "exercise" | "instruction";
+  exerciseNumber?: number;
+  prompt?: string;
+  expectedResponse?: string;
+  variations?: string[];
+  metadata?: Record<string, any>;
+}> {
+  console.log(
+    "🔍 parseStructuredContent called with content:",
+    content.substring(0, 200) + "..."
+  );
+
+  const chunks: Array<{
+    content: string;
+    type: "metadata" | "exercise" | "instruction";
+    exerciseNumber?: number;
+    prompt?: string;
+    expectedResponse?: string;
+    variations?: string[];
+    metadata?: Record<string, any>;
+  }> = [];
+
+  // Detect content format dynamically
+  const formatPatterns = [
+    // English format: "1. Prompt: ... Expected Response: ..."
+    {
+      name: "English",
+      exercisePattern: /(\d+)\.\s*Prompt:\s*(.+?)(?=\s*Expected Response:)/s,
+      responsePattern: /Expected Response:\s*(.+?)(?=\s*Variations:|$)/s,
+      variationsPattern: /Variations:\s*([\s\S]*?)(?=\n\n|\d+\.\s*Prompt:|$)/s,
+      sectionSplitter: /(?=\d+\.\s*Prompt:)/,
+      metadataPattern: /Level:\s*(.+?)(?=\n\n|$)/s,
+    },
+    // Portuguese format: "1. Frase: ... Resposta esperada: ..."
+    {
+      name: "Portuguese",
+      exercisePattern: /(\d+)\.\s*Frase:\s*(.+?)(?=\s*Resposta esperada:)/s,
+      responsePattern: /Resposta esperada:\s*(.+?)(?=\s*Variações:|$)/s,
+      variationsPattern: /Variações:\s*([\s\S]*?)(?=\n\n|\d+\.\s*Frase:|$)/s,
+      sectionSplitter: /(?=\d+\.\s*Frase:)/,
+      metadataPattern: /Nível:\s*(.+?)(?=\n\n|$)/s,
+    },
+    // Generic numbered format: "1. [content]"
+    {
+      name: "Generic",
+      exercisePattern: /(\d+)\.\s*(.+?)(?=\n\n|\d+\.|$)/s,
+      responsePattern: null,
+      variationsPattern: null,
+      sectionSplitter: /(?=\d+\.)/,
+      metadataPattern: null,
+    },
+  ];
+
+  // Find the best matching format
+  let detectedFormat = null;
+  for (const format of formatPatterns) {
+    if (format.exercisePattern && format.exercisePattern.test(content)) {
+      detectedFormat = format;
+      console.log(`🔍 Detected format: ${format.name}`);
+      break;
+    }
+  }
+
+  if (!detectedFormat) {
+    console.log(
+      "🔍 No structured format detected, treating as general content"
+    );
+    chunks.push({
+      content: content.trim(),
+      type: "instruction",
+      metadata: {
+        content_type: "general",
+        source: "manual_input",
+      },
+    });
+    return chunks;
+  }
+
+  // Split content into sections
+  const sections = content.split(detectedFormat.sectionSplitter);
+  console.log(
+    `🔍 Split into ${sections.length} sections (${detectedFormat.name} format)`
+  );
+
+  let currentSection = sections[0] || "";
+
+  // Handle metadata/instructions section
+  if (currentSection.trim() && detectedFormat.metadataPattern) {
+    const metadataMatch = currentSection.match(detectedFormat.metadataPattern);
+    if (metadataMatch) {
+      chunks.push({
+        content: currentSection.trim(),
+        type: "metadata",
+        metadata: {
+          level: metadataMatch[1].trim(),
+          has_instructions: true,
+          format: detectedFormat.name,
+        },
+      });
+      console.log("🔍 Added metadata chunk");
+    }
+  }
+
+  // Process exercise sections
+  for (let i = 1; i < sections.length; i++) {
+    const section = sections[i].trim();
+    if (!section) continue;
+
+    console.log(
+      `🔍 Processing ${detectedFormat.name} section ${i}:`,
+      section.substring(0, 100) + "..."
+    );
+
+    // Extract exercise information using the detected format
+    const exerciseMatch = section.match(detectedFormat.exercisePattern!);
+
+    if (exerciseMatch) {
+      const exerciseNumber = parseInt(exerciseMatch[1]);
+      const prompt = exerciseMatch[2].trim();
+
+      let expectedResponse = "";
+      let variations: string[] = [];
+
+      // Extract expected response if pattern exists
+      if (detectedFormat.responsePattern) {
+        const expectedMatch = section.match(detectedFormat.responsePattern);
+        if (expectedMatch) {
+          expectedResponse = expectedMatch[1].trim();
+        }
+      }
+
+      // Extract variations if pattern exists
+      if (detectedFormat.variationsPattern) {
+        const variationsMatch = section.match(detectedFormat.variationsPattern);
+        if (variationsMatch) {
+          const variationText = variationsMatch[1].trim();
+          const lines = variationText.split("\n").filter((line) => line.trim());
+
+          lines.forEach((line) => {
+            const trimmedLine = line.trim();
+            const cleanLine = trimmedLine.replace(/^[-•*]\s*/, "").trim();
+            if (cleanLine) {
+              variations.push(cleanLine);
+            }
+          });
+        }
+      }
+
+      console.log(
+        `🔍 Added ${detectedFormat.name} exercise chunk ${exerciseNumber}`,
+        "with prompt:",
+        prompt.substring(0, 50) + "...",
+        "expected:",
+        expectedResponse.substring(0, 30) + "...",
+        "variations:",
+        variations.length
+      );
+
+      chunks.push({
+        content: section,
+        type: "exercise",
+        exerciseNumber,
+        prompt,
+        expectedResponse,
+        variations,
+        metadata: {
+          exercise_type: "translation_drill",
+          language_from: "portuguese",
+          language_to: "german",
+          chunk_type: "exercise",
+          format: detectedFormat.name,
+        },
+      });
+    } else {
+      // If no exercise pattern matches, treat as instruction
+      chunks.push({
+        content: section,
+        type: "instruction",
+        metadata: {
+          content_type: "instruction",
+          source: "manual_input",
+          format: detectedFormat.name,
+        },
+      });
+    }
+  }
+
+  if (chunks.length === 0) {
+    console.log("🔍 No structured content found, treating as single chunk");
+    chunks.push({
+      content: content.trim(),
+      type: "instruction",
+      metadata: {
+        content_type: "general",
+        source: "manual_input",
+      },
+    });
+  }
+
+  console.log("🔍 Final chunks created:", chunks.length);
+  chunks.forEach((chunk, index) => {
+    console.log(
+      `  Chunk ${index}: type=${chunk.type}, exerciseNumber=${chunk.exerciseNumber}, content length=${chunk.content.length}`
+    );
+  });
+
+  return chunks;
 }
