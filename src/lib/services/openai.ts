@@ -98,29 +98,44 @@ export async function buildAgentContext(
   conversationHistory: ChatMessage[];
 }> {
   try {
-    // Get agent configuration
-    const { data: agent, error: agentError } = await supabase
+    console.log("🔍 Building agent context for:", agentId);
+
+    // Get agent details
+    const { data: agent } = await supabase
       .from("agents")
       .select(
         `
-        id, name, description, dataset_ids,
-        persona:personas(name, system_prompt),
-        model:models(name, provider, engine, temperature, max_tokens)
+        id,
+        name,
+        description,
+        dataset_ids,
+        persona:personas(name, system_prompt)
       `
       )
       .eq("id", agentId)
       .single();
 
-    if (agentError || !agent) {
+    if (!agent) {
       throw new Error("Agent not found");
     }
 
-    // Build system prompt
     let systemPrompt = "";
 
     // Add persona instructions
-    if (agent.persona?.system_prompt) {
-      systemPrompt += `${agent.persona.system_prompt}\n\n`;
+    if (
+      agent.persona &&
+      Array.isArray(agent.persona) &&
+      agent.persona.length > 0
+    ) {
+      systemPrompt += `Persona: ${agent.persona[0].name}\n`;
+      systemPrompt += `Instructions: ${agent.persona[0].system_prompt}\n\n`;
+    } else if (
+      agent.persona &&
+      typeof agent.persona === "object" &&
+      "name" in agent.persona
+    ) {
+      systemPrompt += `Persona: ${agent.persona.name}\n`;
+      systemPrompt += `Instructions: ${agent.persona.system_prompt}\n\n`;
     }
 
     // Add agent description
@@ -185,7 +200,7 @@ export async function buildAgentContext(
 
             // Add exercises in structured format
             if (exerciseChunks.length > 0) {
-              systemPrompt += `STRUCTURED EXERCISES - FOLLOW THESE EXACTLY:\n\n`;
+              systemPrompt += `STRUCTURED EXERCISES - FOLLOW THESE EXACTLY IN ORDER:\n\n`;
 
               // Sort exercises by exercise number
               exerciseChunks.sort(
@@ -215,14 +230,20 @@ export async function buildAgentContext(
                 }
               });
 
-              systemPrompt += `EXERCISE INSTRUCTIONS:\n`;
-              systemPrompt += `1. Start with Exercise 1 and progress sequentially\n`;
-              systemPrompt += `2. Present the Portuguese prompt to the user\n`;
-              systemPrompt += `3. Wait for their German translation\n`;
-              systemPrompt += `4. Evaluate against the expected response\n`;
-              systemPrompt += `5. Provide feedback and move to next exercise only after correct answer\n`;
-              systemPrompt += `6. Use variations to provide additional practice if needed\n`;
-              systemPrompt += `7. Do NOT create your own exercises - use only the ones above\n\n`;
+              systemPrompt += `CRITICAL EXERCISE INSTRUCTIONS - FOLLOW THESE STRICTLY:\n`;
+              systemPrompt += `1. You MUST start with Exercise 1 and progress sequentially (1, 2, 3, etc.)\n`;
+              systemPrompt += `2. You MUST track the current exercise number in your responses\n`;
+              systemPrompt += `3. You MUST present the Portuguese prompt exactly as written in the dataset\n`;
+              systemPrompt += `4. You MUST wait for the user's German translation\n`;
+              systemPrompt += `5. You MUST compare their response to the expected response from the dataset\n`;
+              systemPrompt += `6. If correct: acknowledge and move to the next exercise number\n`;
+              systemPrompt += `7. If incorrect: provide specific feedback and repeat the same exercise\n`;
+              systemPrompt += `8. You MUST use variations from the dataset for additional practice if needed\n`;
+              systemPrompt += `9. You MUST NOT create your own exercises - use only the ones above\n`;
+              systemPrompt += `10. You MUST NOT skip exercises or jump to random exercises\n`;
+              systemPrompt += `11. You MUST NOT ask for random translations\n`;
+              systemPrompt += `12. You MUST stay within the structured format of the dataset\n`;
+              systemPrompt += `13. You MUST always mention the current exercise number in your responses\n\n`;
             } else {
               console.warn(
                 `⚠️ No exercise chunks found for dataset: ${dataset.name}`
@@ -238,16 +259,18 @@ export async function buildAgentContext(
         // Add conversation tracking instructions
         systemPrompt += `CONVERSATION TRACKING INSTRUCTIONS:
 1. You are a German language tutor using structured exercises from the dataset above
-2. Track which exercise number the user is currently working on (start with Exercise 1)
-3. ONLY present exercises from the dataset - do not create your own
-4. Present the Portuguese prompt exactly as written in the dataset
-5. Wait for the user's German translation
-6. Compare their response to the expected response from the dataset
-7. If correct: acknowledge and move to the next exercise
-8. If incorrect: provide specific feedback and repeat the same exercise
-9. Use variations from the dataset for additional practice if needed
-10. Do NOT ask for random translations or create new exercises
-11. Stay within the structured format of the dataset
+2. You MUST track which exercise number the user is currently working on
+3. You MUST start with Exercise 1 if this is a new conversation
+4. You MUST progress sequentially through exercises (1, 2, 3, etc.)
+5. You MUST present exercises exactly as written in the dataset
+6. You MUST wait for the user's German translation
+7. You MUST compare their response to the expected response from the dataset
+8. If correct: acknowledge and move to the next exercise
+9. If incorrect: provide specific feedback and repeat the same exercise
+10. You MUST use variations from the dataset for additional practice if needed
+11. You MUST NOT ask for random translations or create new exercises
+12. You MUST stay within the structured format of the dataset
+13. You MUST always mention the current exercise number in your responses
 
 Current Exercise State: [Track which exercise number the user is on, starting with 1]\n\n`;
       }
@@ -256,8 +279,7 @@ Current Exercise State: [Track which exercise number the user is on, starting wi
     }
 
     // Add behavioral instructions
-    systemPrompt += `CRITICAL INSTRUCTIONS:
-You are ${agent.name}, a German language tutor. You MUST follow these rules:
+    systemPrompt += `You are ${agent.name}, a German language tutor. You MUST follow these rules:
 
 1. ONLY use the structured exercises provided in the dataset above
 2. Start with Exercise 1 and progress sequentially
@@ -266,6 +288,11 @@ You are ${agent.name}, a German language tutor. You MUST follow these rules:
 5. Compare to the expected response from the dataset
 6. Do NOT create your own exercises or ask for random translations
 7. Do NOT deviate from the dataset format
+8. Always mention the current exercise number in your responses
+9. ALWAYS start your responses with "Exercise X:" where X is the current exercise number
+10. NEVER skip exercises or jump to random exercises
+11. ONLY move to the next exercise after the user provides a correct answer
+12. If the user asks to skip or move to a different exercise, politely explain that you must follow the sequential order
 
 If no structured exercises are found in the dataset, inform the user that no exercises are available.
 
@@ -315,9 +342,51 @@ Current Exercise State: [Track which exercise number the user is on, starting wi
         const exerciseMatch = message.content.match(/Exercise (\d+)/i);
         if (exerciseMatch) {
           currentExerciseNumber = parseInt(exerciseMatch[1]);
+          console.log(
+            `🔍 Found exercise number ${currentExerciseNumber} in assistant message`
+          );
+          break;
+        }
+
+        // Also check for "Let's move to Exercise X" or similar patterns
+        const nextExerciseMatch = message.content.match(
+          /move to Exercise (\d+)/i
+        );
+        if (nextExerciseMatch) {
+          currentExerciseNumber = parseInt(nextExerciseMatch[1]);
+          console.log(
+            `🔍 Found next exercise number ${currentExerciseNumber} in assistant message`
+          );
+          break;
+        }
+
+        // Check for "Now let's try Exercise X"
+        const tryExerciseMatch = message.content.match(/try Exercise (\d+)/i);
+        if (tryExerciseMatch) {
+          currentExerciseNumber = parseInt(tryExerciseMatch[1]);
+          console.log(
+            `🔍 Found try exercise number ${currentExerciseNumber} in assistant message`
+          );
           break;
         }
       }
+    }
+
+    // If this is a new conversation or no exercise mentioned, start with Exercise 1
+    if (conversationHistory.length === 0) {
+      currentExerciseNumber = 1;
+      console.log(
+        `🔍 New conversation, starting with Exercise ${currentExerciseNumber}`
+      );
+    }
+
+    // Additional check: if we found an exercise number but it's not 1,
+    // and this seems like a new conversation, reset to 1
+    if (conversationHistory.length <= 2 && currentExerciseNumber > 1) {
+      console.log(
+        `🔍 Short conversation with exercise ${currentExerciseNumber}, resetting to 1`
+      );
+      currentExerciseNumber = 1;
     }
 
     console.log(
@@ -329,7 +398,7 @@ Current Exercise State: [Track which exercise number the user is on, starting wi
 
     // Update the system prompt with current exercise state
     systemPrompt = systemPrompt.replace(
-      /Current Exercise State: \[.*?\]/,
+      /Current Exercise State: \[.*?\]/g,
       `Current Exercise State: [Currently on Exercise ${currentExerciseNumber}]`
     );
 
@@ -385,9 +454,21 @@ export async function generateAIResponse(
     ];
 
     // Use agent's model configuration or defaults
-    const model = agent?.model?.engine || "gpt-3.5-turbo";
-    const temperature = agent?.model?.temperature || 0.7;
-    const maxTokens = agent?.model?.max_tokens || 1000;
+    let model = "gpt-3.5-turbo";
+    let temperature = 0.7;
+    let maxTokens = 1000;
+
+    if (agent?.model) {
+      if (Array.isArray(agent.model) && agent.model.length > 0) {
+        model = agent.model[0].engine || "gpt-3.5-turbo";
+        temperature = agent.model[0].temperature || 0.7;
+        maxTokens = agent.model[0].max_tokens || 1000;
+      } else if (typeof agent.model === "object" && "engine" in agent.model) {
+        model = agent.model.engine || "gpt-3.5-turbo";
+        temperature = agent.model.temperature || 0.7;
+        maxTokens = agent.model.max_tokens || 1000;
+      }
+    }
 
     console.log("🤖 Calling OpenAI API with:", {
       model,
