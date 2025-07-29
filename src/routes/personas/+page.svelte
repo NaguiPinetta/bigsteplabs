@@ -38,6 +38,8 @@
   let editDialogOpen = false;
   let viewDialogOpen = false;
   let templateDialogOpen = false;
+  let deleteDialogOpen = false;
+  let personaToDelete: any = null;
 
   let newPersona = {
     name: "",
@@ -151,13 +153,32 @@
   }
 
   async function handleDeletePersona(persona: any) {
-    if (
-      !confirm(`Are you sure you want to delete the persona "${persona.name}"?`)
-    ) {
+    personaToDelete = persona;
+    deleteDialogOpen = true;
+  }
+
+  async function confirmDeletePersona() {
+    if (!personaToDelete) {
+      console.warn("⚠️ No persona to delete");
       return;
     }
 
-    await deletePersona(persona.id);
+    console.log("🗑️ Confirming delete for persona:", personaToDelete.id);
+    const result = await deletePersona(personaToDelete.id);
+
+    if (result.error) {
+      console.error("❌ Delete failed:", result.error);
+    } else {
+      console.log("✅ Delete successful");
+    }
+
+    deleteDialogOpen = false;
+    personaToDelete = null;
+  }
+
+  function cancelDeletePersona() {
+    deleteDialogOpen = false;
+    personaToDelete = null;
   }
 
   async function openEditDialog(persona: any) {
@@ -643,5 +664,26 @@
         Close
       </Button>
     </div>
+  </div>
+</Dialog>
+
+<!-- Delete Persona Dialog -->
+<Dialog bind:open={deleteDialogOpen} title="Confirm Deletion" size="sm">
+  <div class="space-y-4 text-center">
+    <p class="text-muted-foreground">
+      Are you sure you want to delete the persona "<strong>{personaToDelete?.name}</strong>"?
+    </p>
+    <p class="text-sm text-muted-foreground">
+      This action cannot be undone.
+    </p>
+  </div>
+
+  <div slot="footer" class="flex justify-end space-x-2">
+    <Button variant="outline" on:click={cancelDeletePersona}>
+      Cancel
+    </Button>
+    <Button variant="destructive" on:click={confirmDeletePersona}>
+      Delete
+    </Button>
   </div>
 </Dialog>

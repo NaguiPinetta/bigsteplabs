@@ -26,6 +26,7 @@
     GripVertical,
     Loader2,
     AlertCircle,
+    AlertTriangle,
   } from "lucide-svelte";
 
   $: user = $authStore.user;
@@ -36,6 +37,9 @@
   $: modules = moduleState.modules;
 
   let createDialogOpen = false;
+  let editDialogOpen = false;
+  let deleteDialogOpen = false;
+  let unitToDelete: any = null;
   let newUnit = {
     title: "",
     description: "",
@@ -118,10 +122,32 @@
   }
 
   async function handleDeleteUnit(unit: any) {
-    if (!confirm(`Are you sure you want to delete "${unit.title}"?`)) {
+    unitToDelete = unit;
+    deleteDialogOpen = true;
+  }
+
+  async function confirmDeleteUnit() {
+    if (!unitToDelete) {
+      console.warn("⚠️ No unit to delete");
       return;
     }
-    await deleteUnit(unit.id);
+
+    console.log("🗑️ Confirming delete for unit:", unitToDelete.id);
+    const result = await deleteUnit(unitToDelete.id);
+
+    if (result.error) {
+      console.error("❌ Delete failed:", result.error);
+    } else {
+      console.log("✅ Delete successful");
+    }
+
+    deleteDialogOpen = false;
+    unitToDelete = null;
+  }
+
+  function cancelDeleteUnit() {
+    deleteDialogOpen = false;
+    unitToDelete = null;
   }
 
   function getModuleName(moduleId: string): string {
@@ -342,5 +368,37 @@
     >
       Create Unit
     </Button>
+  </div>
+</Dialog>
+
+<!-- Delete Unit Confirmation Dialog -->
+<Dialog bind:open={deleteDialogOpen} title="Delete Unit">
+  <div class="space-y-4">
+    <div class="flex items-start space-x-3">
+      <AlertTriangle class="w-5 h-5 text-destructive mt-0.5 flex-shrink-0" />
+      <div>
+        <p class="text-foreground font-medium">
+          Are you sure you want to delete this unit?
+        </p>
+        <p class="text-sm text-muted-foreground mt-1">
+          This action cannot be undone. All content and progress associated with this unit will be permanently deleted.
+        </p>
+        {#if unitToDelete}
+          <div class="mt-3 p-3 bg-muted rounded-lg">
+            <p class="text-sm font-medium">{unitToDelete.title}</p>
+            <p class="text-xs text-muted-foreground">
+              Module: {getModuleName(unitToDelete.module_id)}
+            </p>
+          </div>
+        {/if}
+      </div>
+    </div>
+
+    <div class="flex justify-end space-x-3">
+      <Button variant="outline" on:click={cancelDeleteUnit}>Cancel</Button>
+      <Button variant="destructive" on:click={confirmDeleteUnit}>
+        Delete Unit
+      </Button>
+    </div>
   </div>
 </Dialog>

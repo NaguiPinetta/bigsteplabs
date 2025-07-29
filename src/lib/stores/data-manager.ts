@@ -1,4 +1,4 @@
-import { writable, derived } from "svelte/store";
+import { writable, derived, get } from "svelte/store";
 import { authStore } from "./auth";
 
 interface DataLoadingState {
@@ -18,6 +18,7 @@ interface DataManagerState {
   personas: DataLoadingState;
   files: DataLoadingState;
   chatSessions: DataLoadingState;
+  lessons: DataLoadingState; // Added lessons
 }
 
 const initialLoadingState: DataLoadingState = {
@@ -37,6 +38,7 @@ const initialState: DataManagerState = {
   personas: { ...initialLoadingState },
   files: { ...initialLoadingState },
   chatSessions: { ...initialLoadingState },
+  lessons: { ...initialLoadingState }, // Initialize lessons
 };
 
 export const dataManagerStore = writable<DataManagerState>(initialState);
@@ -111,12 +113,9 @@ export function clearDataError(dataType: keyof DataManagerState) {
 
 // Check if data needs to be refreshed (older than 5 minutes)
 export function shouldRefreshData(dataType: keyof DataManagerState): boolean {
-  let currentState: DataManagerState;
-  dataManagerStore.subscribe((state) => {
-    currentState = state;
-  })();
-
+  const currentState = get(dataManagerStore);
   const lastLoaded = currentState[dataType].lastLoaded;
+
   if (!lastLoaded) {
     return true;
   } else {
@@ -130,13 +129,28 @@ export function resetDataManager() {
   dataManagerStore.set(initialState);
 }
 
+// Reset specific data type loading state
+export function resetDataType(dataType: keyof DataManagerState) {
+  dataManagerStore.update((state) => ({
+    ...state,
+    [dataType]: {
+      ...initialLoadingState,
+    },
+  }));
+}
+
 // Get loading state for a specific data type
 export function getLoadingState(
   dataType: keyof DataManagerState
 ): DataLoadingState {
-  let currentState: DataManagerState;
-  dataManagerStore.subscribe((dataManager) => {
-    currentState = dataManager;
-  })();
+  const currentState = get(dataManagerStore);
   return currentState[dataType];
+}
+
+// Make debug functions available globally
+if (typeof window !== "undefined") {
+  (window as any).resetDataManager = resetDataManager;
+  (window as any).resetDataType = resetDataType;
+  (window as any).getLoadingState = getLoadingState;
+  console.log("🔧 Debug: Data manager functions available in console");
 }

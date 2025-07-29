@@ -49,8 +49,10 @@
   let createDialogOpen = false;
   let editDialogOpen = false;
   let viewDialogOpen = false;
-  let templatesDialogOpen = false;
   let testDialogOpen = false;
+  let templatesDialogOpen = false;
+  let deleteDialogOpen = false;
+  let agentToDelete: any = null;
 
   let newAgent = {
     name: "",
@@ -222,13 +224,32 @@
   }
 
   async function handleDeleteAgent(agent: any) {
-    if (
-      !confirm(`Are you sure you want to delete the agent "${agent.name}"?`)
-    ) {
+    agentToDelete = agent;
+    deleteDialogOpen = true;
+  }
+
+  async function confirmDeleteAgent() {
+    if (!agentToDelete) {
+      console.warn("⚠️ No agent to delete");
       return;
     }
 
-    await deleteAgent(agent.id);
+    console.log("🗑️ Confirming delete for agent:", agentToDelete.id);
+    const result = await deleteAgent(agentToDelete.id);
+
+    if (result.error) {
+      console.error("❌ Delete failed:", result.error);
+    } else {
+      console.log("✅ Delete successful");
+    }
+
+    deleteDialogOpen = false;
+    agentToDelete = null;
+  }
+
+  function cancelDeleteAgent() {
+    deleteDialogOpen = false;
+    agentToDelete = null;
   }
 
   async function handleTestAgent(agent: any) {
@@ -1128,5 +1149,22 @@
       <MessageSquare class="w-4 h-4 mr-2" />
       Start Chat
     </Button>
+  </div>
+</Dialog>
+
+<!-- Delete Agent Dialog -->
+<Dialog bind:open={deleteDialogOpen} title="Confirm Deletion" size="sm">
+  <div class="space-y-4">
+    <p class="text-muted-foreground">
+      Are you sure you want to delete the agent "<strong>{agentToDelete?.name}</strong>"? This action cannot be undone.
+    </p>
+    <div class="flex justify-end space-x-2">
+      <Button variant="outline" on:click={cancelDeleteAgent}>
+        Cancel
+      </Button>
+      <Button variant="destructive" on:click={confirmDeleteAgent}>
+        Delete
+      </Button>
+    </div>
   </div>
 </Dialog>

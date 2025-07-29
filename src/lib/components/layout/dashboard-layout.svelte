@@ -1,8 +1,8 @@
 <script lang="ts">
   import { onMount } from "svelte";
-import Sidebar from "../navigation/sidebar.svelte";
-import { authStore } from "$lib/stores/auth";
-import { signOut } from "$lib/auth";
+  import Sidebar from "../navigation/sidebar.svelte";
+  import { authStore } from "$lib/stores/auth";
+  import { signOut } from "$lib/auth";
   import { goto } from "$app/navigation";
   import { LogOut } from "lucide-svelte";
   import {
@@ -37,14 +37,21 @@ import { signOut } from "$lib/auth";
       console.log("🔍 Dashboard: Starting sign out process...");
 
       // Clear the auth store first
-      authStore.set({ session: null, user: null, loading: false, initialized: true });
+      authStore.set({
+        session: null,
+        user: null,
+        loading: false,
+        initialized: true,
+      });
 
       // Call the main sign out function
       await signOut();
     } catch (error) {
       console.error("❌ Dashboard: Sign out error:", error);
       // Force redirect even if sign out fails
-      window.location.href = "/auth/login";
+      if (typeof window !== "undefined") {
+        window.location.replace("/auth/login");
+      }
     }
   }
 
@@ -75,8 +82,8 @@ import { signOut } from "$lib/auth";
       show: canManage,
     },
     {
-      label: "Content",
-      href: "/content",
+      label: "Lessons",
+      href: "/lessons",
       icon: FileText,
       show: canManage,
     },

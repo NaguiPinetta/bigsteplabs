@@ -154,10 +154,16 @@ export const POST: RequestHandler = async ({ request }) => {
       JSON.stringify(transcriptionData, null, 2)
     );
 
-    // Debug: Check if the transcription looks suspicious
+    // Enhanced detection and handling of problematic transcriptions
+    let finalTranscribedText = transcribedText;
+
     if (
       transcribedText.includes("Untertitel") ||
-      transcribedText.includes("Amara")
+      transcribedText.includes("Amara") ||
+      transcribedText.includes("subtitles") ||
+      transcribedText.includes("caption") ||
+      transcribedText.includes("CC") ||
+      transcribedText.includes("SDH")
     ) {
       console.warn("⚠️ SUSPICIOUS TRANSCRIPTION DETECTED!");
       console.warn(
@@ -169,6 +175,54 @@ export const POST: RequestHandler = async ({ request }) => {
         name: file.name,
         lastModified: file.lastModified,
       });
+
+      // Try to clean the transcription by removing subtitle-related text
+      finalTranscribedText = transcribedText
+        .replace(/Untertitel der Amara\.org-Community/gi, "")
+        .replace(/subtitles?/gi, "")
+        .replace(/caption/gi, "")
+        .replace(/CC/gi, "")
+        .replace(/SDH/gi, "")
+        .replace(/Amara\.org/gi, "")
+        .replace(/\s+/g, " ")
+        .trim();
+
+      console.log("🧹 Cleaned transcription:", finalTranscribedText);
+
+      // If the cleaned text is too short, it might be invalid
+      if (finalTranscribedText.length < 5) {
+        console.error(
+          "❌ Cleaned transcription too short, likely invalid audio"
+        );
+        return new Response(
+          JSON.stringify({
+            error:
+              "Invalid audio content detected. The audio file may contain embedded subtitles or metadata instead of speech. Please try recording again with a clean audio source.",
+            details:
+              "Audio appears to contain subtitle metadata rather than speech",
+          }),
+          {
+            status: 400,
+            headers: { "Content-Type": "application/json" },
+          }
+        );
+      }
+    }
+
+    // Additional validation for transcription quality
+    if (finalTranscribedText.length < 3) {
+      console.error("❌ Transcription too short, likely no speech detected");
+      return new Response(
+        JSON.stringify({
+          error:
+            "No speech detected in the audio. Please ensure you're speaking clearly and try again.",
+          details: "Transcription result too short",
+        }),
+        {
+          status: 400,
+          headers: { "Content-Type": "application/json" },
+        }
+      );
     }
 
     // Upload audio file to Supabase Storage
@@ -202,8 +256,10 @@ export const POST: RequestHandler = async ({ request }) => {
 
     return new Response(
       JSON.stringify({
-        text: transcribedText,
+        text: finalTranscribedText,
         audioUrl: audioUrl,
+        originalText: transcribedText, // Include original for debugging
+        wasCleaned: finalTranscribedText !== transcribedText,
       }),
       {
         status: 200,

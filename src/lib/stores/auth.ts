@@ -1,4 +1,4 @@
-import { writable, derived } from "svelte/store";
+import { writable, derived, get } from "svelte/store";
 import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "../supabase";
 import type { User as AppUser } from "../types";
@@ -113,7 +113,12 @@ async function updateAuthState(session: Session | null) {
     }
   } catch (error) {
     console.error("❌ Error in updateAuthState:", error);
-    authStore.set({ session, user: null, loading: false, initialized: true });
+    authStore.set({
+      session: null,
+      user: null,
+      loading: false,
+      initialized: true,
+    });
   }
 }
 
@@ -184,27 +189,18 @@ export async function initAuth() {
 
 // Helper functions
 export function getCurrentUser(): AppUser | null {
-  let user: AppUser | null = null;
-  authStore.subscribe((state) => {
-    user = state.user;
-  })();
-  return user;
+  const state = get(authStore);
+  return state.user;
 }
 
 export function getCurrentSession(): Session | null {
-  let session: Session | null = null;
-  authStore.subscribe((state) => {
-    session = state.session;
-  })();
-  return session;
+  const state = get(authStore);
+  return state.session;
 }
 
 export function isAuthenticated(): boolean {
-  let session: Session | null = null;
-  authStore.subscribe((state) => {
-    session = state.session;
-  })();
-  return !!session;
+  const state = get(authStore);
+  return !!state.session;
 }
 
 // Derived store for canManageContent to prevent reactive loops
@@ -237,10 +233,30 @@ export function isCollaborator(): boolean {
 
 // Reset auth state (for testing/debugging)
 export function resetAuth() {
-  authStore.set(initialState);
+  console.log("🔄 Resetting auth state...");
+
+  // Clear the auth store
+  authStore.set({
+    session: null,
+    user: null,
+    loading: false,
+    initialized: true,
+  });
+
+  // Reset the initialization flag
   authInitialized = false;
+
+  // Clear any auth listener
   if (authListener) {
     authListener.data.subscription.unsubscribe();
     authListener = null;
   }
+
+  console.log("✅ Auth state reset complete");
+}
+
+// Make resetAuth available globally for debugging
+if (typeof window !== "undefined") {
+  (window as any).resetAuth = resetAuth;
+  console.log("🔧 Debug: resetAuth() function available in console");
 }

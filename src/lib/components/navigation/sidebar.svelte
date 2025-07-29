@@ -67,8 +67,8 @@
       roles: ["Admin", "Collaborator"],
     },
     {
-      label: "Content",
-      href: "/content",
+      label: "Lessons",
+      href: "/lessons",
       icon: FileText,
       roles: ["Admin", "Collaborator"],
     },

@@ -512,6 +512,83 @@ export interface Database {
           updated_at?: string;
         };
       };
+      lessons: {
+        Row: {
+          id: string;
+          title: string;
+          notion_url: string;
+          embed_url?: string | null;
+          module_id: string | null;
+          unit_id: string | null;
+          content_type: Json;
+          is_published: boolean;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          title: string;
+          notion_url: string;
+          embed_url?: string | null;
+          module_id?: string | null;
+          unit_id?: string | null;
+          content_type?: Json;
+          is_published?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          title?: string;
+          notion_url?: string;
+          embed_url?: string | null;
+          module_id?: string | null;
+          unit_id?: string | null;
+          content_type?: Json;
+          is_published?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
+      // Deprecated: content table (migrated to lessons)
+      content: {
+        Row: {
+          id: string;
+          title: string | null;
+          description: string | null;
+          file_url: string | null;
+          module_id: string | null;
+          unit_id: string | null;
+          content_type: Json | null;
+          is_published: boolean | null;
+          created_at: string | null;
+          updated_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          title?: string | null;
+          description?: string | null;
+          file_url?: string | null;
+          module_id?: string | null;
+          unit_id?: string | null;
+          content_type?: Json | null;
+          is_published?: boolean | null;
+          created_at?: string | null;
+          updated_at?: string | null;
+        };
+        Update: {
+          id?: string;
+          title?: string | null;
+          description?: string | null;
+          file_url?: string | null;
+          module_id?: string | null;
+          unit_id?: string | null;
+          content_type?: Json | null;
+          is_published?: boolean | null;
+          created_at?: string | null;
+          updated_at?: string | null;
+        };
+      };
     };
     Views: {
       [_ in never]: never;
@@ -553,6 +630,20 @@ export type Agent = Database["public"]["Tables"]["agents"]["Row"];
 export type Model = Database["public"]["Tables"]["models"]["Row"];
 export type ChatSession = Database["public"]["Tables"]["chat_sessions"]["Row"];
 export type Message = Database["public"]["Tables"]["messages"]["Row"];
+export type Lesson = Database["public"]["Tables"]["lessons"]["Row"];
+export type LessonInsert = Database["public"]["Tables"]["lessons"]["Insert"];
+export type LessonUpdate = Database["public"]["Tables"]["lessons"]["Update"];
+
+export interface LessonWithRelations extends Lesson {
+  module?: {
+    id: string;
+    title: string;
+  };
+  unit?: {
+    id: string;
+    title: string;
+  };
+}
 
 // Extended types for joined data
 export interface ChatSessionWithAgent extends ChatSession {

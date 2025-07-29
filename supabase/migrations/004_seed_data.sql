@@ -50,7 +50,7 @@ INSERT INTO units (id, module_id, title, description, slug, status, order_index,
 
 -- Create sample content
 INSERT INTO content (id, unit_id, type, title, description, content, order_index, is_published, created_at) VALUES
-('gggggggg-gggg-gggg-gggg-gggggggggggg', 'eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee', 'markdown', 'Welcome to BigStepLabs', 'An introduction to the platform', 
+('11111111-1111-1111-1111-111111111111', 'eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee', 'markdown', 'Welcome to BigStepLabs', 'An introduction to the platform', 
 '# Welcome to BigStepLabs 2.0
 
 BigStepLabs is an AI-integrated Learning Management System that combines structured educational content with intelligent conversational agents.
@@ -74,7 +74,7 @@ As a student, you can:
 Ready to explore? Let''s move on to the next unit!', 
 1, true, NOW()),
 
-('hhhhhhhh-hhhh-hhhh-hhhh-hhhhhhhhhhhh', 'ffffffff-ffff-ffff-ffff-ffffffffffff', 'markdown', 'Understanding AI Agents', 'Learn how AI agents work in BigStepLabs',
+('22222222-2222-2222-2222-222222222222', 'ffffffff-ffff-ffff-ffff-ffffffffffff', 'markdown', 'Understanding AI Agents', 'Learn how AI agents work in BigStepLabs',
 '# Understanding AI Agents
 
 AI Agents in BigStepLabs are your personal learning companions, designed to help you understand complex topics and guide your learning journey.
@@ -97,11 +97,17 @@ When you chat with an agent:
 ## Agent Types
 
 - **Default Tutor**: General-purpose educational assistance
-- **Research Assistant**: Help with analysis and research tasks  
-- **Creative Writing Coach**: Support for writing and creativity
-- **Custom Agents**: Specialized agents created by your instructors
+- **Research Assistant**: Help with analysis and research tasks
+- **Creative Writing Coach**: Specialized guidance for writing projects
 
-Try starting a conversation with the agent for this unit to see how it works!',
+## Best Practices
+
+- Be specific in your questions
+- Provide context about what you''re learning
+- Ask for clarification when needed
+- Use agents to explore topics beyond your current lesson
+
+Ready to start chatting with an AI agent?', 
 1, true, NOW());
 
 -- Create a sample agent using the default persona and model

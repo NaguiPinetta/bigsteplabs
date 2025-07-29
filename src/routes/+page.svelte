@@ -27,15 +27,7 @@
       }
     });
 
-    // Initialize auth
-    import("$lib/stores/auth")
-      .then((module) => module.initAuth())
-      .catch((err) => {
-        console.error("Auth initialization failed:", err);
-        error = "Authentication initialization failed";
-        loading = false;
-      });
-
+    // Auth is already initialized in root layout, no need to call initAuth here
     // Cleanup
     return unsubscribe;
   });
@@ -45,34 +37,16 @@
   <title>BigStepLabs 2.0</title>
 </svelte:head>
 
-<main class="flex items-center justify-center min-h-screen p-4">
-  {#if loading}
-    <div class="text-center">
+<!-- Loading state -->
+<div class="min-h-screen bg-background flex items-center justify-center">
+  <div class="text-center">
+    {#if error}
+      <div class="text-red-500 mb-4">{error}</div>
+    {:else}
       <div
         class="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"
       ></div>
-      <p class="text-muted-foreground">Loading BigStepLabs...</p>
-    </div>
-  {:else if error}
-    <div class="max-w-md text-center space-y-4">
-      <h1 class="text-2xl font-bold">⚠️ Configuration Issue</h1>
-      <p class="text-muted-foreground">{error}</p>
-      <div class="flex gap-3 justify-center">
-        <button
-          on:click={() => window.location.reload()}
-          class="bg-primary text-primary-foreground px-4 py-2 rounded-md hover:bg-primary/90"
-        >
-          Retry
-        </button>
-        <a
-          href="/dev"
-          class="bg-secondary text-secondary-foreground px-4 py-2 rounded-md hover:bg-secondary/80"
-        >
-          Dev Mode
-        </a>
-      </div>
-    </div>
-  {:else}
-    <p class="text-muted-foreground">Redirecting...</p>
-  {/if}
-</main>
+      <p class="text-muted-foreground">Loading...</p>
+    {/if}
+  </div>
+</div>

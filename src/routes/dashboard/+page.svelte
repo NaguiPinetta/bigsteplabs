@@ -6,8 +6,41 @@
     isCollaborator,
     isStudent,
     canManageContent,
-    initAuth,
   } from "$lib/stores/auth";
+  import { supabase } from "$lib/supabase";
+  import Button from "$lib/components/ui/button.svelte";
+  import Card from "$lib/components/ui/card.svelte";
+  import {
+    BookOpen,
+    Layers3,
+    FileText,
+    Users,
+    MessageSquare,
+    TrendingUp,
+    Clock,
+    BarChart3,
+    Plus,
+    ArrowRight,
+    Loader2,
+    AlertCircle,
+    CheckCircle,
+    Globe,
+    Lock,
+  } from "lucide-svelte";
+
+  let loading = true;
+  let error = "";
+  let stats = {
+    totalModules: 0,
+    publishedModules: 0,
+    totalUnits: 0,
+    publishedUnits: 0,
+    totalContent: 0,
+    totalUsers: 0,
+    totalChatSessions: 0,
+  };
+  let recentModules: any[] = [];
+  let recentActivity: any[] = [];
 
   $: user = $authStore.user;
   $: console.log("Dashboard auth state:", {
@@ -19,10 +52,127 @@
     canManageContent: $canManageContent,
   });
 
-  onMount(() => {
-    // Ensure auth is initialized when dashboard loads
-    initAuth();
+  onMount(async () => {
+    if (user) {
+      await loadDashboardData();
+    }
   });
+
+  async function loadDashboardData() {
+    loading = true;
+    error = "";
+
+    try {
+      await Promise.all([
+        loadStats(),
+        loadRecentModules(),
+        loadRecentActivity(),
+      ]);
+    } catch (err) {
+      error =
+        err instanceof Error ? err.message : "Failed to load dashboard data";
+      console.error("Dashboard error:", err);
+    } finally {
+      loading = false;
+    }
+  }
+
+  async function loadStats() {
+    // Get modules count
+    const { count: totalModules } = await supabase
+      .from("modules")
+      .select("*", { count: "exact", head: true });
+
+    const { count: publishedModules } = await supabase
+      .from("modules")
+      .select("*", { count: "exact", head: true })
+      .eq("is_published", true);
+
+    // Get units count
+    const { count: totalUnits } = await supabase
+      .from("units")
+      .select("*", { count: "exact", head: true });
+
+    const { count: publishedUnits } = await supabase
+      .from("units")
+      .select("*", { count: "exact", head: true })
+      .eq("is_published", true);
+
+    // Get content count
+    const { count: totalContent } = await supabase
+      .from("content")
+      .select("*", { count: "exact", head: true });
+
+    // Get users count (admin only)
+    let totalUsers = 0;
+    if (isAdmin()) {
+      const { count } = await supabase
+        .from("users")
+        .select("*", { count: "exact", head: true });
+      totalUsers = count || 0;
+    }
+
+    // Get chat sessions count
+    const { count: totalChatSessions } = await supabase
+      .from("chat_sessions")
+      .select("*", { count: "exact", head: true });
+
+    stats = {
+      totalModules: totalModules || 0,
+      publishedModules: publishedModules || 0,
+      totalUnits: totalUnits || 0,
+      publishedUnits: publishedUnits || 0,
+      totalContent: totalContent || 0,
+      totalUsers,
+      totalChatSessions: totalChatSessions || 0,
+    };
+  }
+
+  async function loadRecentModules() {
+    const { data } = await supabase
+      .from("modules")
+      .select("*")
+      .order("created_at", { ascending: false })
+      .limit(5);
+
+    recentModules = data || [];
+  }
+
+  async function loadRecentActivity() {
+    // Get recent chat sessions
+    const { data: recentChats } = await supabase
+      .from("chat_sessions")
+      .select(
+        `
+        *,
+        user:users(email),
+        agent:agents(name)
+      `
+      )
+      .order("created_at", { ascending: false })
+      .limit(5);
+
+    recentActivity = recentChats || [];
+  }
+
+  function formatDate(dateString: string): string {
+    return new Date(dateString).toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  }
+
+  function getStatusIcon(module: any) {
+    return module.is_published ? Globe : Lock;
+  }
+
+  function getStatusColor(module: any): string {
+    return module.is_published
+      ? "bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-300"
+      : "bg-gray-100 text-gray-800 dark:bg-gray-900/20 dark:text-gray-300";
+  }
 </script>
 
 <svelte:head>
@@ -60,192 +210,237 @@
   </div>
 {/if}
 
-<div class="max-w-7xl mx-auto">
-  {#if $authStore.loading}
-    <div class="flex items-center justify-center py-12">
-      <div
-        class="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"
-      ></div>
-      <span class="ml-3 text-muted-foreground">Loading user data...</span>
-    </div>
-  {:else if user}
-    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 lg:gap-6">
-      <!-- Student Dashboard -->
-      {#if isCollaborator() || isStudent()}
-        <div class="bg-card p-4 lg:p-6 rounded-lg border shadow-sm">
-          <h2 class="text-base lg:text-lg font-semibold mb-2">
-            📚 My Learning
-          </h2>
-          <p class="text-muted-foreground text-sm mb-4">
-            Access your modules and track progress
-          </p>
-          <a
-            href="/modules"
-            class="block w-full bg-primary text-primary-foreground py-2 px-4 rounded-md hover:bg-primary/90 transition-colors text-center text-sm"
-          >
-            Browse Modules
-          </a>
-        </div>
-      {/if}
-
-      <!-- Content Management (Admin/Collaborator) -->
-      {#if $canManageContent}
-        <div class="bg-card p-4 lg:p-6 rounded-lg border shadow-sm">
-          <h2 class="text-base lg:text-lg font-semibold mb-2">📝 Content</h2>
-          <p class="text-muted-foreground text-sm mb-4">
-            Create and manage learning materials
-          </p>
-          <a
-            href="/modules"
-            class="block w-full bg-primary text-primary-foreground py-2 px-4 rounded-md hover:bg-primary/90 transition-colors text-center text-sm"
-          >
-            Manage Content
-          </a>
-        </div>
-      {/if}
-
-      <!-- AI Agents (Admin/Collaborator) -->
-      {#if $canManageContent}
-        <div class="bg-card p-4 lg:p-6 rounded-lg border shadow-sm">
-          <h2 class="text-base lg:text-lg font-semibold mb-2">🤖 AI Agents</h2>
-          <p class="text-muted-foreground text-sm mb-4">
-            Configure AI learning assistants
-          </p>
-          <a
-            href="/agents"
-            class="block w-full bg-primary text-primary-foreground py-2 px-4 rounded-md hover:bg-primary/90 transition-colors text-center text-sm"
-          >
-            Manage Agents
-          </a>
-        </div>
-      {/if}
-
-      <!-- Chat (All Users) -->
-      <div class="bg-card p-4 lg:p-6 rounded-lg border shadow-sm">
-        <h2 class="text-base lg:text-lg font-semibold mb-2">💬 Chat</h2>
-        <p class="text-muted-foreground text-sm mb-4">
-          Start conversations with AI assistants
-        </p>
-        <a
-          href="/chat"
-          class="block w-full bg-primary text-primary-foreground py-2 px-4 rounded-md hover:bg-primary/90 transition-colors text-center text-sm"
-        >
-          Start Chat
-        </a>
-      </div>
-
-      <!-- Admin Tools -->
-      {#if isAdmin()}
-        <div class="bg-card p-4 lg:p-6 rounded-lg border shadow-sm">
-          <h2 class="text-base lg:text-lg font-semibold mb-2">⚙️ Admin</h2>
-          <p class="text-muted-foreground text-sm mb-4">
-            Manage users and system settings
-          </p>
-          <a
-            href="/admin/users"
-            class="block w-full bg-primary text-primary-foreground py-2 px-4 rounded-md hover:bg-primary/90 transition-colors text-center text-sm"
-          >
-            Manage Users
-          </a>
-        </div>
-
-        <div class="bg-card p-4 lg:p-6 rounded-lg border shadow-sm">
-          <h2 class="text-base lg:text-lg font-semibold mb-2">🔧 Workbench</h2>
-          <p class="text-muted-foreground text-sm mb-4">
-            Test and debug AI agents
-          </p>
-          <a
-            href="/workbench"
-            class="block w-full bg-primary text-primary-foreground py-2 px-4 rounded-md hover:bg-primary/90 transition-colors text-center text-sm"
-          >
-            Open Workbench
-          </a>
-        </div>
-      {/if}
-    </div>
-
-    <!-- Quick Stats Section -->
+<!-- Loading user data... -->
+{#if $authStore.loading || loading}
+  <div class="text-center py-8">
     <div
-      class="mt-8 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-6"
-    >
-      <div class="bg-card p-4 lg:p-6 rounded-lg border shadow-sm">
-        <div class="flex items-center justify-between">
-          <div>
-            <p class="text-sm font-medium text-muted-foreground">Role</p>
-            <p class="text-2xl font-bold text-foreground">{user.role}</p>
-          </div>
-          <div
-            class="w-8 h-8 bg-primary/10 rounded-full flex items-center justify-center"
+      class="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"
+    ></div>
+    <p class="text-muted-foreground">Loading user data...</p>
+  </div>
+{:else if user}
+  <!-- Dashboard content for authenticated users -->
+  <div class="space-y-8">
+    <!-- Welcome Card -->
+    <Card class="p-6">
+      <div class="flex items-center justify-between">
+        <div>
+          <h2 class="text-2xl font-bold text-foreground mb-2">
+            Welcome back, {user.email}!
+          </h2>
+          <p class="text-muted-foreground">
+            You're logged in as <span class="font-semibold text-primary"
+              >{user.role}</span
+            >
+          </p>
+        </div>
+        <div class="text-right">
+          <p class="text-sm text-muted-foreground">Last login</p>
+          <p class="text-sm font-medium">{formatDate(user.updated_at)}</p>
+        </div>
+      </div>
+    </Card>
+
+    <!-- Statistics Grid -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <Card class="p-6">
+        <div class="flex items-center justify-between mb-2">
+          <BookOpen class="w-8 h-8 text-primary" />
+          <span class="text-2xl font-bold text-foreground"
+            >{stats.totalModules}</span
           >
-            <span class="text-primary text-sm font-medium">
-              {user.role.charAt(0)}
+        </div>
+        <h3 class="font-semibold text-foreground">Total Modules</h3>
+        <p class="text-sm text-muted-foreground">
+          {stats.publishedModules} published
+        </p>
+      </Card>
+
+      <Card class="p-6">
+        <div class="flex items-center justify-between mb-2">
+          <Layers3 class="w-8 h-8 text-blue-500" />
+          <span class="text-2xl font-bold text-foreground"
+            >{stats.totalUnits}</span
+          >
+        </div>
+        <h3 class="font-semibold text-foreground">Total Units</h3>
+        <p class="text-sm text-muted-foreground">
+          {stats.publishedUnits} published
+        </p>
+      </Card>
+
+      <Card class="p-6">
+        <div class="flex items-center justify-between mb-2">
+          <FileText class="w-8 h-8 text-green-500" />
+          <span class="text-2xl font-bold text-foreground"
+            >{stats.totalContent}</span
+          >
+        </div>
+        <h3 class="font-semibold text-foreground">Content Items</h3>
+        <p class="text-sm text-muted-foreground">Total lessons & materials</p>
+      </Card>
+
+      <Card class="p-6">
+        <div class="flex items-center justify-between mb-2">
+          <MessageSquare class="w-8 h-8 text-purple-500" />
+          <span class="text-2xl font-bold text-foreground"
+            >{stats.totalChatSessions}</span
+          >
+        </div>
+        <h3 class="font-semibold text-foreground">Chat Sessions</h3>
+        <p class="text-sm text-muted-foreground">AI interactions</p>
+      </Card>
+    </div>
+
+    <!-- Admin Stats (if admin) -->
+    {#if isAdmin()}
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <Card class="p-6">
+          <div class="flex items-center justify-between mb-2">
+            <Users class="w-8 h-8 text-orange-500" />
+            <span class="text-2xl font-bold text-foreground"
+              >{stats.totalUsers}</span
+            >
+          </div>
+          <h3 class="font-semibold text-foreground">Total Users</h3>
+          <p class="text-sm text-muted-foreground">Registered users</p>
+        </Card>
+
+        <Card class="p-6">
+          <div class="flex items-center justify-between mb-2">
+            <TrendingUp class="w-8 h-8 text-emerald-500" />
+            <span class="text-2xl font-bold text-foreground">
+              {stats.publishedModules > 0
+                ? Math.round((stats.publishedUnits / stats.totalUnits) * 100)
+                : 0}%
             </span>
           </div>
-        </div>
+          <h3 class="font-semibold text-foreground">Publishing Rate</h3>
+          <p class="text-sm text-muted-foreground">Units published</p>
+        </Card>
       </div>
+    {/if}
 
-      <div class="bg-card p-4 lg:p-6 rounded-lg border shadow-sm">
-        <div class="flex items-center justify-between">
-          <div>
-            <p class="text-sm font-medium text-muted-foreground">Status</p>
-            <p class="text-2xl font-bold text-foreground">Active</p>
-          </div>
-          <div
-            class="w-8 h-8 bg-green-500/10 rounded-full flex items-center justify-center"
+    <!-- Quick Actions -->
+    {#if $canManageContent}
+      <Card class="p-6">
+        <h3 class="text-lg font-semibold mb-4">Quick Actions</h3>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <Button
+            variant="outline"
+            class="w-full justify-start"
+            on:click={() => (window.location.href = "/lessons")}
           >
-            <div class="w-3 h-3 bg-green-500 rounded-full"></div>
-          </div>
+            <Plus class="w-4 h-4 mr-2" />
+            Manage Lessons
+          </Button>
+          <Button
+            variant="outline"
+            class="w-full justify-start"
+            on:click={() => (window.location.href = "/personas")}
+          >
+            <Users class="w-4 h-4 mr-2" />
+            Manage Personas
+          </Button>
+          <Button
+            variant="outline"
+            class="w-full justify-start"
+            on:click={() => (window.location.href = "/agents")}
+          >
+            <MessageSquare class="w-4 h-4 mr-2" />
+            Manage Agents
+          </Button>
         </div>
-      </div>
+      </Card>
+    {/if}
 
-      <div class="bg-card p-4 lg:p-6 rounded-lg border shadow-sm">
-        <div class="flex items-center justify-between">
-          <div>
-            <p class="text-sm font-medium text-muted-foreground">
-              Member Since
-            </p>
-            <p class="text-lg font-bold text-foreground">
-              {user.created_at
-                ? new Date(user.created_at).toLocaleDateString()
-                : "N/A"}
-            </p>
-          </div>
-          <div
-            class="w-8 h-8 bg-blue-500/10 rounded-full flex items-center justify-center"
+    <!-- Recent Modules -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <Card class="p-6">
+        <div class="flex items-center justify-between mb-4">
+          <h3 class="text-lg font-semibold">Recent Modules</h3>
+          <Button
+            variant="ghost"
+            size="sm"
+            on:click={() => (window.location.href = "/modules")}
           >
-            <span class="text-blue-500 text-sm">📅</span>
-          </div>
+            View All
+            <ArrowRight class="w-4 h-4 ml-1" />
+          </Button>
         </div>
-      </div>
 
-      <div class="bg-card p-4 lg:p-6 rounded-lg border shadow-sm">
-        <div class="flex items-center justify-between">
-          <div>
-            <p class="text-sm font-medium text-muted-foreground">Email</p>
-            <p class="text-sm font-bold text-foreground truncate">
-              {user.email}
-            </p>
+        {#if recentModules.length === 0}
+          <p class="text-muted-foreground text-sm">No modules created yet.</p>
+        {:else}
+          <div class="space-y-3">
+            {#each recentModules as module}
+              <div
+                class="flex items-center justify-between p-3 bg-muted rounded-md"
+              >
+                <div class="flex items-center space-x-3">
+                  <svelte:component
+                    this={getStatusIcon(module)}
+                    class="w-4 h-4 text-muted-foreground"
+                  />
+                  <div>
+                    <p class="font-medium text-sm">{module.title}</p>
+                    <p class="text-xs text-muted-foreground">
+                      {formatDate(module.created_at)}
+                    </p>
+                  </div>
+                </div>
+                <span
+                  class={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(module)}`}
+                >
+                  {module.is_published ? "Published" : "Draft"}
+                </span>
+              </div>
+            {/each}
           </div>
-          <div
-            class="w-8 h-8 bg-purple-500/10 rounded-full flex items-center justify-center"
+        {/if}
+      </Card>
+
+      <!-- Recent Activity -->
+      <Card class="p-6">
+        <div class="flex items-center justify-between mb-4">
+          <h3 class="text-lg font-semibold">Recent Activity</h3>
+          <Button
+            variant="ghost"
+            size="sm"
+            on:click={() => (window.location.href = "/chat")}
           >
-            <span class="text-purple-500 text-sm">📧</span>
-          </div>
+            View All
+            <ArrowRight class="w-4 h-4 ml-1" />
+          </Button>
         </div>
-      </div>
+
+        {#if recentActivity.length === 0}
+          <p class="text-muted-foreground text-sm">No recent activity.</p>
+        {:else}
+          <div class="space-y-3">
+            {#each recentActivity as activity}
+              <div class="flex items-center space-x-3 p-3 bg-muted rounded-md">
+                <MessageSquare class="w-4 h-4 text-muted-foreground" />
+                <div class="flex-1">
+                  <p class="text-sm">
+                    <span class="font-medium"
+                      >{activity.user?.email || "Unknown"}</span
+                    >
+                    {#if activity.agent?.name}
+                      chatted with <span class="font-medium"
+                        >{activity.agent.name}</span
+                      >
+                    {/if}
+                  </p>
+                  <p class="text-xs text-muted-foreground">
+                    {formatDate(activity.created_at)}
+                  </p>
+                </div>
+              </div>
+            {/each}
+          </div>
+        {/if}
+      </Card>
     </div>
-  {:else}
-    <div class="text-center py-12">
-      <h2 class="text-xl font-semibold mb-2">Not Authenticated</h2>
-      <p class="text-muted-foreground mb-4">
-        Please log in to access your dashboard.
-      </p>
-      <a
-        href="/auth/login"
-        class="inline-block bg-primary text-primary-foreground py-2 px-4 rounded-md hover:bg-primary/90 transition-colors"
-      >
-        Go to Login
-      </a>
-    </div>
-  {/if}
-</div>
+  </div>
+{/if}

@@ -429,21 +429,43 @@ export async function signOut(redirectTo?: string): Promise<void> {
       const keysToRemove = [];
       for (let i = 0; i < localStorage.length; i++) {
         const key = localStorage.key(i);
-        if (key && (key.includes('supabase') || key.includes('auth'))) {
+        if (key && (key.includes("supabase") || key.includes("auth"))) {
           keysToRemove.push(key);
         }
       }
-      keysToRemove.forEach(key => localStorage.removeItem(key));
+      keysToRemove.forEach((key) => localStorage.removeItem(key));
+
+      // Clear sessionStorage as well
+      sessionStorage.clear();
     }
 
-    // Sign out from Supabase
-    const { error } = await supabase.auth.signOut();
-    
-    if (error) {
-      console.error("❌ Supabase sign out error:", error);
+    // Clear cookies if possible
+    if (typeof document !== "undefined") {
+      const cookies = document.cookie.split(";");
+      for (let i = 0; i < cookies.length; i++) {
+        const cookie = cookies[i];
+        const eqPos = cookie.indexOf("=");
+        const name =
+          eqPos > -1 ? cookie.substr(0, eqPos).trim() : cookie.trim();
+        if (name.includes("supabase") || name.includes("auth")) {
+          document.cookie = `${name}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/`;
+        }
+      }
+    }
+
+    // Sign out from Supabase with error handling
+    try {
+      const { error } = await supabase.auth.signOut();
+
+      if (error) {
+        console.error("❌ Supabase sign out error:", error);
+        // Continue with local cleanup even if Supabase fails
+      } else {
+        console.log("✅ Supabase sign out successful");
+      }
+    } catch (supabaseError) {
+      console.error("❌ Supabase sign out exception:", supabaseError);
       // Continue with local cleanup even if Supabase fails
-    } else {
-      console.log("✅ Supabase sign out successful");
     }
 
     const redirectUrl = redirectTo || "/auth/login";
@@ -451,13 +473,14 @@ export async function signOut(redirectTo?: string): Promise<void> {
 
     // Use window.location for hard redirect to ensure complete session cleanup
     if (typeof window !== "undefined") {
-      window.location.href = redirectUrl;
+      // Force a complete page reload to clear any cached auth state
+      window.location.replace(redirectUrl);
     }
   } catch (error) {
     console.error("❌ Sign out error:", error);
     // Force redirect even if everything fails
     if (typeof window !== "undefined") {
-      window.location.href = redirectTo || "/auth/login";
+      window.location.replace(redirectTo || "/auth/login");
     }
   }
 }

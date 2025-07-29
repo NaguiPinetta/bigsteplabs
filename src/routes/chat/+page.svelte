@@ -66,6 +66,10 @@
   let deleteDialogOpen = false;
   let sessionToDelete: any = null;
 
+  // End session confirmation dialog state
+  let endSessionDialogOpen = false;
+  let sessionToEnd: any = null;
+
   // Voice recording state
   let isRecording = false;
   let mediaRecorder: MediaRecorder | null = null;
@@ -171,11 +175,32 @@
   }
 
   async function handleEndSession(session: any) {
-    if (!confirm(`Are you sure you want to end this conversation?`)) {
+    sessionToEnd = session;
+    endSessionDialogOpen = true;
+  }
+
+  async function confirmEndSession() {
+    if (!sessionToEnd) {
+      console.warn("⚠️ No session to end");
       return;
     }
 
-    await endChatSession(session.id);
+    console.log("🔚 Confirming end for session:", sessionToEnd.id);
+    const result = await endChatSession(sessionToEnd.id);
+
+    if (result.error) {
+      console.error("❌ End failed:", result.error);
+    } else {
+      console.log("✅ End successful");
+    }
+
+    endSessionDialogOpen = false;
+    sessionToEnd = null;
+  }
+
+  function cancelEndSession() {
+    endSessionDialogOpen = false;
+    sessionToEnd = null;
   }
 
   function formatTime(dateString: string): string {
@@ -382,6 +407,15 @@
         // Insert transcribed text into the input
         messageInput = result.text.trim();
         console.log("✅ Transcription completed:", result.text);
+
+        // Log if the transcription was cleaned
+        if (result.wasCleaned) {
+          console.warn(
+            "⚠️ Transcription was cleaned due to subtitle metadata detection"
+          );
+          console.log("🔍 Original transcription:", result.originalText);
+          console.log("🧹 Cleaned transcription:", result.text);
+        }
 
         // Store audio URL for later use (we'll attach it to the message when sent)
         if (result.audioUrl) {
@@ -1131,6 +1165,41 @@
       <Button variant="outline" on:click={cancelDeleteSession}>Cancel</Button>
       <Button variant="destructive" on:click={confirmDeleteSession}>
         Delete Conversation
+      </Button>
+    </div>
+  </div>
+</Dialog>
+
+<!-- End Session Confirmation Dialog -->
+<Dialog bind:open={endSessionDialogOpen} title="End Conversation">
+  <div class="space-y-4">
+    <div class="flex items-start space-x-3">
+      <AlertTriangle class="w-5 h-5 text-destructive mt-0.5 flex-shrink-0" />
+      <div>
+        <p class="text-foreground font-medium">
+          Are you sure you want to end this conversation?
+        </p>
+        <p class="text-sm text-muted-foreground mt-1">
+          This action cannot be undone. All messages in this conversation will
+          be permanently deleted.
+        </p>
+        {#if sessionToEnd}
+          <div class="mt-3 p-3 bg-muted rounded-lg">
+            <p class="text-sm font-medium">
+              {sessionToEnd.agent?.name || "AI Assistant"}
+            </p>
+            <p class="text-xs text-muted-foreground">
+              {sessionToEnd.message_count || 0} messages
+            </p>
+          </div>
+        {/if}
+      </div>
+    </div>
+
+    <div class="flex justify-end space-x-3">
+      <Button variant="outline" on:click={cancelEndSession}>Cancel</Button>
+      <Button variant="destructive" on:click={confirmEndSession}>
+        End Conversation
       </Button>
     </div>
   </div>

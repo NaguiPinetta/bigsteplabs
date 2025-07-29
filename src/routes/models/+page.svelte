@@ -38,12 +38,15 @@
     Settings,
     Pencil,
     XCircle,
+    AlertTriangle,
   } from "lucide-svelte";
 
   let createDialogOpen = false;
   let editDialogOpen = false;
   let viewDialogOpen = false;
   let presetsDialogOpen = false;
+  let deleteDialogOpen = false;
+  let modelToDelete: any = null;
 
   let newModel = {
     name: "",
@@ -191,13 +194,32 @@
   }
 
   async function handleDeleteModel(model: any) {
-    if (
-      !confirm(`Are you sure you want to delete the model "${model.name}"?`)
-    ) {
+    modelToDelete = model;
+    deleteDialogOpen = true;
+  }
+
+  async function confirmDeleteModel() {
+    if (!modelToDelete) {
+      console.warn("⚠️ No model to delete");
       return;
     }
 
-    await deleteModel(model.id);
+    console.log("🗑️ Confirming delete for model:", modelToDelete.id);
+    const result = await deleteModel(modelToDelete.id);
+
+    if (result.error) {
+      console.error("❌ Delete failed:", result.error);
+    } else {
+      console.log("✅ Delete successful");
+    }
+
+    deleteDialogOpen = false;
+    modelToDelete = null;
+  }
+
+  function cancelDeleteModel() {
+    deleteDialogOpen = false;
+    modelToDelete = null;
   }
 
   async function handleTestModel(model: any) {
@@ -1158,6 +1180,38 @@
       </Button>
       <Button variant="outline" on:click={() => (viewDialogOpen = false)}>
         Close
+      </Button>
+    </div>
+  </div>
+</Dialog>
+
+<!-- Delete Model Confirmation Dialog -->
+<Dialog bind:open={deleteDialogOpen} title="Delete Model">
+  <div class="space-y-4">
+    <div class="flex items-start space-x-3">
+      <AlertTriangle class="w-5 h-5 text-destructive mt-0.5 flex-shrink-0" />
+      <div>
+        <p class="text-foreground font-medium">
+          Are you sure you want to delete this model?
+        </p>
+        <p class="text-sm text-muted-foreground mt-1">
+          This action cannot be undone. All agents using this model will need to be reconfigured.
+        </p>
+        {#if modelToDelete}
+          <div class="mt-3 p-3 bg-muted rounded-lg">
+            <p class="text-sm font-medium">{modelToDelete.name}</p>
+            <p class="text-xs text-muted-foreground">
+              {modelToDelete.provider} • {modelToDelete.engine}
+            </p>
+          </div>
+        {/if}
+      </div>
+    </div>
+
+    <div class="flex justify-end space-x-3">
+      <Button variant="outline" on:click={cancelDeleteModel}>Cancel</Button>
+      <Button variant="destructive" on:click={confirmDeleteModel}>
+        Delete Model
       </Button>
     </div>
   </div>
