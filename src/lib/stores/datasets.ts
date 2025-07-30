@@ -474,7 +474,7 @@ export async function createStructuredChunks(
 /**
  * Parse structured content into logical chunks
  */
-function parseStructuredContent(content: string): Array<{
+export function parseStructuredContent(content: string): Array<{
   content: string;
   type: "metadata" | "exercise" | "instruction";
   exerciseNumber?: number;
@@ -488,6 +488,32 @@ function parseStructuredContent(content: string): Array<{
     content.substring(0, 200) + "..."
   );
 
+  // Test the Portuguese translation pattern on the full content
+  const testPattern =
+    /###\s*(\d+)\.\s*Frase:\s*(.+?)\s*>\s*Resposta esperada:\s*(.+?)(?=\n|$)/s;
+  const allMatches = content.matchAll(testPattern);
+  let matchCount = 0;
+  for (const match of allMatches) {
+    matchCount++;
+    if (matchCount <= 3) {
+      // Show first 3 matches
+      console.log(`🔍 Found Portuguese translation match ${matchCount}:`, {
+        exerciseNumber: match[1],
+        prompt: match[2]?.trim(),
+        response: match[3]?.trim(),
+      });
+    }
+  }
+  console.log(`🔍 Total Portuguese translation matches found: ${matchCount}`);
+
+  // Also test for language direction indicator
+  const langDirectionMatch = content.match(/\[pt-BR>(\w+)\]/);
+  if (langDirectionMatch) {
+    console.log(
+      `🔍 Found language direction: pt-BR > ${langDirectionMatch[1]}`
+    );
+  }
+
   const chunks: Array<{
     content: string;
     type: "metadata" | "exercise" | "instruction";
@@ -500,6 +526,26 @@ function parseStructuredContent(content: string): Array<{
 
   // Detect content format dynamically
   const formatPatterns = [
+    // Portuguese translation format with language direction: "[pt-BR>de] ### 1. Frase: [Portuguese] > Resposta esperada: [Target]"
+    {
+      name: "PortugueseTranslation",
+      exercisePattern:
+        /###\s*(\d+)\.\s*Frase:\s*(.+?)\s*>\s*Resposta esperada:\s*(.+?)(?=\n|$)/s,
+      responsePattern: null, // Response is already in the pattern
+      variationsPattern: null,
+      sectionSplitter: /(?=###\s*\d+\.)/,
+      metadataPattern: /\[pt-BR>(\w+)\]/s,
+    },
+    // Portuguese-German translation format: "### 1. Frase: [Portuguese] > Resposta esperada: [German]"
+    {
+      name: "PortugueseGerman",
+      exercisePattern:
+        /###\s*(\d+)\.\s*Frase:\s*(.+?)\s*>\s*Resposta esperada:\s*(.+?)(?=\n|$)/s,
+      responsePattern: null, // Response is already in the pattern
+      variationsPattern: null,
+      sectionSplitter: /(?=###\s*\d+\.)/,
+      metadataPattern: /Nível:\s*(.+?)(?=\n\n|$)/s,
+    },
     // English format: "1. Prompt: ... Expected Response: ..."
     {
       name: "English",
@@ -560,27 +606,55 @@ function parseStructuredContent(content: string): Array<{
     `🔍 Split into ${sections.length} sections (${detectedFormat.name} format)`
   );
 
+  if (detectedFormat.name === "PortugueseGerman") {
+    console.log("🔍 Portuguese-German sections:");
+    sections.forEach((section, index) => {
+      console.log(`Section ${index}:`, section.substring(0, 100) + "...");
+
+      // Test the regex pattern on this section
+      const testMatch = section.match(detectedFormat.exercisePattern!);
+      if (testMatch) {
+        console.log(`✅ Section ${index} matches pattern:`, {
+          exerciseNumber: testMatch[1],
+          prompt: testMatch[2]?.substring(0, 50) + "...",
+          response: testMatch[3]?.substring(0, 30) + "...",
+        });
+      } else {
+        console.log(`❌ Section ${index} does NOT match pattern`);
+      }
+    });
+  }
+
   let currentSection = sections[0] || "";
 
   // Handle metadata/instructions section
   if (currentSection.trim() && detectedFormat.metadataPattern) {
     const metadataMatch = currentSection.match(detectedFormat.metadataPattern);
     if (metadataMatch) {
+      const metadata: Record<string, any> = {
+        has_instructions: true,
+        format: detectedFormat.name,
+      };
+
+      // Handle different metadata patterns
+      if (detectedFormat.name === "PortugueseTranslation") {
+        metadata.target_language = metadataMatch[1].trim();
+        metadata.source_language = "pt-BR";
+      } else {
+        metadata.level = metadataMatch[1].trim();
+      }
+
       chunks.push({
         content: currentSection.trim(),
         type: "metadata",
-        metadata: {
-          level: metadataMatch[1].trim(),
-          has_instructions: true,
-          format: detectedFormat.name,
-        },
+        metadata,
       });
-      console.log("🔍 Added metadata chunk");
+      console.log("🔍 Added metadata chunk:", metadata);
     }
   }
 
-  // Process exercise sections
-  for (let i = 1; i < sections.length; i++) {
+  // Process all sections for exercises
+  for (let i = 0; i < sections.length; i++) {
     const section = sections[i].trim();
     if (!section) continue;
 
@@ -599,8 +673,15 @@ function parseStructuredContent(content: string): Array<{
       let expectedResponse = "";
       let variations: string[] = [];
 
+      // Handle Portuguese-German format where response is in the pattern
+      if (detectedFormat.name === "PortugueseGerman" && exerciseMatch[3]) {
+        expectedResponse = exerciseMatch[3].trim();
+        console.log(
+          `🔍 Portuguese-German format: Exercise ${exerciseNumber}, Prompt: "${prompt}", Response: "${expectedResponse}"`
+        );
+      }
       // Extract expected response if pattern exists
-      if (detectedFormat.responsePattern) {
+      else if (detectedFormat.responsePattern) {
         const expectedMatch = section.match(detectedFormat.responsePattern);
         if (expectedMatch) {
           expectedResponse = expectedMatch[1].trim();
@@ -634,6 +715,13 @@ function parseStructuredContent(content: string): Array<{
         variations.length
       );
 
+      // Find metadata chunk to get target language
+      let targetLanguage = "german"; // default
+      const metadataChunk = chunks.find((chunk) => chunk.type === "metadata");
+      if (metadataChunk && metadataChunk.metadata?.target_language) {
+        targetLanguage = metadataChunk.metadata.target_language;
+      }
+
       chunks.push({
         content: section,
         type: "exercise",
@@ -643,8 +731,11 @@ function parseStructuredContent(content: string): Array<{
         variations,
         metadata: {
           exercise_type: "translation_drill",
-          language_from: "portuguese",
-          language_to: "german",
+          language_from:
+            detectedFormat.name === "PortugueseTranslation"
+              ? "pt-BR"
+              : "portuguese",
+          language_to: targetLanguage,
           chunk_type: "exercise",
           format: detectedFormat.name,
         },

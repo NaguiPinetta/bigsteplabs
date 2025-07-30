@@ -647,6 +647,67 @@
       console.error("❌ Error reprocessing dataset:", error);
     }
   }
+
+  async function testDatasetParsing(datasetId: string) {
+    console.log("🔍 Testing dataset parsing for:", datasetId);
+    try {
+      // Get the dataset content
+      const { data: dataset } = await supabase
+        .from("datasets")
+        .select("id, name, text_content")
+        .eq("id", datasetId)
+        .single();
+
+      if (!dataset || !dataset.text_content) {
+        console.error("❌ Dataset not found or has no content");
+        return;
+      }
+
+      console.log("🔍 Dataset:", dataset.name);
+      console.log(
+        "🔍 Content preview:",
+        dataset.text_content.substring(0, 500) + "..."
+      );
+
+      // Test the parsing logic directly
+      const { parseStructuredContent } = await import("$lib/stores/datasets");
+      const chunks = parseStructuredContent(dataset.text_content);
+
+      console.log("🔍 Parsed chunks:", chunks.length);
+      chunks.forEach((chunk: any, index: number) => {
+        console.log(`Chunk ${index}:`, {
+          type: chunk.type,
+          exerciseNumber: chunk.exerciseNumber,
+          prompt: chunk.prompt?.substring(0, 50) + "...",
+          expectedResponse: chunk.expectedResponse?.substring(0, 30) + "...",
+          metadata: chunk.metadata,
+        });
+      });
+
+      // Check if we have exercise chunks
+      const exerciseChunks = chunks.filter(
+        (chunk: any) => chunk.type === "exercise"
+      );
+      console.log("🔍 Exercise chunks found:", exerciseChunks.length);
+
+      if (exerciseChunks.length === 0) {
+        console.warn(
+          "⚠️ No exercise chunks found! This is why the agent is not working correctly."
+        );
+      } else {
+        console.log("✅ Exercise chunks found! First few exercises:");
+        exerciseChunks.slice(0, 3).forEach((chunk: any, index: number) => {
+          console.log(`  Exercise ${index + 1}:`, {
+            number: chunk.exerciseNumber,
+            prompt: chunk.prompt,
+            expected: chunk.expectedResponse,
+          });
+        });
+      }
+    } catch (error) {
+      console.error("❌ Error testing dataset parsing:", error);
+    }
+  }
 </script>
 
 <svelte:head>
@@ -789,6 +850,14 @@
               >
                 <RefreshCw class="w-4 h-4" />
               </button>
+
+              <button
+                on:click={() => testDatasetParsing(dataset.id)}
+                class="p-2 hover:bg-warning/20 rounded-md text-muted-foreground hover:text-warning"
+                title="Test parsing"
+              >
+                <Bug class="w-4 h-4" />
+              </button>
             </div>
           </div>
 
@@ -820,6 +889,9 @@
         "Use clear naming conventions to organize your datasets effectively",
         "Upload files or input text directly depending on your content format",
         "Monitor dataset processing status to ensure successful chunking and indexing",
+        "Supported structured formats: Portuguese translation exercises with '### 1. Frase: [text] > Resposta esperada: [text]' format",
+        "Language direction indicators like '[pt-BR>de]' help specify source and target languages",
+        "For translation exercises, use numbered format with clear prompts and expected responses",
       ]}
     />
   {/if}
@@ -926,6 +998,26 @@
         <p class="text-xs text-muted-foreground mt-1">
           This content will be automatically chunked for use by AI agents
         </p>
+      </div>
+
+      <!-- Format Guide -->
+      <div class="bg-muted/50 p-4 rounded-lg">
+        <h4 class="text-sm font-medium mb-2">📋 Supported Structured Formats</h4>
+        <div class="text-xs text-muted-foreground space-y-2">
+          <div>
+            <strong>Translation Exercises:</strong>
+            <pre class="mt-1 bg-background p-2 rounded text-xs overflow-x-auto">
+[pt-BR>de]
+### 1. Frase: Eu compro pão > Resposta esperada: Ich kaufe Brot
+### 2. Frase: Eu compro leite > Resposta esperada: Ich kaufe Milch</pre>
+          </div>
+          <div>
+            <strong>Language Direction:</strong> Use <code>[pt-BR>de]</code> for Portuguese to German, <code>[pt-BR>en]</code> for Portuguese to English, etc.
+          </div>
+          <div>
+            <strong>Exercise Format:</strong> Each exercise must follow <code>### [number]. Frase: [prompt] > Resposta esperada: [answer]</code>
+          </div>
+        </div>
       </div>
     {/if}
   </div>
