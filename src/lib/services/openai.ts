@@ -200,6 +200,19 @@ export async function buildAgentContext(
 
             // Add exercises in structured format
             if (exerciseChunks.length > 0) {
+              console.log(
+                `🔍 Found ${exerciseChunks.length} exercise chunks for agent`
+              );
+              console.log(
+                `🔍 First few exercise chunks:`,
+                exerciseChunks.slice(0, 3).map((chunk) => ({
+                  exerciseNumber: chunk.metadata?.exercise_number,
+                  prompt: chunk.metadata?.prompt,
+                  expectedResponse: chunk.metadata?.expected_response,
+                  chunkType: chunk.metadata?.chunk_type,
+                }))
+              );
+
               systemPrompt += `STRUCTURED EXERCISES - FOLLOW THESE EXACTLY IN ORDER:\n\n`;
 
               // Sort exercises by exercise number

@@ -490,7 +490,7 @@ export function parseStructuredContent(content: string): Array<{
 
   // Test the Portuguese translation pattern on the full content
   const testPattern =
-    /###\s*(\d+)\.\s*Frase:\s*(.+?)\s*>\s*Resposta esperada:\s*(.+?)(?=\n|$)/s;
+    /###\s*(\d+)\.\s*Frase:\s*(.+?)\s*>\s*Resposta esperada:\s*(.+?)(?=\n|$)/gs;
   const allMatches = content.matchAll(testPattern);
   let matchCount = 0;
   for (const match of allMatches) {
@@ -530,7 +530,7 @@ export function parseStructuredContent(content: string): Array<{
     {
       name: "PortugueseTranslation",
       exercisePattern:
-        /###\s*(\d+)\.\s*Frase:\s*(.+?)\s*>\s*Resposta esperada:\s*(.+?)(?=\n|$)/s,
+        /###\s*(\d+)\.\s*Frase:\s*(.+?)\s*>\s*Resposta esperada:\s*(.+?)(?=\n|$)/gs,
       responsePattern: null, // Response is already in the pattern
       variationsPattern: null,
       sectionSplitter: /(?=###\s*\d+\.)/,
@@ -540,7 +540,7 @@ export function parseStructuredContent(content: string): Array<{
     {
       name: "PortugueseGerman",
       exercisePattern:
-        /###\s*(\d+)\.\s*Frase:\s*(.+?)\s*>\s*Resposta esperada:\s*(.+?)(?=\n|$)/s,
+        /###\s*(\d+)\.\s*Frase:\s*(.+?)\s*>\s*Resposta esperada:\s*(.+?)(?=\n|$)/gs,
       responsePattern: null, // Response is already in the pattern
       variationsPattern: null,
       sectionSplitter: /(?=###\s*\d+\.)/,
@@ -668,17 +668,24 @@ export function parseStructuredContent(content: string): Array<{
 
     if (exerciseMatch) {
       const exerciseNumber = parseInt(exerciseMatch[1]);
-      const prompt = exerciseMatch[2].trim();
+      const prompt = exerciseMatch[2]?.trim();
+      let expectedResponse = exerciseMatch[3]?.trim();
 
-      let expectedResponse = "";
+      // Skip if we don't have all required parts
+      if (!exerciseNumber || !prompt || !expectedResponse) {
+        console.log(`⚠️ Skipping incomplete exercise match in section ${i}:`, {
+          exerciseNumber,
+          prompt: prompt || "undefined",
+          expectedResponse: expectedResponse || "undefined",
+        });
+        continue;
+      }
+
       let variations: string[] = [];
 
       // Handle Portuguese-German format where response is in the pattern
       if (detectedFormat.name === "PortugueseGerman" && exerciseMatch[3]) {
         expectedResponse = exerciseMatch[3].trim();
-        console.log(
-          `🔍 Portuguese-German format: Exercise ${exerciseNumber}, Prompt: "${prompt}", Response: "${expectedResponse}"`
-        );
       }
       // Extract expected response if pattern exists
       else if (detectedFormat.responsePattern) {
@@ -748,6 +755,53 @@ export function parseStructuredContent(content: string): Array<{
         metadata: {
           content_type: "instruction",
           source: "manual_input",
+          format: detectedFormat.name,
+        },
+      });
+    }
+  }
+
+  // Alternative approach: Process all matches directly
+  console.log(
+    "🔍 Trying alternative approach: processing all matches directly..."
+  );
+  const directMatches = content.matchAll(detectedFormat.exercisePattern!);
+  let matchIndex = 0;
+
+  for (const match of directMatches) {
+    matchIndex++;
+    const exerciseNumber = parseInt(match[1]);
+    const prompt = match[2]?.trim();
+    const expectedResponse = match[3]?.trim();
+
+    if (exerciseNumber && prompt && expectedResponse) {
+      console.log(`🔍 Direct match ${matchIndex}: Exercise ${exerciseNumber}`, {
+        prompt: prompt.substring(0, 50) + "...",
+        expectedResponse: expectedResponse.substring(0, 30) + "...",
+      });
+
+      // Find metadata chunk to get target language
+      let targetLanguage = "german"; // default
+      const metadataChunk = chunks.find((chunk) => chunk.type === "metadata");
+      if (metadataChunk && metadataChunk.metadata?.target_language) {
+        targetLanguage = metadataChunk.metadata.target_language;
+      }
+
+      chunks.push({
+        content: match[0], // Full match
+        type: "exercise",
+        exerciseNumber,
+        prompt,
+        expectedResponse,
+        variations: [],
+        metadata: {
+          exercise_type: "translation_drill",
+          language_from:
+            detectedFormat.name === "PortugueseTranslation"
+              ? "pt-BR"
+              : "portuguese",
+          language_to: targetLanguage,
+          chunk_type: "exercise",
           format: detectedFormat.name,
         },
       });
