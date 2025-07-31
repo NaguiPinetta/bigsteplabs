@@ -60,9 +60,11 @@ export async function loadLessons(forceRefresh = false): Promise<void> {
         `
         *,
         module:modules(id, title),
-        unit:units(id, title)
+        unit:units(id, title),
+        agent:agents(id, name, description, is_active)
       `
       )
+      .order("order_index", { ascending: true })
       .order("created_at", { ascending: false });
 
     if (error) {
@@ -104,7 +106,9 @@ export async function createLesson(lessonData: {
   embed_url?: string | null;
   module_id?: string | null;
   unit_id?: string | null;
-  content_type?: any;
+  agent_id?: string | null;
+  content_type?: string;
+  order_index?: number;
   is_published?: boolean;
 }) {
   try {
@@ -143,7 +147,9 @@ export async function updateLesson(
     embed_url?: string | null;
     module_id?: string | null;
     unit_id?: string | null;
-    content_type?: any;
+    agent_id?: string | null;
+    content_type?: string;
+    order_index?: number;
     is_published?: boolean;
   }
 ) {
@@ -281,11 +287,13 @@ export async function getLessonsByUnit(
       .select(
         `
         *,
-        module:modules(id, name),
-        unit:units(id, name)
+        module:modules(id, title),
+        unit:units(id, title),
+        agent:agents(id, name, description, is_active)
       `
       )
       .eq("unit_id", unitId)
+      .order("order_index", { ascending: true })
       .order("created_at", { ascending: false });
 
     if (error) {
@@ -298,6 +306,27 @@ export async function getLessonsByUnit(
   } catch (error) {
     console.error("❌ Error getting lessons by unit:", error);
     return [];
+  }
+}
+
+export async function reorderLessons(lessonIds: string[]): Promise<boolean> {
+  try {
+    console.log("🔄 Reordering lessons:", lessonIds);
+
+    const { error } = await supabase.rpc("reorder_lessons", {
+      p_lesson_ids: lessonIds,
+    });
+
+    if (error) {
+      console.error("❌ Error reordering lessons:", error);
+      return false;
+    }
+
+    console.log("✅ Lessons reordered successfully");
+    return true;
+  } catch (error) {
+    console.error("❌ Error reordering lessons:", error);
+    return false;
   }
 }
 

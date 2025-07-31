@@ -12,6 +12,7 @@
   } from "$lib/stores/lessons";
   import { modulesStore, loadModules } from "$lib/stores/modules";
   import { unitsStore, loadUnits } from "$lib/stores/units";
+  import { agentsStore, loadAgents } from "$lib/stores/agents";
 
   import Button from "$lib/components/ui/button.svelte";
   import Card from "$lib/components/ui/card.svelte";
@@ -33,6 +34,8 @@
     AlertCircle,
     CheckCircle,
     Filter,
+    MessageSquare,
+    Bot,
   } from "lucide-svelte";
 
   let createDialogOpen = false;
@@ -53,7 +56,8 @@
     embed_url: "",
     module_id: "",
     unit_id: "",
-    content_type: {},
+    content_type: "embedded",
+    agent_id: "",
     is_published: false,
   };
 
@@ -64,7 +68,8 @@
     embed_url: "",
     module_id: "",
     unit_id: "",
-    content_type: {},
+    content_type: "embedded",
+    agent_id: "",
     is_published: false,
   };
 
@@ -80,6 +85,7 @@
   $: lessons = state.lessons;
   $: modules = $modulesStore.modules;
   $: units = $unitsStore.units;
+  $: agents = $agentsStore.agents;
 
   // Filter lessons based on selected filters
   $: filteredLessons = lessons.filter((lesson) => {
@@ -94,6 +100,7 @@
       loadLessons();
       loadModules();
       loadUnits();
+      loadAgents();
     }
   });
 
@@ -112,9 +119,22 @@
       return;
     }
 
-    if (!newLesson.notion_url.trim() && !newLesson.embed_url.trim()) {
-      console.log("❌ No Notion URL or Embed URL provided");
-      return;
+    // For embedded content, require Notion URL or embed URL
+    if (newLesson.content_type === "embedded") {
+      if (!newLesson.notion_url.trim() && !newLesson.embed_url.trim()) {
+        console.log(
+          "❌ No Notion URL or Embed URL provided for embedded content"
+        );
+        return;
+      }
+    }
+
+    // For agent chat, require agent selection
+    if (newLesson.content_type === "agent_chat") {
+      if (!newLesson.agent_id.trim()) {
+        console.log("❌ No Agent selected for agent chat");
+        return;
+      }
     }
 
     if (!user) {
@@ -122,8 +142,8 @@
       return;
     }
 
-    // Require embed URL validation
-    if (!embedUrlValidated) {
+    // Require embed URL validation only for embedded content
+    if (newLesson.content_type === "embedded" && !embedUrlValidated) {
       console.log("❌ Embed URL not validated. Please click 'Apply' first.");
       return;
     }
@@ -148,11 +168,15 @@
     try {
       const result = await createLesson({
         title: newLesson.title.trim(),
-        notion_url: newLesson.notion_url.trim() || newLesson.embed_url.trim(),
+        notion_url:
+          newLesson.content_type === "agent_chat"
+            ? `agent-chat-${newLesson.agent_id}`
+            : newLesson.notion_url.trim() || newLesson.embed_url.trim(),
         embed_url: newLesson.embed_url || null,
         module_id: newLesson.module_id || null,
         unit_id: newLesson.unit_id || null,
         content_type: newLesson.content_type,
+        agent_id: newLesson.agent_id || null,
         is_published: newLesson.is_published,
       });
 
@@ -166,7 +190,8 @@
           embed_url: "",
           module_id: "",
           unit_id: "",
-          content_type: {},
+          content_type: "embedded",
+          agent_id: "",
           is_published: false,
         };
         embedUrlValidated = false;
@@ -186,7 +211,23 @@
   }
 
   async function handleUpdateLesson() {
-    if (!editLesson.title.trim() || !editLesson.notion_url.trim()) return;
+    if (!editLesson.title.trim()) return;
+
+    if (
+      editLesson.content_type === "embedded" &&
+      !editLesson.notion_url.trim()
+    ) {
+      console.log("❌ No Notion URL provided for embedded content");
+      return;
+    }
+
+    if (
+      editLesson.content_type === "agent_chat" &&
+      !editLesson.agent_id.trim()
+    ) {
+      console.log("❌ No Agent selected for agent chat");
+      return;
+    }
 
     isUpdatingLesson = true;
     try {
@@ -197,6 +238,7 @@
         module_id: editLesson.module_id || null,
         unit_id: editLesson.unit_id || null,
         content_type: editLesson.content_type,
+        agent_id: editLesson.agent_id || null,
         is_published: editLesson.is_published,
       });
 
@@ -228,7 +270,8 @@
       embed_url: lesson.embed_url || "",
       module_id: lesson.module_id || "",
       unit_id: lesson.unit_id || "",
-      content_type: lesson.content_type || {},
+      content_type: lesson.content_type || "embedded",
+      agent_id: lesson.agent_id || "",
       is_published: lesson.is_published,
     };
     editDialogOpen = true;
@@ -513,7 +556,14 @@
             <div class="p-6">
               <div class="flex items-start justify-between mb-4">
                 <div class="flex-1">
-                  <h3 class="font-semibold text-lg mb-1">{lesson.title}</h3>
+                  <div class="flex items-center gap-2 mb-1">
+                    {#if lesson.content_type === "agent_chat"}
+                      <Bot class="w-4 h-4 text-blue-500" />
+                    {:else}
+                      <FileText class="w-4 h-4 text-gray-500" />
+                    {/if}
+                    <h3 class="font-semibold text-lg">{lesson.title}</h3>
+                  </div>
                   <div
                     class="flex items-center gap-2 text-sm text-muted-foreground mb-2"
                   >
@@ -554,22 +604,33 @@
               </div>
 
               <div class="flex items-center gap-2">
-                <a href="/lessons/{lesson.id}" class="flex-1">
-                  <Button variant="outline" class="w-full">
-                    <Eye class="w-4 h-4 mr-2" />
-                    View Lesson
-                  </Button>
-                </a>
-                <a
-                  href={lesson.notion_url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  class="flex-shrink-0"
-                >
-                  <Button variant="ghost" size="sm">
-                    <ExternalLink class="w-4 h-4" />
-                  </Button>
-                </a>
+                {#if lesson.content_type === "agent_chat"}
+                  <a href="/chat?agent={lesson.agent_id}" class="flex-1">
+                    <Button variant="outline" class="w-full">
+                      <MessageSquare class="w-4 h-4 mr-2" />
+                      Start Chat
+                    </Button>
+                  </a>
+                {:else}
+                  <a href="/lessons/{lesson.id}" class="flex-1">
+                    <Button variant="outline" class="w-full">
+                      <Eye class="w-4 h-4 mr-2" />
+                      View Lesson
+                    </Button>
+                  </a>
+                  {#if lesson.notion_url}
+                    <a
+                      href={lesson.notion_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      class="flex-shrink-0"
+                    >
+                      <Button variant="ghost" size="sm">
+                        <ExternalLink class="w-4 h-4" />
+                      </Button>
+                    </a>
+                  {/if}
+                {/if}
               </div>
             </div>
           </Card>
@@ -592,72 +653,105 @@
       />
     </div>
 
-    <div>
-      <label for="notion_url" class="block text-sm font-medium mb-1"
-        >Notion URL</label
-      >
-      <Input
-        id="notion_url"
-        bind:value={newLesson.notion_url}
-        placeholder="Paste Notion URL or iframe snippet here"
-        on:input={handleNotionUrlInput}
-        required
-      />
-      {#if newLesson.notion_url}
-        {#if embedUrlValidated}
+    {#if newLesson.content_type === "embedded"}
+      <div>
+        <label for="notion_url" class="block text-sm font-medium mb-1"
+          >Notion URL</label
+        >
+        <Input
+          id="notion_url"
+          bind:value={newLesson.notion_url}
+          placeholder="Paste Notion URL or iframe snippet here"
+          on:input={handleNotionUrlInput}
+          required
+        />
+        {#if newLesson.notion_url}
+          {#if embedUrlValidated}
+            <p class="text-xs text-green-600 mt-1">
+              ✅ Embed URL is automatically populated
+            </p>
+          {:else}
+            <p class="text-xs text-yellow-600 mt-1">
+              ⚠️ Could not extract embed URL. You may need to use manual embed
+              in the lesson view.
+            </p>
+          {/if}
+          {#if embedUrlError}
+            <p class="text-xs text-red-600 mt-1">{embedUrlError}</p>
+          {/if}
+        {/if}
+        <p class="text-xs text-muted-foreground mt-1">
+          💡 You can paste either a Notion page URL or the iframe snippet from
+          Notion's embed dialog. Make sure your Notion page is set to "Public"
+          in sharing settings for embedding to work.
+        </p>
+      </div>
+
+      <div>
+        <label for="embed_url" class="block text-sm font-medium mb-1"
+          >Embed URL</label
+        >
+        <div class="flex items-center gap-2">
+          <Input
+            id="embed_url"
+            bind:value={newLesson.embed_url}
+            placeholder="https://bigstep-idiomas.notion.site/ebd/your-page-id"
+            on:input={() => {
+              if (newLesson.embed_url) {
+                console.log("🔍 Embed URL field changed:", newLesson.embed_url);
+                // Auto-validate if it looks like an iframe snippet
+                if (newLesson.embed_url.includes("<iframe")) {
+                  validateEmbedUrl();
+                }
+              }
+            }}
+            required
+          />
+          <Button variant="outline" on:click={validateEmbedUrl} size="sm">
+            Apply
+          </Button>
+          <Button variant="outline" on:click={testApplyButton} size="sm">
+            Test Apply
+          </Button>
+        </div>
+        {#if newLesson.embed_url}
           <p class="text-xs text-green-600 mt-1">
-            ✅ Embed URL is automatically populated
-          </p>
-        {:else}
-          <p class="text-xs text-yellow-600 mt-1">
-            ⚠️ Could not extract embed URL. You may need to use manual embed in
-            the lesson view.
+            ✅ Embed URL is automatically populated from Notion URL
           </p>
         {/if}
-        {#if embedUrlError}
-          <p class="text-xs text-red-600 mt-1">{embedUrlError}</p>
-        {/if}
-      {/if}
+      </div>
+    {/if}
+
+    <div>
+      <label for="content_type" class="block text-sm font-medium mb-1"
+        >Content Type</label
+      >
+      <Select bind:value={newLesson.content_type} id="content_type">
+        <option value="embedded">Embedded Content (Notion, etc.)</option>
+        <option value="agent_chat">Agent Chat</option>
+      </Select>
       <p class="text-xs text-muted-foreground mt-1">
-        💡 You can paste either a Notion page URL or the iframe snippet from
-        Notion's embed dialog. Make sure your Notion page is set to "Public" in
-        sharing settings for embedding to work.
+        💡 Choose "Embedded Content" for Notion pages or other embedded content.
+        Choose "Agent Chat" to create an interactive chat session with an AI
+        agent.
       </p>
     </div>
 
-    <div>
-      <label for="embed_url" class="block text-sm font-medium mb-1"
-        >Embed URL</label
-      >
-      <div class="flex items-center gap-2">
-        <Input
-          id="embed_url"
-          bind:value={newLesson.embed_url}
-          placeholder="https://bigstep-idiomas.notion.site/ebd/your-page-id"
-          on:input={() => {
-            if (newLesson.embed_url) {
-              console.log("🔍 Embed URL field changed:", newLesson.embed_url);
-              // Auto-validate if it looks like an iframe snippet
-              if (newLesson.embed_url.includes("<iframe")) {
-                validateEmbedUrl();
-              }
-            }
-          }}
-          required
-        />
-        <Button variant="outline" on:click={validateEmbedUrl} size="sm">
-          Apply
-        </Button>
-        <Button variant="outline" on:click={testApplyButton} size="sm">
-          Test Apply
-        </Button>
-      </div>
-      {#if newLesson.embed_url}
-        <p class="text-xs text-green-600 mt-1">
-          ✅ Embed URL is automatically populated from Notion URL
+    {#if newLesson.content_type === "agent_chat"}
+      <div>
+        <label for="agent" class="block text-sm font-medium mb-1">Agent</label>
+        <Select bind:value={newLesson.agent_id} id="agent">
+          <option value="">Select an Agent</option>
+          {#each agents as agent}
+            <option value={agent.id}>{agent.name}</option>
+          {/each}
+        </Select>
+        <p class="text-xs text-muted-foreground mt-1">
+          💡 Select the AI agent that will handle the chat session for this
+          lesson.
         </p>
-      {/if}
-    </div>
+      </div>
+    {/if}
 
     <div class="grid grid-cols-2 gap-4">
       <div>
@@ -727,37 +821,72 @@
     </div>
 
     <div>
-      <label for="edit-notion_url" class="block text-sm font-medium mb-1"
-        >Notion URL</label
+      <label for="edit-content_type" class="block text-sm font-medium mb-1"
+        >Content Type</label
       >
-      <Input
-        id="edit-notion_url"
-        bind:value={editLesson.notion_url}
-        placeholder="https://notion.so/your-page"
-        on:input={handleEditNotionUrlInput}
-        required
-      />
-      {#if editLesson.notion_url}
-        {#if editEmbedUrlValidated}
-          <p class="text-xs text-green-600 mt-1">
-            ✅ Embed URL is automatically populated
-          </p>
-        {:else}
-          <p class="text-xs text-yellow-600 mt-1">
-            ⚠️ Could not extract embed URL. You may need to use manual embed in
-            the lesson view.
-          </p>
-        {/if}
-        {#if editEmbedUrlError}
-          <p class="text-xs text-red-600 mt-1">{editEmbedUrlError}</p>
-        {/if}
-      {/if}
+      <Select bind:value={editLesson.content_type} id="edit-content_type">
+        <option value="embedded">Embedded Content (Notion, etc.)</option>
+        <option value="agent_chat">Agent Chat</option>
+      </Select>
       <p class="text-xs text-muted-foreground mt-1">
-        💡 You can paste either a Notion page URL or the iframe snippet from
-        Notion's embed dialog. Make sure your Notion page is set to "Public" in
-        sharing settings for embedding to work.
+        💡 Choose "Embedded Content" for Notion pages or other embedded content.
+        Choose "Agent Chat" to create an interactive chat session with an AI
+        agent.
       </p>
     </div>
+
+    {#if editLesson.content_type === "agent_chat"}
+      <div>
+        <label for="edit-agent" class="block text-sm font-medium mb-1"
+          >Agent</label
+        >
+        <Select bind:value={editLesson.agent_id} id="edit-agent">
+          <option value="">Select an Agent</option>
+          {#each agents as agent}
+            <option value={agent.id}>{agent.name}</option>
+          {/each}
+        </Select>
+        <p class="text-xs text-muted-foreground mt-1">
+          💡 Select the AI agent that will handle the chat session for this
+          lesson.
+        </p>
+      </div>
+    {/if}
+
+    {#if editLesson.content_type === "embedded"}
+      <div>
+        <label for="edit-notion_url" class="block text-sm font-medium mb-1"
+          >Notion URL</label
+        >
+        <Input
+          id="edit-notion_url"
+          bind:value={editLesson.notion_url}
+          placeholder="https://notion.so/your-page"
+          on:input={handleEditNotionUrlInput}
+          required
+        />
+        {#if editLesson.notion_url}
+          {#if editEmbedUrlValidated}
+            <p class="text-xs text-green-600 mt-1">
+              ✅ Embed URL is automatically populated
+            </p>
+          {:else}
+            <p class="text-xs text-yellow-600 mt-1">
+              ⚠️ Could not extract embed URL. You may need to use manual embed
+              in the lesson view.
+            </p>
+          {/if}
+          {#if editEmbedUrlError}
+            <p class="text-xs text-red-600 mt-1">{editEmbedUrlError}</p>
+          {/if}
+        {/if}
+        <p class="text-xs text-muted-foreground mt-1">
+          💡 You can paste either a Notion page URL or the iframe snippet from
+          Notion's embed dialog. Make sure your Notion page is set to "Public"
+          in sharing settings for embedding to work.
+        </p>
+      </div>
+    {/if}
 
     <div>
       <label for="edit-embed_url" class="block text-sm font-medium mb-1"

@@ -134,7 +134,7 @@
     <div class="w-full max-w-md space-y-8">
       <!-- Logo and Welcome -->
       <div class="text-center">
-        <div class="text-4xl font-bold text-red-600 mb-2">BigStepLabs</div>
+        <img src="/images/bigstep-logo.png" alt="BigStepLabs" class="h-12 mx-auto mb-4" />
         <h2 class="text-2xl font-bold text-foreground">Welcome back</h2>
         <p class="text-muted-foreground mt-2">
           Sign in to your BigStepLabs account

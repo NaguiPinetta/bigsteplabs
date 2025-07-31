@@ -99,10 +99,27 @@
 
   // Auto-scroll messages
   afterUpdate(() => {
-    if (messagesContainer) {
-      messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    if (messagesContainer && messages.length > 0) {
+      // Use smooth scrolling for better UX
+      messagesContainer.scrollTo({
+        top: messagesContainer.scrollHeight,
+        behavior: "smooth",
+      });
     }
   });
+
+  // Additional auto-scroll trigger when messages change
+  $: {
+    if (messagesContainer && messages.length > 0) {
+      // Use setTimeout to ensure DOM is updated
+      setTimeout(() => {
+        messagesContainer.scrollTo({
+          top: messagesContainer.scrollHeight,
+          behavior: "smooth",
+        });
+      }, 100);
+    }
+  }
 
   async function handleCreateSession(agentId: string) {
     if (!user || !agentId) return;
@@ -117,6 +134,13 @@
 
     const content = messageInput.trim();
     const audioUrl = currentAudioUrl; // Store reference before clearing
+
+    console.log(
+      "🔍 handleSendMessage - currentAudioUrl before clearing:",
+      currentAudioUrl
+    );
+    console.log("🔍 handleSendMessage - stored audioUrl:", audioUrl);
+
     messageInput = "";
     currentAudioUrl = null; // Clear the audio URL
 
@@ -425,6 +449,7 @@
           console.log("🔍 Current audio URL state:", currentAudioUrl);
         } else {
           console.warn("⚠️ No audio URL returned from transcription API");
+          console.log("🔍 Full transcription result:", result);
         }
       } else {
         recordingError = "No speech detected. Please try again.";

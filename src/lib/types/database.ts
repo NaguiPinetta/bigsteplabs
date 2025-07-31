@@ -526,7 +526,9 @@ export interface Database {
           embed_url?: string | null;
           module_id: string | null;
           unit_id: string | null;
-          content_type: Json;
+          agent_id: string | null;
+          content_type: string;
+          order_index: number;
           is_published: boolean;
           created_at: string;
           updated_at: string;
@@ -538,7 +540,9 @@ export interface Database {
           embed_url?: string | null;
           module_id?: string | null;
           unit_id?: string | null;
-          content_type?: Json;
+          agent_id?: string | null;
+          content_type?: string;
+          order_index?: number;
           is_published?: boolean;
           created_at?: string;
           updated_at?: string;
@@ -550,7 +554,9 @@ export interface Database {
           embed_url?: string | null;
           module_id?: string | null;
           unit_id?: string | null;
-          content_type?: Json;
+          agent_id?: string | null;
+          content_type?: string;
+          order_index?: number;
           is_published?: boolean;
           created_at?: string;
           updated_at?: string;
@@ -648,6 +654,12 @@ export interface LessonWithRelations extends Lesson {
   unit?: {
     id: string;
     title: string;
+  };
+  agent?: {
+    id: string;
+    name: string;
+    description: string | null;
+    is_active: boolean;
   };
 }
 

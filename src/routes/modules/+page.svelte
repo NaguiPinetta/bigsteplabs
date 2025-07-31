@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from "svelte";
+  import { onMount, afterUpdate } from "svelte";
   import { authStore, canManageContent } from "$lib/stores/auth";
   import {
     modulesStore,
@@ -15,8 +15,18 @@
     getModuleStats,
     duplicateModule,
   } from "$lib/stores/modules";
+  import { reorderUnits } from "$lib/stores/units";
+  import { reorderLessons } from "$lib/stores/lessons";
   import { supabase } from "$lib/supabase";
   import { toastStore } from "$lib/stores/toast";
+  import { agentsStore, loadAgents } from "$lib/stores/agents";
+  import {
+    chatStore,
+    sendMessage,
+    createChatSession,
+    setCurrentSession,
+  } from "$lib/stores/chat";
+  import AudioPlayer from "$lib/components/ui/audio-player.svelte";
 
   import Button from "$lib/components/ui/button.svelte";
   import Card from "$lib/components/ui/card.svelte";
@@ -25,6 +35,7 @@
   import Textarea from "$lib/components/ui/textarea.svelte";
   import CrudTips from "$lib/components/ui/crud-tips.svelte";
   import Collapsible from "$lib/components/ui/collapsible.svelte";
+  import DraggableList from "$lib/components/ui/draggable-list.svelte";
   import {
     BookOpen,
     Plus,
@@ -48,6 +59,12 @@
     Play,
     Layers,
     ExternalLink,
+    MessageSquare,
+    Bot,
+    Mic,
+    MicOff,
+    Square,
+    Send,
   } from "lucide-svelte";
 
   // Dialog states
@@ -85,15 +102,81 @@
   let expandedUnits: Record<string, boolean> = {};
   let expandedLessons: Record<string, boolean> = {};
 
+  // Inline chat states
+  let activeChatSessions: Record<string, string> = {}; // lessonId -> sessionId
+  let chatMessages: Record<string, any[]> = {};
+  let sendingMessage: Record<string, boolean> = {};
+  let newMessageText: Record<string, string> = {};
+
+  // Voice recording states
+  let isRecording: Record<string, boolean> = {};
+  let mediaRecorder: Record<string, MediaRecorder | null> = {};
+  let audioChunks: Record<string, Blob[]> = {};
+  let isTranscribing: Record<string, boolean> = {};
+  let recordingError: Record<string, string> = {};
+  let currentAudioUrl: Record<string, string | null> = {};
+
+  // Auto-scroll containers for inline chat
+  let inlineChatContainers: Record<string, HTMLElement> = {};
+
   // Auth and store state
   $: user = $authStore.user;
   $: canManage = $canManageContent;
   $: state = $modulesStore;
   $: modules = state.modules;
   $: selectedModule = state.selectedModule;
+  $: agents = $agentsStore.agents;
+
+  // Sync chat messages from global store to local arrays
+  $: {
+    const currentSession = $chatStore.currentSession;
+    const messages = $chatStore.messages;
+
+    // Find which lesson this session belongs to
+    for (const lessonId in activeChatSessions) {
+      if (activeChatSessions[lessonId] === currentSession?.id) {
+        chatMessages[lessonId] = messages;
+        break;
+      }
+    }
+  }
+
+  // Auto-scroll to latest message in inline chats
+  afterUpdate(() => {
+    for (const lessonId in inlineChatContainers) {
+      const container = inlineChatContainers[lessonId];
+      if (container && chatMessages[lessonId] && chatMessages[lessonId].length > 0) {
+        // Use smooth scrolling for better UX
+        container.scrollTo({
+          top: container.scrollHeight,
+          behavior: 'smooth'
+        });
+      }
+    }
+  });
+
+  // Additional auto-scroll trigger when messages change
+  $: {
+    // Trigger auto-scroll when any chat messages change
+    for (const lessonId in chatMessages) {
+      if (chatMessages[lessonId] && chatMessages[lessonId].length > 0) {
+        const container = inlineChatContainers[lessonId];
+        if (container) {
+          // Use setTimeout to ensure DOM is updated
+          setTimeout(() => {
+            container.scrollTo({
+              top: container.scrollHeight,
+              behavior: 'smooth'
+            });
+          }, 100);
+        }
+      }
+    }
+  }
 
   onMount(async () => {
     await loadModules();
+    await loadAgents();
   });
 
   // Load units for a module
@@ -171,6 +254,273 @@
   // View lesson content (now expands inline)
   function viewLesson(lesson: any) {
     toggleLesson(lesson.id);
+  }
+
+  // Start agent chat
+  async function startAgentChat(lesson: any) {
+    if (!lesson.agent_id) {
+      toastStore.error("No agent configured for this chat lesson");
+      return;
+    }
+
+    if (!user) {
+      toastStore.error("You must be logged in to start a chat");
+      return;
+    }
+
+    try {
+      // Create a new chat session for this lesson
+      const result = await createChatSession(lesson.agent_id, user.id);
+
+      if (result.data) {
+        // Store the session ID for this lesson
+        activeChatSessions[lesson.id] = result.data.id;
+        chatMessages[lesson.id] = [];
+        newMessageText[lesson.id] = "";
+        sendingMessage[lesson.id] = false;
+        isRecording[lesson.id] = false; // Initialize recording states
+        mediaRecorder[lesson.id] = null;
+        audioChunks[lesson.id] = [];
+        isTranscribing[lesson.id] = false;
+        recordingError[lesson.id] = "";
+        currentAudioUrl[lesson.id] = null;
+
+        // Set as current session in chat store
+        const sessionResult = await setCurrentSession(result.data);
+
+        // Load existing messages from the session into local array
+        if (sessionResult.data) {
+          chatMessages[lesson.id] = sessionResult.data;
+        }
+
+        // Expand the lesson card to show the chat interface
+        expandedLessons[lesson.id] = true;
+        expandedLessons = { ...expandedLessons }; // Trigger reactivity
+
+        toastStore.success("Chat session started");
+      } else {
+        toastStore.error("Failed to start chat session");
+      }
+    } catch (error) {
+      console.error("Error starting chat session:", error);
+      toastStore.error("Failed to start chat session");
+    }
+  }
+
+  // Send message in inline chat
+  async function sendInlineMessage(lessonId: string) {
+    const messageText = newMessageText[lessonId]?.trim();
+    const sessionId = activeChatSessions[lessonId];
+    const audioUrl = currentAudioUrl[lessonId];
+
+    if (!messageText || !sessionId) return;
+
+    sendingMessage[lessonId] = true;
+
+    try {
+      const result = await sendMessage(
+        messageText,
+        sessionId,
+        audioUrl || undefined
+      );
+
+      if (result.data) {
+        // The sendMessage function already updates the global chat store
+        // We just need to sync the local messages from the global store
+        const currentState = $chatStore;
+        if (currentState.currentSession?.id === activeChatSessions[lessonId]) {
+          chatMessages[lessonId] = [...currentState.messages];
+        }
+
+        // Clear input and audio
+        newMessageText[lessonId] = "";
+        currentAudioUrl[lessonId] = null;
+      } else {
+        toastStore.error(result.error || "Failed to send message");
+      }
+    } catch (error) {
+      console.error("Error sending message:", error);
+      toastStore.error("Failed to send message");
+    } finally {
+      sendingMessage[lessonId] = false;
+    }
+  }
+
+  // Voice recording functions
+  async function startRecording(lessonId: string) {
+    try {
+      recordingError[lessonId] = "";
+      console.log("🎙️ Starting audio recording for lesson:", lessonId);
+
+      // Get microphone-only stream with strict constraints
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+          sampleRate: 16000,
+          channelCount: 1,
+        },
+        video: false,
+      });
+
+      // Check available MIME types and use the best one
+      const mimeTypes = [
+        "audio/webm;codecs=opus",
+        "audio/webm",
+        "audio/mp4",
+        "audio/wav",
+      ];
+
+      let selectedMimeType = null;
+      for (const mimeType of mimeTypes) {
+        if (MediaRecorder.isTypeSupported(mimeType)) {
+          selectedMimeType = mimeType;
+          console.log(`✅ Using MIME type: ${mimeType}`);
+          break;
+        }
+      }
+
+      if (!selectedMimeType) {
+        throw new Error("No supported audio MIME type found");
+      }
+
+      mediaRecorder[lessonId] = new MediaRecorder(stream, {
+        mimeType: selectedMimeType,
+        audioBitsPerSecond: 128000,
+      });
+      audioChunks[lessonId] = [];
+
+      mediaRecorder[lessonId]!.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          audioChunks[lessonId].push(event.data);
+          console.log("📦 Audio chunk received:", event.data.size, "bytes");
+        }
+      };
+
+      mediaRecorder[lessonId]!.onstop = async () => {
+        console.log("⏹️ Recording stopped, processing audio...");
+        await handleRecordingComplete(lessonId);
+        stream.getTracks().forEach((track) => track.stop());
+      };
+
+      mediaRecorder[lessonId]!.start(1000);
+      isRecording[lessonId] = true;
+      console.log("🎙️ Recording started successfully");
+    } catch (error) {
+      console.error("❌ Error starting recording:", error);
+      recordingError[lessonId] =
+        "Failed to access microphone. Please check permissions.";
+    }
+  }
+
+  function stopRecording(lessonId: string) {
+    if (mediaRecorder[lessonId] && isRecording[lessonId]) {
+      mediaRecorder[lessonId]!.stop();
+      isRecording[lessonId] = false;
+      console.log("⏹️ Recording stopped");
+    }
+  }
+
+  async function handleRecordingComplete(lessonId: string) {
+    if (audioChunks[lessonId].length === 0 || !activeChatSessions[lessonId])
+      return;
+
+    isTranscribing[lessonId] = true;
+    recordingError[lessonId] = "";
+
+    try {
+      console.log("🔧 Processing audio chunks...");
+      console.log("📦 Total audio chunks:", audioChunks[lessonId].length);
+
+      const audioBlob = new Blob(audioChunks[lessonId], {
+        type: "audio/webm;codecs=opus",
+      });
+      console.log("🎵 Created audio blob:", audioBlob.size, "bytes");
+
+      if (audioBlob.size < 1000) {
+        throw new Error("Audio recording too small - may not contain speech");
+      }
+
+      // Test the audio blob to ensure it's valid
+      const testAudio = new Audio();
+      const testUrl = URL.createObjectURL(audioBlob);
+      testAudio.src = testUrl;
+
+      await new Promise((resolve, reject) => {
+        testAudio.onloadedmetadata = resolve;
+        testAudio.onerror = () => reject(new Error("Audio blob is invalid"));
+        setTimeout(() => reject(new Error("Audio loading timeout")), 5000);
+      });
+
+      console.log(
+        "✅ Audio blob validation passed - duration:",
+        testAudio.duration,
+        "seconds"
+      );
+      URL.revokeObjectURL(testUrl);
+
+      // Send to transcription API
+      const formData = new FormData();
+      formData.append("file", audioBlob, "recording.webm");
+      formData.append("sessionId", activeChatSessions[lessonId]);
+
+      // Get the agent ID from the lesson data
+      let agentId = "";
+      for (const unitId in lessonsData) {
+        const lessons = lessonsData[unitId] || [];
+        const lesson = lessons.find((l) => l.id === lessonId);
+        if (lesson && lesson.agent_id) {
+          agentId = lesson.agent_id;
+          break;
+        }
+      }
+      formData.append("agentId", agentId);
+
+      console.log("📤 Sending audio to transcription API...");
+
+      const response = await fetch("/api/whisper-transcribe", {
+        method: "POST",
+        body: formData,
+      });
+
+      console.log("📡 Transcription API response status:", response.status);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error("❌ Transcription API error:", errorText);
+        throw new Error(
+          `Transcription failed: ${response.statusText} - ${errorText}`
+        );
+      }
+
+      const result = await response.json();
+      console.log("📋 Transcription API result:", result);
+
+      if (result.text && result.text.trim()) {
+        // Insert transcribed text into the input
+        newMessageText[lessonId] = result.text.trim();
+        console.log("✅ Transcription completed:", result.text);
+
+        // Store audio URL for later use
+        if (result.audioUrl) {
+          currentAudioUrl[lessonId] = result.audioUrl;
+          console.log("✅ Audio stored and URL captured:", result.audioUrl);
+        } else {
+          console.warn("⚠️ No audio URL returned from transcription API");
+        }
+      } else {
+        recordingError[lessonId] = "No speech detected. Please try again.";
+        console.warn("⚠️ No speech detected in audio");
+      }
+    } catch (error) {
+      console.error("❌ Transcription error:", error);
+      recordingError[lessonId] =
+        "Failed to transcribe audio. Please try again.";
+    } finally {
+      isTranscribing[lessonId] = false;
+      audioChunks[lessonId] = [];
+    }
   }
 
   // Module management functions
@@ -334,6 +684,65 @@
       }
     });
   }
+
+  // Reordering functions
+  async function handleReorderModules(event: CustomEvent) {
+    const { items } = event.detail;
+    const moduleIds = items.map((module: any) => module.id);
+
+    try {
+      const success = await reorderModules(moduleIds);
+      if (success) {
+        toastStore.success("Modules reordered successfully");
+        await loadModules(true); // Refresh data
+      } else {
+        toastStore.error("Failed to reorder modules");
+      }
+    } catch (error) {
+      console.error("Error reordering modules:", error);
+      toastStore.error("Failed to reorder modules");
+    }
+  }
+
+  async function handleReorderUnits(event: CustomEvent, moduleId: string) {
+    const { items } = event.detail;
+    const unitIds = items.map((unit: any) => unit.id);
+
+    try {
+      const success = await reorderUnits(unitIds);
+      if (success) {
+        toastStore.success("Units reordered successfully");
+        // Refresh units for this module
+        delete unitsData[moduleId]; // Clear cached data
+        await loadUnits(moduleId);
+      } else {
+        toastStore.error("Failed to reorder units");
+      }
+    } catch (error) {
+      console.error("Error reordering units:", error);
+      toastStore.error("Failed to reorder units");
+    }
+  }
+
+  async function handleReorderLessons(event: CustomEvent, unitId: string) {
+    const { items } = event.detail;
+    const lessonIds = items.map((lesson: any) => lesson.id);
+
+    try {
+      const success = await reorderLessons(lessonIds);
+      if (success) {
+        toastStore.success("Lessons reordered successfully");
+        // Refresh lessons for this unit
+        delete lessonsData[unitId]; // Clear cached data
+        await loadLessons(unitId);
+      } else {
+        toastStore.error("Failed to reorder lessons");
+      }
+    } catch (error) {
+      console.error("Error reordering lessons:", error);
+      toastStore.error("Failed to reorder lessons");
+    }
+  }
 </script>
 
 <svelte:head>
@@ -388,14 +797,32 @@
     </Card>
   {:else}
     <!-- Modules List -->
-    <div class="space-y-4">
-      {#each modules as module (module.id)}
+    <DraggableList
+      items={modules}
+      disabled={!canManage}
+      on:reorder={handleReorderModules}
+      classList="space-y-4"
+    >
+      <svelte:fragment
+        let:item={module}
+        let:index
+        let:draggedIndex
+        let:dropTargetIndex
+      >
         <!-- Module Card -->
         <Card class="overflow-hidden">
           <div class="p-6">
             <!-- Module Header -->
             <div class="flex items-start justify-between mb-4">
               <div class="flex items-start gap-4 flex-1">
+                <!-- Drag Handle -->
+                {#if canManage}
+                  <div
+                    class="cursor-grab active:cursor-grabbing text-muted-foreground hover:text-foreground"
+                  >
+                    <GripVertical class="w-4 h-4" />
+                  </div>
+                {/if}
                 <!-- Module Icon -->
                 <div
                   class="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center"
@@ -685,11 +1112,20 @@
                                       >
                                         <!-- Lesson Icon -->
                                         <div
-                                          class="w-6 h-6 bg-green-500/10 rounded flex items-center justify-center"
+                                          class="w-6 h-6 {lesson.content_type ===
+                                          'agent_chat'
+                                            ? 'bg-blue-500/10'
+                                            : 'bg-green-500/10'} rounded flex items-center justify-center"
                                         >
-                                          <FileText
-                                            class="w-3 h-3 text-green-500"
-                                          />
+                                          {#if lesson.content_type === "agent_chat"}
+                                            <Bot
+                                              class="w-3 h-3 text-blue-500"
+                                            />
+                                          {:else}
+                                            <FileText
+                                              class="w-3 h-3 text-green-500"
+                                            />
+                                          {/if}
                                         </div>
 
                                         <!-- Lesson Info -->
@@ -727,12 +1163,22 @@
                                         <Button
                                           variant="outline"
                                           size="sm"
-                                          on:click={() => viewLesson(lesson)}
+                                          on:click={() =>
+                                            lesson.content_type === "agent_chat"
+                                              ? activeChatSessions[lesson.id]
+                                                ? toggleLesson(lesson.id)
+                                                : startAgentChat(lesson)
+                                              : viewLesson(lesson)}
                                           class="text-xs"
                                         >
                                           {#if expandedLessons[lesson.id]}
                                             <ChevronDown class="w-3 h-3 mr-1" />
                                             Hide Content
+                                          {:else if lesson.content_type === "agent_chat"}
+                                            <MessageSquare
+                                              class="w-3 h-3 mr-1"
+                                            />
+                                            Start Chat
                                           {:else}
                                             <Play class="w-3 h-3 mr-1" />
                                             View Lesson
@@ -764,7 +1210,317 @@
                                       <div
                                         class="mt-3 pt-3 border-t border-border"
                                       >
-                                        {#if lesson.embed_url}
+                                        {#if lesson.content_type === "agent_chat"}
+                                          {#if activeChatSessions[lesson.id]}
+                                            <!-- Inline Chat Interface -->
+                                            <div
+                                              class="bg-background rounded border h-[500px] flex flex-col"
+                                            >
+                                              <!-- Chat Header -->
+                                              <div
+                                                class="p-3 border-b border-border bg-muted/50"
+                                              >
+                                                <div
+                                                  class="flex items-center justify-between"
+                                                >
+                                                  <div
+                                                    class="flex items-center gap-2"
+                                                  >
+                                                    <Bot
+                                                      class="w-4 h-4 text-blue-500"
+                                                    />
+                                                    <span
+                                                      class="text-sm font-medium"
+                                                      >Chat Session</span
+                                                    >
+                                                  </div>
+                                                  <Button
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    on:click={() => {
+                                                      delete activeChatSessions[
+                                                        lesson.id
+                                                      ];
+                                                      delete chatMessages[
+                                                        lesson.id
+                                                      ];
+                                                      delete newMessageText[
+                                                        lesson.id
+                                                      ];
+                                                      delete sendingMessage[
+                                                        lesson.id
+                                                      ];
+                                                      delete isRecording[
+                                                        lesson.id
+                                                      ];
+                                                      delete mediaRecorder[
+                                                        lesson.id
+                                                      ];
+                                                      delete audioChunks[
+                                                        lesson.id
+                                                      ];
+                                                      delete isTranscribing[
+                                                        lesson.id
+                                                      ];
+                                                      delete recordingError[
+                                                        lesson.id
+                                                      ];
+                                                      delete currentAudioUrl[
+                                                        lesson.id
+                                                      ];
+                                                    }}
+                                                  >
+                                                    End Chat
+                                                  </Button>
+                                                </div>
+                                              </div>
+
+                                              <!-- Messages Area -->
+                                              <div
+                                                bind:this={inlineChatContainers[lesson.id]}
+                                                class="flex-1 overflow-y-auto p-3 space-y-3"
+                                              >
+                                                {#if chatMessages[lesson.id] && chatMessages[lesson.id].length > 0}
+                                                  {#each chatMessages[lesson.id] as message}
+                                                    <div
+                                                      class="flex {message.role ===
+                                                      'user'
+                                                        ? 'justify-end'
+                                                        : 'justify-start'}"
+                                                    >
+                                                      <div
+                                                        class="max-w-xs lg:max-w-md px-3 py-2 rounded-lg {message.role ===
+                                                        'user'
+                                                          ? 'bg-blue-500 text-white'
+                                                          : 'bg-muted'}"
+                                                      >
+                                                        <p
+                                                          class="text-sm whitespace-pre-wrap"
+                                                        >
+                                                          {message.content}
+                                                        </p>
+
+                                                        <!-- Audio Playback for Voice Messages -->
+                                                        {#if message.metadata?.audio_url}
+                                                          <div class="mt-2">
+                                                            <AudioPlayer
+                                                              src={message
+                                                                .metadata
+                                                                .audio_url}
+                                                              title={message.content}
+                                                            />
+                                                          </div>
+                                                        {/if}
+
+                                                        <p
+                                                          class="text-xs mt-1 opacity-70"
+                                                        >
+                                                          {new Date(
+                                                            message.created_at
+                                                          ).toLocaleTimeString()}
+                                                        </p>
+                                                      </div>
+                                                    </div>
+                                                  {/each}
+                                                {:else}
+                                                  <div
+                                                    class="text-center text-muted-foreground py-8"
+                                                  >
+                                                    <Bot
+                                                      class="w-8 h-8 mx-auto mb-2 opacity-50"
+                                                    />
+                                                    <p class="text-sm">
+                                                      Start chatting with the AI
+                                                      agent
+                                                    </p>
+                                                  </div>
+                                                {/if}
+
+                                                {#if sendingMessage[lesson.id]}
+                                                  <div
+                                                    class="flex justify-start"
+                                                  >
+                                                    <div
+                                                      class="bg-muted px-3 py-2 rounded-lg"
+                                                    >
+                                                      <div
+                                                        class="flex items-center gap-2"
+                                                      >
+                                                        <div
+                                                          class="w-2 h-2 bg-muted-foreground rounded-full animate-bounce"
+                                                        ></div>
+                                                        <div
+                                                          class="w-2 h-2 bg-muted-foreground rounded-full animate-bounce"
+                                                          style="animation-delay: 0.1s"
+                                                        ></div>
+                                                        <div
+                                                          class="w-2 h-2 bg-muted-foreground rounded-full animate-bounce"
+                                                          style="animation-delay: 0.2s"
+                                                        ></div>
+                                                      </div>
+                                                    </div>
+                                                  </div>
+                                                {/if}
+                                              </div>
+
+                                              <!-- Message Input -->
+                                              <div
+                                                class="p-3 border-t border-border"
+                                              >
+                                                <div class="flex gap-2">
+                                                  <textarea
+                                                    bind:value={
+                                                      newMessageText[lesson.id]
+                                                    }
+                                                    placeholder="Type your message..."
+                                                    disabled={sendingMessage[
+                                                      lesson.id
+                                                    ] || isRecording[lesson.id]}
+                                                    on:keydown={(e) => {
+                                                      if (
+                                                        e.key === "Enter" &&
+                                                        !e.shiftKey
+                                                      ) {
+                                                        e.preventDefault();
+                                                        sendInlineMessage(
+                                                          lesson.id
+                                                        );
+                                                      }
+                                                    }}
+                                                    class="flex-1 min-h-[40px] max-h-24 resize-none border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 rounded-md"
+                                                    rows="1"
+                                                  ></textarea>
+
+                                                  <!-- Voice Recording Button -->
+                                                  <Button
+                                                    variant={isRecording[
+                                                      lesson.id
+                                                    ]
+                                                      ? "destructive"
+                                                      : "outline"}
+                                                    size="sm"
+                                                    on:click={isRecording[
+                                                      lesson.id
+                                                    ]
+                                                      ? () =>
+                                                          stopRecording(
+                                                            lesson.id
+                                                          )
+                                                      : () =>
+                                                          startRecording(
+                                                            lesson.id
+                                                          )}
+                                                    disabled={sendingMessage[
+                                                      lesson.id
+                                                    ] ||
+                                                      isTranscribing[lesson.id]}
+                                                    class="self-end"
+                                                  >
+                                                    {#if isTranscribing[lesson.id]}
+                                                      <Loader2
+                                                        class="w-4 h-4 animate-spin"
+                                                      />
+                                                    {:else if isRecording[lesson.id]}
+                                                      <Square class="w-4 h-4" />
+                                                    {:else}
+                                                      <Mic class="w-4 h-4" />
+                                                    {/if}
+                                                  </Button>
+
+                                                  <Button
+                                                    on:click={() =>
+                                                      sendInlineMessage(
+                                                        lesson.id
+                                                      )}
+                                                    disabled={!newMessageText[
+                                                      lesson.id
+                                                    ]?.trim() ||
+                                                      sendingMessage[
+                                                        lesson.id
+                                                      ] ||
+                                                      isRecording[lesson.id]}
+                                                    size="sm"
+                                                    class="self-end"
+                                                  >
+                                                    {#if sendingMessage[lesson.id]}
+                                                      <Loader2
+                                                        class="w-4 h-4 animate-spin"
+                                                      />
+                                                    {:else}
+                                                      <Send class="w-4 h-4" />
+                                                    {/if}
+                                                  </Button>
+                                                </div>
+
+                                                <!-- Recording Status and Error Messages -->
+                                                {#if isRecording[lesson.id]}
+                                                  <div
+                                                    class="flex items-center space-x-2 mt-2 text-sm text-muted-foreground"
+                                                  >
+                                                    <div
+                                                      class="w-2 h-2 bg-red-500 rounded-full animate-pulse"
+                                                    ></div>
+                                                    <span
+                                                      >Recording... Click the
+                                                      square button to stop</span
+                                                    >
+                                                  </div>
+                                                {/if}
+
+                                                {#if isTranscribing[lesson.id]}
+                                                  <div
+                                                    class="flex items-center space-x-2 mt-2 text-sm text-muted-foreground"
+                                                  >
+                                                    <Loader2
+                                                      class="w-4 h-4 animate-spin"
+                                                    />
+                                                    <span
+                                                      >Transcribing audio...</span
+                                                    >
+                                                  </div>
+                                                {/if}
+
+                                                {#if recordingError[lesson.id]}
+                                                  <div
+                                                    class="mt-2 text-sm text-destructive"
+                                                  >
+                                                    {recordingError[lesson.id]}
+                                                  </div>
+                                                {/if}
+                                              </div>
+                                            </div>
+                                          {:else}
+                                            <!-- Start Chat Button -->
+                                            <div
+                                              class="text-center p-4 bg-muted rounded"
+                                            >
+                                              <Bot
+                                                class="w-8 h-8 text-blue-500 mx-auto mb-2"
+                                              />
+                                              <h6 class="font-medium mb-1">
+                                                Agent Chat Lesson
+                                              </h6>
+                                              <p
+                                                class="text-sm text-muted-foreground mb-3"
+                                              >
+                                                This lesson is configured as an
+                                                interactive chat session with an
+                                                AI agent.
+                                              </p>
+                                              <Button
+                                                variant="outline"
+                                                size="sm"
+                                                on:click={() =>
+                                                  startAgentChat(lesson)}
+                                              >
+                                                <MessageSquare
+                                                  class="w-3 h-3 mr-1"
+                                                />
+                                                Start Chat Session
+                                              </Button>
+                                            </div>
+                                          {/if}
+                                        {:else if lesson.embed_url}
                                           <div
                                             class="bg-background rounded border"
                                           >
@@ -843,8 +1599,8 @@
             </Collapsible>
           </div>
         </Card>
-      {/each}
-    </div>
+      </svelte:fragment>
+    </DraggableList>
   {/if}
 
   <!-- Module Management Tips -->

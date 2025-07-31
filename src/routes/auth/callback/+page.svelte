@@ -113,39 +113,39 @@
   <title>Authentication - BigStepLabs</title>
 </svelte:head>
 
-<div class="min-h-screen flex items-center justify-center bg-gray-50">
+<div class="min-h-screen flex items-center justify-center bg-background">
   <div class="max-w-md w-full space-y-8 p-6">
     <Card class="p-8">
       <div class="text-center">
         {#if loading}
           <div class="flex justify-center mb-4">
-            <Loader2 class="h-12 w-12 text-blue-600 animate-spin" />
+            <Loader2 class="h-12 w-12 text-primary animate-spin" />
           </div>
-          <h2 class="text-xl font-semibold text-gray-900 mb-2">
+          <h2 class="text-xl font-semibold text-foreground mb-2">
             {status}
           </h2>
-          <p class="text-gray-600">
+          <p class="text-muted-foreground">
             Please wait while we complete your authentication...
           </p>
         {:else if success}
           <div class="flex justify-center mb-4">
             <CheckCircle class="h-12 w-12 text-green-600" />
           </div>
-          <h2 class="text-xl font-semibold text-gray-900 mb-2">
+          <h2 class="text-xl font-semibold text-foreground mb-2">
             Welcome to BigStepLabs!
           </h2>
-          <p class="text-gray-600">
+          <p class="text-muted-foreground">
             You have been successfully authenticated. Redirecting to
             dashboard...
           </p>
         {:else}
           <div class="flex justify-center mb-4">
-            <AlertCircle class="h-12 w-12 text-red-600" />
+            <AlertCircle class="h-12 w-12 text-destructive" />
           </div>
-          <h2 class="text-xl font-semibold text-gray-900 mb-2">
+          <h2 class="text-xl font-semibold text-foreground mb-2">
             Authentication Failed
           </h2>
-          <p class="text-gray-600 mb-6">
+          <p class="text-muted-foreground mb-6">
             {getErrorMessage()}
           </p>
 
@@ -164,10 +164,10 @@
     {#if error && error.details}
       <Card class="p-4">
         <details class="text-sm">
-          <summary class="cursor-pointer font-medium text-gray-700">
+          <summary class="cursor-pointer font-medium text-foreground">
             Technical Details
           </summary>
-          <pre class="mt-2 bg-gray-100 p-2 rounded overflow-auto text-xs">
+          <pre class="mt-2 bg-muted p-2 rounded overflow-auto text-xs text-muted-foreground">
 {JSON.stringify(error.details, null, 2)}
           </pre>
         </details>
