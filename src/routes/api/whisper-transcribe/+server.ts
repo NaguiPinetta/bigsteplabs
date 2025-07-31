@@ -227,31 +227,70 @@ export const POST: RequestHandler = async ({ request }) => {
 
     // Upload audio file to Supabase Storage
     let audioUrl = null;
+    console.log("🎵 Starting audio upload process...");
+    console.log("🎵 SessionId:", sessionId);
+    console.log("🎵 File info:", {
+      name: file.name,
+      size: buffer.length,
+      type: file.type,
+    });
+
     if (sessionId) {
       try {
-        const fileName = `${sessionId}/${Date.now()}_${file.name}`;
+        const fileName = `${sessionId}/${Date.now()}_audio.webm`;
+        console.log("🎵 Attempting to upload file:", fileName);
+
+        // Check if bucket exists first
+        const { data: buckets, error: bucketsError } =
+          await supabaseAdmin.storage.listBuckets();
+        if (bucketsError) {
+          console.error("❌ Error listing buckets:", bucketsError);
+        } else {
+          console.log(
+            "📦 Available buckets:",
+            buckets?.map((b) => b.name) || []
+          );
+        }
 
         const { data: uploadData, error: uploadError } =
           await supabaseAdmin.storage
             .from("audio-messages")
             .upload(fileName, buffer, {
-              contentType: file.type,
+              contentType: "audio/webm",
               upsert: false,
             });
 
         if (uploadError) {
           console.error("❌ Storage upload error:", uploadError);
+          console.error(
+            "❌ Upload error details:",
+            JSON.stringify(uploadError, null, 2)
+          );
+          console.error("❌ Upload error message:", uploadError.message);
+          console.error("❌ Upload error statusCode:", uploadError.statusCode);
         } else {
+          console.log("✅ Upload successful, getting public URL...");
+          console.log("✅ Upload data:", uploadData);
+
           const { data: urlData } = supabaseAdmin.storage
             .from("audio-messages")
             .getPublicUrl(fileName);
 
           audioUrl = urlData.publicUrl;
           console.log("✅ Audio file uploaded:", audioUrl);
+          console.log("✅ URL data:", urlData);
         }
       } catch (storageError) {
         console.error("❌ Storage error:", storageError);
+        console.error(
+          "❌ Storage error details:",
+          JSON.stringify(storageError, null, 2)
+        );
+        console.error("❌ Storage error name:", storageError.name);
+        console.error("❌ Storage error message:", storageError.message);
       }
+    } else {
+      console.warn("⚠️ No sessionId provided, skipping audio upload");
     }
 
     return new Response(

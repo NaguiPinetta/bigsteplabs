@@ -16,7 +16,7 @@
     duplicateModule,
   } from "$lib/stores/modules";
   import { reorderUnits } from "$lib/stores/units";
-  import { reorderLessons } from "$lib/stores/lessons";
+  import { reorderLessons, loadLessons as loadGlobalLessons } from "$lib/stores/lessons";
   import { supabase } from "$lib/supabase";
   import { toastStore } from "$lib/stores/toast";
   import { agentsStore, loadAgents } from "$lib/stores/agents";
@@ -115,6 +115,9 @@
   let isTranscribing: Record<string, boolean> = {};
   let recordingError: Record<string, string> = {};
   let currentAudioUrl: Record<string, string | null> = {};
+  let recordingTimer: Record<string, ReturnType<typeof setInterval> | null> =
+    {};
+  let recordingDuration: Record<string, number> = {};
 
   // Auto-scroll containers for inline chat
   let inlineChatContainers: Record<string, HTMLElement> = {};
@@ -145,11 +148,15 @@
   afterUpdate(() => {
     for (const lessonId in inlineChatContainers) {
       const container = inlineChatContainers[lessonId];
-      if (container && chatMessages[lessonId] && chatMessages[lessonId].length > 0) {
+      if (
+        container &&
+        chatMessages[lessonId] &&
+        chatMessages[lessonId].length > 0
+      ) {
         // Use smooth scrolling for better UX
         container.scrollTo({
           top: container.scrollHeight,
-          behavior: 'smooth'
+          behavior: "smooth",
         });
       }
     }
@@ -166,7 +173,7 @@
           setTimeout(() => {
             container.scrollTo({
               top: container.scrollHeight,
-              behavior: 'smooth'
+              behavior: "smooth",
             });
           }, 100);
         }
@@ -212,7 +219,7 @@
         .from("lessons")
         .select("*")
         .eq("unit_id", unitId)
-        .order("created_at", { ascending: true });
+        .order("order_index", { ascending: true });
 
       if (error) throw error;
       lessonsData[unitId] = lessons || [];
@@ -350,6 +357,7 @@
   async function startRecording(lessonId: string) {
     try {
       recordingError[lessonId] = "";
+      recordingDuration[lessonId] = 0;
       console.log("🎙️ Starting audio recording for lesson:", lessonId);
 
       // Get microphone-only stream with strict constraints
@@ -400,12 +408,28 @@
 
       mediaRecorder[lessonId]!.onstop = async () => {
         console.log("⏹️ Recording stopped, processing audio...");
+        if (recordingTimer[lessonId]) {
+          clearInterval(recordingTimer[lessonId]!);
+          recordingTimer[lessonId] = null;
+        }
         await handleRecordingComplete(lessonId);
         stream.getTracks().forEach((track) => track.stop());
       };
 
       mediaRecorder[lessonId]!.start(1000);
       isRecording[lessonId] = true;
+
+      // Start recording timer for 10-second limit
+      recordingTimer[lessonId] = setInterval(() => {
+        recordingDuration[lessonId] += 1;
+        if (recordingDuration[lessonId] >= 10) {
+          console.log(
+            "⏰ 10-second recording limit reached, stopping automatically"
+          );
+          stopRecording(lessonId);
+        }
+      }, 1000);
+
       console.log("🎙️ Recording started successfully");
     } catch (error) {
       console.error("❌ Error starting recording:", error);
@@ -418,6 +442,10 @@
     if (mediaRecorder[lessonId] && isRecording[lessonId]) {
       mediaRecorder[lessonId]!.stop();
       isRecording[lessonId] = false;
+      if (recordingTimer[lessonId]) {
+        clearInterval(recordingTimer[lessonId]!);
+        recordingTimer[lessonId] = null;
+      }
       console.log("⏹️ Recording stopped");
     }
   }
@@ -434,7 +462,7 @@
       console.log("📦 Total audio chunks:", audioChunks[lessonId].length);
 
       const audioBlob = new Blob(audioChunks[lessonId], {
-        type: "audio/webm;codecs=opus",
+        type: "audio/webm",
       });
       console.log("🎵 Created audio blob:", audioBlob.size, "bytes");
 
@@ -464,6 +492,20 @@
       const formData = new FormData();
       formData.append("file", audioBlob, "recording.webm");
       formData.append("sessionId", activeChatSessions[lessonId]);
+
+      console.log(
+        "🎵 SessionId being sent to transcription API:",
+        activeChatSessions[lessonId]
+      );
+      console.log("🎵 LessonId:", lessonId);
+      console.log("🎵 Active chat sessions:", activeChatSessions);
+      console.log("🎵 Session ID check:", {
+        hasActiveSession: !!activeChatSessions[lessonId],
+        sessionId: activeChatSessions[lessonId],
+        sessionIdType: typeof activeChatSessions[lessonId],
+        sessionIdLength: activeChatSessions[lessonId]?.length,
+        allActiveSessions: Object.keys(activeChatSessions),
+      });
 
       // Get the agent ID from the lesson data
       let agentId = "";
@@ -735,6 +777,8 @@
         // Refresh lessons for this unit
         delete lessonsData[unitId]; // Clear cached data
         await loadLessons(unitId);
+        // Also refresh the global lessons store
+        await loadGlobalLessons(true); // Force refresh
       } else {
         toastStore.error("Failed to reorder lessons");
       }
@@ -973,12 +1017,30 @@
                     {/if}
                   </div>
                 {:else}
-                  <div class="space-y-3">
-                    {#each unitsData[module.id] || [] as unit (unit.id)}
+                  <DraggableList
+                    items={unitsData[module.id] || []}
+                    disabled={!canManage}
+                    on:reorder={(event) => handleReorderUnits(event, module.id)}
+                    classList="space-y-3"
+                  >
+                    <svelte:fragment
+                      let:item={unit}
+                      let:index
+                      let:draggedIndex
+                      let:dropTargetIndex
+                    >
                       <!-- Unit Card -->
                       <Card class="p-4">
                         <div class="flex items-start justify-between mb-3">
                           <div class="flex items-start gap-3 flex-1">
+                            <!-- Drag Handle -->
+                            {#if canManage}
+                              <div
+                                class="cursor-grab active:cursor-grabbing text-muted-foreground hover:text-foreground"
+                              >
+                                <GripVertical class="w-4 h-4" />
+                              </div>
+                            {/if}
                             <!-- Unit Icon -->
                             <div
                               class="w-8 h-8 bg-blue-500/10 rounded-lg flex items-center justify-center"
@@ -1094,8 +1156,18 @@
                                 {/if}
                               </div>
                             {:else}
-                              <div class="space-y-2">
-                                {#each lessonsData[unit.id] || [] as lesson (lesson.id)}
+                              <DraggableList
+                                items={lessonsData[unit.id] || []}
+                                disabled={!canManage}
+                                on:reorder={(event) => handleReorderLessons(event, unit.id)}
+                                classList="space-y-2"
+                              >
+                                <svelte:fragment
+                                  let:item={lesson}
+                                  let:index
+                                  let:draggedIndex
+                                  let:dropTargetIndex
+                                >
                                   <!-- Lesson Card -->
                                   <div
                                     class="border rounded p-3 bg-muted/30 {expandedLessons[
@@ -1110,6 +1182,14 @@
                                       <div
                                         class="flex items-center gap-2 flex-1"
                                       >
+                                        <!-- Drag Handle -->
+                                        {#if canManage}
+                                          <div
+                                            class="cursor-grab active:cursor-grabbing text-muted-foreground hover:text-foreground"
+                                          >
+                                            <GripVertical class="w-3 h-3" />
+                                          </div>
+                                        {/if}
                                         <!-- Lesson Icon -->
                                         <div
                                           class="w-6 h-6 {lesson.content_type ===
@@ -1277,8 +1357,13 @@
 
                                               <!-- Messages Area -->
                                               <div
-                                                bind:this={inlineChatContainers[lesson.id]}
+                                                bind:this={
+                                                  inlineChatContainers[
+                                                    lesson.id
+                                                  ]
+                                                }
                                                 class="flex-1 overflow-y-auto p-3 space-y-3"
+                                                style="height: calc(100vh - 16rem);"
                                               >
                                                 {#if chatMessages[lesson.id] && chatMessages[lesson.id].length > 0}
                                                   {#each chatMessages[lesson.id] as message}
@@ -1309,6 +1394,14 @@
                                                                 .audio_url}
                                                               title={message.content}
                                                             />
+                                                          </div>
+                                                        {:else if message.metadata?.is_voice_message}
+                                                          <!-- Debug: Show when voice message flag is set but no audio URL -->
+                                                          <div
+                                                            class="mt-2 text-xs text-muted-foreground"
+                                                          >
+                                                            🎵 Voice message
+                                                            (audio URL missing)
                                                           </div>
                                                         {/if}
 
@@ -1461,8 +1554,10 @@
                                                       class="w-2 h-2 bg-red-500 rounded-full animate-pulse"
                                                     ></div>
                                                     <span
-                                                      >Recording... Click the
-                                                      square button to stop</span
+                                                      >Recording... {recordingDuration[
+                                                        lesson.id
+                                                      ] || 0}s / 10s (Click to
+                                                      stop)</span
                                                     >
                                                   </div>
                                                 {/if}
@@ -1586,14 +1681,14 @@
                                       </div>
                                     {/if}
                                   </div>
-                                {/each}
-                              </div>
+                                </svelte:fragment>
+                              </DraggableList>
                             {/if}
                           </div>
                         </Collapsible>
                       </Card>
-                    {/each}
-                  </div>
+                    </svelte:fragment>
+                  </DraggableList>
                 {/if}
               </div>
             </Collapsible>

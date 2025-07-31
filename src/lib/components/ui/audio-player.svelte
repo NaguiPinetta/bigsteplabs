@@ -1,9 +1,9 @@
 <script lang="ts">
-  import { onMount, onDestroy } from 'svelte';
-  import { Play, Pause, Volume2, VolumeX } from 'lucide-svelte';
+  import { onMount, onDestroy } from "svelte";
+  import { Play, Pause, Volume2, VolumeX } from "lucide-svelte";
 
   export let src: string;
-  export let title: string = '';
+  export let title: string = "";
   export let autoPlay: boolean = false;
 
   let audio: HTMLAudioElement;
@@ -18,14 +18,21 @@
   let progressBar: HTMLDivElement;
   let volumeSlider: HTMLInputElement;
 
+  // Debug logging
+  $: {
+    console.log("🎵 AudioPlayer received src:", src);
+    console.log("🎵 AudioPlayer received title:", title);
+  }
+
   onMount(() => {
+    console.log("🎵 AudioPlayer mounted with src:", src);
     if (audio) {
-      audio.addEventListener('loadedmetadata', handleLoadedMetadata);
-      audio.addEventListener('timeupdate', handleTimeUpdate);
-      audio.addEventListener('ended', handleEnded);
-      audio.addEventListener('error', handleError);
-      audio.addEventListener('canplay', handleCanPlay);
-      
+      audio.addEventListener("loadedmetadata", handleLoadedMetadata);
+      audio.addEventListener("timeupdate", handleTimeUpdate);
+      audio.addEventListener("ended", handleEnded);
+      audio.addEventListener("error", handleError);
+      audio.addEventListener("canplay", handleCanPlay);
+
       if (autoPlay) {
         audio.play().catch(console.error);
       }
@@ -34,15 +41,21 @@
 
   onDestroy(() => {
     if (audio) {
-      audio.removeEventListener('loadedmetadata', handleLoadedMetadata);
-      audio.removeEventListener('timeupdate', handleTimeUpdate);
-      audio.removeEventListener('ended', handleEnded);
-      audio.removeEventListener('error', handleError);
-      audio.removeEventListener('canplay', handleCanPlay);
+      audio.removeEventListener("loadedmetadata", handleLoadedMetadata);
+      audio.removeEventListener("timeupdate", handleTimeUpdate);
+      audio.removeEventListener("ended", handleEnded);
+      audio.removeEventListener("error", handleError);
+      audio.removeEventListener("canplay", handleCanPlay);
     }
   });
 
   function handleLoadedMetadata() {
+    console.log(
+      "🎵 AudioPlayer loaded metadata for src:",
+      src,
+      "duration:",
+      audio.duration
+    );
     duration = audio.duration;
     isLoading = false;
   }
@@ -57,6 +70,7 @@
   }
 
   function handleError() {
+    console.error("🎵 AudioPlayer error occurred for src:", src);
     hasError = true;
     isLoading = false;
   }
@@ -83,7 +97,7 @@
     const clickX = event.clientX - rect.left;
     const percentage = clickX / rect.width;
     const newTime = percentage * duration;
-    
+
     audio.currentTime = newTime;
     currentTime = newTime;
   }
@@ -108,11 +122,11 @@
   }
 
   function formatTime(seconds: number): string {
-    if (isNaN(seconds)) return '0:00';
-    
+    if (isNaN(seconds)) return "0:00";
+
     const mins = Math.floor(seconds / 60);
     const secs = Math.floor(seconds % 60);
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
+    return `${mins}:${secs.toString().padStart(2, "0")}`;
   }
 
   function getProgressPercentage(): number {
@@ -121,7 +135,9 @@
   }
 </script>
 
-<div class="audio-player bg-background/50 rounded-md border border-border/50 p-3">
+<div
+  class="audio-player bg-background/50 rounded-md border border-border/50 p-3"
+>
   <!-- Title -->
   {#if title}
     <div class="text-sm font-medium text-foreground mb-2">{title}</div>
@@ -129,16 +145,26 @@
 
   <!-- Voice Message Label -->
   <div class="flex items-center space-x-2 mb-2">
-    <svg class="w-3 h-3 text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"></path>
+    <svg
+      class="w-3 h-3 text-muted-foreground"
+      fill="none"
+      stroke="currentColor"
+      viewBox="0 0 24 24"
+    >
+      <path
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        stroke-width="2"
+        d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"
+      ></path>
     </svg>
     <span class="text-xs font-medium text-muted-foreground">Voice Message</span>
   </div>
 
   <!-- Audio Element (hidden) -->
-  <audio 
-    bind:this={audio} 
-    {src} 
+  <audio
+    bind:this={audio}
+    {src}
     preload="metadata"
     on:loadedmetadata={handleLoadedMetadata}
     on:timeupdate={handleTimeUpdate}
@@ -156,10 +182,22 @@
       class="flex items-center justify-center w-8 h-8 rounded-full bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
     >
       {#if isLoading}
-        <div class="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin"></div>
+        <div
+          class="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin"
+        ></div>
       {:else if hasError}
-        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z"></path>
+        <svg
+          class="w-4 h-4"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z"
+          ></path>
         </svg>
       {:else if isPlaying}
         <Pause class="w-4 h-4" />
@@ -170,12 +208,12 @@
 
     <!-- Progress Bar -->
     <div class="flex-1">
-      <div 
+      <div
         bind:this={progressBar}
         on:click={handleProgressClick}
         class="relative h-2 bg-muted rounded-full cursor-pointer overflow-hidden"
       >
-        <div 
+        <div
           class="absolute top-0 left-0 h-full bg-primary rounded-full transition-all duration-100"
           style="width: {getProgressPercentage()}%"
         ></div>
@@ -214,9 +252,7 @@
 
   <!-- Error Message -->
   {#if hasError}
-    <div class="text-xs text-destructive mt-2">
-      Failed to load audio
-    </div>
+    <div class="text-xs text-destructive mt-2">Failed to load audio</div>
   {/if}
 </div>
 
@@ -246,4 +282,4 @@
     background: hsl(var(--primary));
     cursor: pointer;
   }
-</style> 
+</style>

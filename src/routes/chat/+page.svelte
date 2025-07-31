@@ -78,6 +78,8 @@
   let isTranscribing = false;
   let recordingError = "";
   let currentAudioUrl: string | null = null;
+  let recordingTimer: number | null = null;
+  let recordingDuration = 0;
 
   // Load data on mount
   onMount(async () => {
@@ -278,6 +280,7 @@
   async function startRecording() {
     try {
       recordingError = "";
+      recordingDuration = 0;
       console.log("🎙️ Starting audio recording...");
 
       // Get microphone-only stream with strict constraints
@@ -328,12 +331,28 @@
 
       mediaRecorder.onstop = async () => {
         console.log("⏹️ Recording stopped, processing audio...");
+        if (recordingTimer) {
+          clearInterval(recordingTimer);
+          recordingTimer = null;
+        }
         await handleRecordingComplete();
         stream.getTracks().forEach((track) => track.stop());
       };
 
       mediaRecorder.start(1000); // Collect data every second
       isRecording = true;
+
+      // Start recording timer for 10-second limit
+      recordingTimer = setInterval(() => {
+        recordingDuration += 1;
+        if (recordingDuration >= 10) {
+          console.log(
+            "⏰ 10-second recording limit reached, stopping automatically"
+          );
+          stopRecording();
+        }
+      }, 1000);
+
       console.log(
         "🎙️ Recording started successfully with MIME type:",
         selectedMimeType
@@ -348,6 +367,10 @@
     if (mediaRecorder && isRecording) {
       mediaRecorder.stop();
       isRecording = false;
+      if (recordingTimer) {
+        clearInterval(recordingTimer);
+        recordingTimer = null;
+      }
       console.log("⏹️ Recording stopped");
     }
   }
@@ -368,7 +391,7 @@
       );
 
       const audioBlob = new Blob(audioChunks, {
-        type: "audio/webm;codecs=opus",
+        type: "audio/webm",
       });
       console.log(
         "🎵 Created audio blob:",
@@ -407,6 +430,19 @@
       formData.append("file", audioBlob, "recording.webm");
       formData.append("sessionId", currentSession?.id || "default");
       formData.append("agentId", currentSession?.agent_id || "");
+
+      console.log(
+        "🎵 SessionId being sent to transcription API:",
+        currentSession?.id || "default"
+      );
+      console.log("🎵 Current session:", currentSession);
+      console.log("🎵 Agent ID:", currentSession?.agent_id || "");
+      console.log("🎵 Current session ID check:", {
+        hasCurrentSession: !!currentSession,
+        sessionId: currentSession?.id,
+        sessionIdType: typeof currentSession?.id,
+        sessionIdLength: currentSession?.id?.length,
+      });
 
       console.log("📤 Sending audio to transcription API...");
 
@@ -649,6 +685,7 @@
       <div
         bind:this={messagesContainer}
         class="flex-1 flex flex-col p-4 min-h-0"
+        style="height: calc(100vh - 12rem);"
       >
         {#if loading}
           <div class="flex items-center justify-center py-8">
@@ -801,7 +838,10 @@
             class="flex items-center space-x-2 mt-2 text-sm text-muted-foreground"
           >
             <div class="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
-            <span>Recording... Click the square button to stop</span>
+            <span
+              >Recording... {recordingDuration}s / 10s (Click the square button
+              to stop)</span
+            >
           </div>
         {/if}
 
@@ -871,7 +911,10 @@
       </div>
 
       <!-- Mobile Messages -->
-      <div class="flex-1 flex flex-col p-4 min-h-0">
+      <div
+        class="flex-1 flex flex-col p-4 min-h-0"
+        style="height: calc(100vh - 12rem);"
+      >
         {#if loading}
           <div class="flex items-center justify-center py-8">
             <Loader2 class="w-6 h-6 animate-spin text-primary" />
@@ -1015,7 +1058,7 @@
             class="flex items-center space-x-2 mt-2 text-sm text-muted-foreground"
           >
             <div class="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
-            <span>Recording... Tap to stop</span>
+            <span>Recording... {recordingDuration}s / 10s (Tap to stop)</span>
           </div>
         {/if}
 

@@ -261,6 +261,7 @@ export async function getLessonsByModule(
       `
       )
       .eq("module_id", moduleId)
+      .order("order_index", { ascending: true })
       .order("created_at", { ascending: false });
 
     if (error) {
@@ -313,12 +314,18 @@ export async function reorderLessons(lessonIds: string[]): Promise<boolean> {
   try {
     console.log("🔄 Reordering lessons:", lessonIds);
 
-    const { error } = await supabase.rpc("reorder_lessons", {
-      p_lesson_ids: lessonIds,
+    const response = await fetch("/api/reorder-lessons-manual", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ lessonIds }),
     });
 
-    if (error) {
-      console.error("❌ Error reordering lessons:", error);
+    const result = await response.json();
+
+    if (!result.success) {
+      console.error("❌ Error reordering lessons:", result.error);
       return false;
     }
 

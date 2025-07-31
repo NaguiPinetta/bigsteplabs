@@ -260,6 +260,16 @@ export async function setCurrentSession(session: ChatSessionWithAgent | null) {
       loading: false,
     }));
 
+    // Debug: Log message metadata
+    if (data && data.length > 0) {
+      console.log("🎵 Loaded messages with metadata:", data.map(msg => ({
+        id: msg.id,
+        content: msg.content,
+        metadata: msg.metadata,
+        hasAudioUrl: !!msg.metadata?.audio_url
+      })));
+    }
+
     console.log(
       "✅ Chat session set with messages from database:",
       data?.length || 0
@@ -311,6 +321,9 @@ export async function sendMessage(
     if (audioUrl) {
       messageMetadata.audio_url = audioUrl;
       messageMetadata.is_voice_message = true;
+      console.log("🎵 Storing audio URL in message metadata:", audioUrl);
+    } else {
+      console.log("🎵 No audio URL provided for message");
     }
 
     // Add current exercise context
