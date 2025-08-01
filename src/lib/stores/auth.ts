@@ -122,7 +122,13 @@ async function updateAuthState(session: Session | null) {
   }
 }
 
+// Note: Use signOut from src/lib/auth.ts instead
+// This function is deprecated and will be removed
 export async function signOut() {
+  console.warn(
+    "⚠️ Using deprecated signOut from auth store. Use signOut from src/lib/auth.ts instead."
+  );
+
   try {
     console.log("🔍 Auth store: Signing out...");
 
@@ -150,7 +156,7 @@ export async function signOut() {
 // Initialize auth state - only call once
 export async function initAuth() {
   if (authInitialized) {
-    console.log("Auth already initialized, skipping...");
+    console.log("🔄 Auth already initialized, skipping...");
     return;
   }
 
@@ -169,8 +175,15 @@ export async function initAuth() {
     // Set up auth listener only once
     if (!authListener) {
       authListener = supabase.auth.onAuthStateChange(async (event, session) => {
-        console.log("🔄 Auth state changed:", event);
-        await updateAuthState(session);
+        console.log("🔄 Auth state changed:", event, {
+          hasSession: !!session,
+          userId: session?.user?.id,
+        });
+
+        // Debounce rapid auth state changes
+        if (event === "SIGNED_IN" || event === "SIGNED_OUT") {
+          await updateAuthState(session);
+        }
       });
     }
 

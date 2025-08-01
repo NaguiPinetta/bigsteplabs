@@ -145,10 +145,7 @@ async function handleAccessTokenAuth(
 ): Promise<AuthResult> {
   try {
     console.log("🔍 Processing access token authentication...");
-    console.log("🔍 Token details:", {
-      accessTokenLength: accessToken.length,
-      refreshTokenLength: refreshToken.length,
-    });
+    console.log("🔍 Token authentication in progress");
 
     // Set the session manually
     const { data, error } = await supabase.auth.setSession({
@@ -291,12 +288,23 @@ export async function ensureUserProfile(session: Session): Promise<AuthResult> {
     if (fetchError && fetchError.code === "PGRST116") {
       // User doesn't exist, create profile
       console.log("🔍 Creating new user profile");
+
+      // Check if user is in allowlist to get their role
+      const { data: allowlistEntry } = await supabase
+        .from("allowlist")
+        .select("role")
+        .eq("email", session.user.email)
+        .single();
+
+      const role = allowlistEntry?.role || "Student"; // Default to Student if not in allowlist
+      console.log("🔍 Assigning role:", role, "for email:", session.user.email);
+
       const { data: newUser, error: createError } = await supabase
         .from("users")
         .insert({
           id: session.user.id,
           email: session.user.email || "",
-          role: "Student", // Default role
+          role: role,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         })
@@ -316,6 +324,22 @@ export async function ensureUserProfile(session: Session): Promise<AuthResult> {
       }
 
       console.log("✅ User profile created successfully");
+
+      // Remove user from allowlist if they were allowlisted
+      if (allowlistEntry) {
+        console.log("🔍 Removing user from allowlist");
+        const { error: deleteError } = await supabase
+          .from("allowlist")
+          .delete()
+          .eq("email", session.user.email);
+
+        if (deleteError) {
+          console.error("❌ Failed to remove from allowlist:", deleteError);
+        } else {
+          console.log("✅ Removed from allowlist");
+        }
+      }
+
       return { success: true, user: newUser };
     } else if (fetchError) {
       console.error("❌ Failed to fetch user profile:", fetchError.message);
@@ -380,12 +404,12 @@ export async function sendMagicLink(
 
     console.log("🔍 Using callback URL:", callbackUrl);
 
-    // Since we know the user exists, only try with shouldCreateUser: false
+    // Allow user creation for magic links - the allowlist check will be handled in the auth callback
     const { error } = await supabase.auth.signInWithOtp({
       email,
       options: {
         emailRedirectTo: callbackUrl,
-        shouldCreateUser: false, // Only for existing users
+        shouldCreateUser: true, // Allow creation for new users
       },
     });
 
@@ -517,15 +541,37 @@ export async function isAuthenticated(): Promise<boolean> {
 
 export async function redirectAuthenticatedUser(): Promise<void> {
   try {
+    console.log("🔍 Checking authentication status for redirect...");
+    
+    // Check both Supabase session and auth store
     const {
       data: { session },
     } = await supabase.auth.getSession();
+    
+    console.log("🔍 Supabase session check:", {
+      hasSession: !!session,
+      userId: session?.user?.id,
+    });
+    
     if (session) {
-      console.log("🔍 User already authenticated, redirecting to dashboard");
-      window.location.href = "/dashboard";
+      console.log("✅ User authenticated, redirecting to dashboard");
+      
+      // Use replace to prevent back button issues
+      if (typeof window !== "undefined") {
+        window.location.replace("/dashboard");
+      }
+    } else {
+      console.log("❌ No session found, redirecting to login");
+      if (typeof window !== "undefined") {
+        window.location.replace("/auth/login");
+      }
     }
   } catch (error) {
     console.error("❌ Redirect check failed:", error);
+    // Fallback to login page
+    if (typeof window !== "undefined") {
+      window.location.replace("/auth/login");
+    }
   }
 }
 

@@ -5,6 +5,7 @@
     redirectAuthenticatedUser,
     ensureUserProfile,
   } from "$lib/auth";
+  import { authStore } from "$lib/stores/auth";
   import Button from "$lib/components/ui/button.svelte";
   import Card from "$lib/components/ui/card.svelte";
   import { AlertCircle, CheckCircle, Loader2 } from "lucide-svelte";
@@ -41,6 +42,22 @@
 
         if (profileResult.success) {
           console.log("✅ User profile ensured:", profileResult.user);
+
+          // Update the auth store with the session and user
+          authStore.set({
+            session: result.session,
+            user: profileResult.user,
+            loading: false,
+            initialized: true,
+          });
+
+          console.log("✅ Auth store updated with session and user");
+
+          // Force a small delay to ensure the store is updated
+          await new Promise((resolve) => setTimeout(resolve, 100));
+
+          // Double-check the auth store state
+          console.log("🔍 Auth store state after update:", $authStore);
         } else {
           console.error(
             "❌ Failed to ensure user profile:",
@@ -63,7 +80,17 @@
         // Redirect to dashboard after a short delay
         setTimeout(async () => {
           console.log("🔍 Redirecting to dashboard...");
-          await redirectAuthenticatedUser();
+          console.log("🔍 Current auth store state:", $authStore);
+
+          // Try the redirect function first
+          try {
+            await redirectAuthenticatedUser();
+          } catch (error) {
+            console.error("❌ Redirect function failed:", error);
+            // Fallback to direct redirect
+            console.log("🔄 Using fallback redirect to dashboard");
+            window.location.replace("/dashboard");
+          }
         }, 1000);
       } else {
         console.error("❌ Authentication failed:", result.error);
@@ -167,7 +194,8 @@
           <summary class="cursor-pointer font-medium text-foreground">
             Technical Details
           </summary>
-          <pre class="mt-2 bg-muted p-2 rounded overflow-auto text-xs text-muted-foreground">
+          <pre
+            class="mt-2 bg-muted p-2 rounded overflow-auto text-xs text-muted-foreground">
 {JSON.stringify(error.details, null, 2)}
           </pre>
         </details>

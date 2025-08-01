@@ -2,6 +2,11 @@
   import { onMount } from "svelte";
   import { authStore } from "$lib/stores/auth";
   import { supabase } from "$lib/supabase";
+  import {
+    userModuleAccessStore,
+    loadUserModuleAccess,
+  } from "$lib/stores/user-module-access";
+  import { get } from "svelte/store";
 
   import Button from "$lib/components/ui/button.svelte";
   import Card from "$lib/components/ui/card.svelte";
@@ -51,6 +56,7 @@
 
   onMount(async () => {
     if (user) {
+      await loadUserModuleAccess();
       await loadStudentData();
     }
   });
@@ -112,16 +118,30 @@
       totalTime += p.time_spent_minutes || 0;
     });
 
-    // Get total modules and units
-    const { count: totalModulesCount } = await supabase
-      .from("modules")
-      .select("*", { count: "exact", head: true })
-      .eq("is_published", true);
+    // Get user's accessible modules
+    const userAccess = get(userModuleAccessStore);
+    const accessibleModuleIds = userAccess.assignedModuleIds;
 
-    const { count: totalUnitsCount } = await supabase
-      .from("units")
-      .select("*, module:modules!inner(*)", { count: "exact", head: true })
-      .eq("modules.is_published", true);
+    // Get total modules and units (only accessible ones for students)
+    let totalModulesCount = 0;
+    let totalUnitsCount = 0;
+
+    if (accessibleModuleIds.length > 0) {
+      const { count: modulesCount } = await supabase
+        .from("modules")
+        .select("*", { count: "exact", head: true })
+        .eq("is_published", true)
+        .in("id", accessibleModuleIds);
+
+      const { count: unitsCount } = await supabase
+        .from("units")
+        .select("*, module:modules!inner(*)", { count: "exact", head: true })
+        .eq("modules.is_published", true)
+        .in("modules.id", accessibleModuleIds);
+
+      totalModulesCount = modulesCount || 0;
+      totalUnitsCount = unitsCount || 0;
+    }
 
     // Get chat sessions count
     const { count: sessionsCount } = await supabase
@@ -157,19 +177,29 @@
         ?.filter((p) => p.status === "in_progress")
         .map((p) => p.unit_id) || [];
 
-    // Get next recommended units
-    const { data: units } = await supabase
-      .from("units")
-      .select(
-        `
-				*,
-				module:modules!inner(*),
-				content:content(id, title, content_type)
-			`
-      )
-      .eq("modules.is_published", true)
-      .order("order_index")
-      .limit(5);
+    // Get user's accessible modules
+    const userAccess = get(userModuleAccessStore);
+    const accessibleModuleIds = userAccess.assignedModuleIds;
+
+    // Get next recommended units (only from accessible modules)
+    let units = [];
+    if (accessibleModuleIds.length > 0) {
+      const { data: unitsData } = await supabase
+        .from("units")
+        .select(
+          `
+					*,
+					module:modules!inner(*),
+					content:content(id, title, content_type)
+				`
+        )
+        .eq("modules.is_published", true)
+        .in("modules.id", accessibleModuleIds)
+        .order("order_index")
+        .limit(5);
+
+      units = unitsData || [];
+    }
 
     // Filter and prioritize units
     const nextUnits =
@@ -550,11 +580,11 @@
                       <p class="text-sm text-muted-foreground">
                         {lesson.module.title} • {lesson.contentCount} items
                       </p>
-                      {#if lesson.description}
+                      {#if lesson.title}
                         <p class="text-sm text-muted-foreground mt-1">
-                          {lesson.description.length > 80
-                            ? lesson.description.substring(0, 80) + "..."
-                            : lesson.description}
+                          {lesson.title.length > 80
+                            ? lesson.title.substring(0, 80) + "..."
+                            : lesson.title}
                         </p>
                       {/if}
                     </div>

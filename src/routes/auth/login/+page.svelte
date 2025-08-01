@@ -134,7 +134,11 @@
     <div class="w-full max-w-md space-y-8">
       <!-- Logo and Welcome -->
       <div class="text-center">
-        <img src="/images/bigstep-logo.png" alt="BigStepLabs" class="h-12 mx-auto mb-4" />
+        <img
+          src="/images/bigstep-logo.png"
+          alt="BigStepLabs"
+          class="h-12 mx-auto mb-4"
+        />
         <h2 class="text-2xl font-bold text-foreground">Welcome back</h2>
         <p class="text-muted-foreground mt-2">
           Sign in to your BigStepLabs account
@@ -160,20 +164,22 @@
       <div class="flex space-x-1 bg-muted p-1 rounded-lg">
         <button
           type="button"
-          class="flex-1 py-2 px-3 text-sm font-medium rounded-md transition-colors {loginMethod === 'magic'
+          class="flex-1 py-2 px-3 text-sm font-medium rounded-md transition-colors {loginMethod ===
+          'magic'
             ? 'bg-background text-foreground shadow-sm'
             : 'text-muted-foreground hover:text-foreground'}"
-          on:click={() => (loginMethod = 'magic')}
+          on:click={() => (loginMethod = "magic")}
         >
           <Mail class="w-4 h-4 inline mr-2" />
           Magic Link
         </button>
         <button
           type="button"
-          class="flex-1 py-2 px-3 text-sm font-medium rounded-md transition-colors {loginMethod === 'password'
+          class="flex-1 py-2 px-3 text-sm font-medium rounded-md transition-colors {loginMethod ===
+          'password'
             ? 'bg-background text-foreground shadow-sm'
             : 'text-muted-foreground hover:text-foreground'}"
-          on:click={() => (loginMethod = 'password')}
+          on:click={() => (loginMethod = "password")}
         >
           <Shield class="w-4 h-4 inline mr-2" />
           Password
@@ -181,7 +187,7 @@
       </div>
 
       <!-- Magic Link Form -->
-      {#if loginMethod === 'magic'}
+      {#if loginMethod === "magic"}
         <form class="space-y-4" on:submit|preventDefault={handleMagicLinkLogin}>
           <div>
             <label
@@ -220,7 +226,7 @@
       {/if}
 
       <!-- Password Form -->
-      {#if loginMethod === 'password'}
+      {#if loginMethod === "password"}
         <form class="space-y-4" on:submit|preventDefault={handlePasswordLogin}>
           <div>
             <label
@@ -299,15 +305,6 @@
           <a href="/privacy" class="text-primary hover:underline"
             >Privacy Policy</a
           >
-        </div>
-
-        <div class="mt-4">
-          <a
-            href="/dev"
-            class="text-sm text-muted-foreground hover:text-primary underline"
-          >
-            Development Mode (Test without email)
-          </a>
         </div>
       </div>
     </div>

@@ -8,20 +8,21 @@
   import Dialog from "$lib/components/ui/dialog.svelte";
   import Input from "$lib/components/ui/input.svelte";
   import Select from "$lib/components/ui/select.svelte";
-  import {
-    Users,
-    Plus,
-    Edit,
-    Trash2,
-    Shield,
-    User,
-    UserCheck,
-    AlertCircle,
-    Search,
-    Filter,
-    Loader2,
-    Mail,
-  } from "lucide-svelte";
+     import {
+     Users,
+     Plus,
+     Edit,
+     Trash2,
+     Shield,
+     User,
+     UserCheck,
+     AlertCircle,
+     Search,
+     Filter,
+     Loader2,
+     Mail,
+     BookOpen,
+   } from "lucide-svelte";
 
   let users: any[] = [];
   let filteredUsers = users;
@@ -48,6 +49,12 @@
     status: "",
     newPassword: "",
   };
+
+  let moduleAssignmentDialogOpen = false;
+  let selectedUserForModules: any = null;
+  let availableModules: any[] = [];
+  let assignedModuleIds: string[] = [];
+  let moduleAssignmentLoading = false;
 
   let userToDelete: any = null;
 
@@ -88,14 +95,16 @@
 
       if (allowlistError) throw allowlistError;
 
-      // Combine and format the data
+      // Format existing users (these have proper UUID IDs from auth.users)
       const existingUsersFormatted = (existingUsers || []).map((user) => ({
         ...user,
         status: "active",
         is_allowlisted: false,
         source: "existing",
+        canEdit: true, // These users can be edited
       }));
 
+      // Format allowlisted users (these have different IDs and can't be edited the same way)
       const allowlistedUsersFormatted = (allowlistedUsers || []).map(
         (allowlistEntry) => ({
           id: allowlistEntry.id,
@@ -106,6 +115,7 @@
           status: "pending",
           is_allowlisted: true,
           source: "allowlist",
+          canEdit: false, // These users can't be edited until they sign up
         })
       );
 
@@ -185,7 +195,7 @@
         return;
       }
 
-      console.log("🔍 Creating user with password:", {
+      console.log("🔍 Creating user:", {
         email: newUser.email,
         role: newUser.role,
       });
@@ -253,7 +263,7 @@
           return;
         }
 
-        console.log("🔍 Updating user password:", editUser.email);
+        console.log("🔍 Updating user:", editUser.email);
 
         const response = await fetch("/api/admin/update-user", {
           method: "POST",
@@ -321,6 +331,9 @@
         console.log("✅ User deleted:", userToDelete.email);
       }
 
+      // Store email before clearing userToDelete
+      const deletedEmail = userToDelete.email;
+
       // Reload users
       await loadUsers();
 
@@ -329,7 +342,7 @@
 
       // Show success message
       toastStore.success(
-        `${userToDelete.email} has been deleted successfully.`
+        `${deletedEmail} has been deleted successfully.`
       );
     } catch (err) {
       console.error("❌ Error deleting user:", err);
@@ -401,6 +414,14 @@
   }
 
   function openEditDialog(user: any) {
+    // Only allow editing of existing users (not allowlisted users)
+    if (user.source !== "existing") {
+      toastStore.error(
+        "Cannot edit allowlisted users. They must sign up first."
+      );
+      return;
+    }
+
     editUser = {
       id: user.id,
       email: user.email,
@@ -414,6 +435,64 @@
   function openDeleteDialog(user: any) {
     userToDelete = user;
     deleteDialogOpen = true;
+  }
+
+  async function openModuleAssignmentDialog(user: any) {
+    selectedUserForModules = user;
+    moduleAssignmentLoading = true;
+    moduleAssignmentDialogOpen = true;
+
+    try {
+      const response = await fetch(`/api/admin/user-module-assignments?userId=${user.id}`);
+      const data = await response.json();
+
+      if (data.success) {
+        availableModules = data.availableModules;
+        assignedModuleIds = data.assignedModuleIds;
+      } else {
+        toastStore.error("Failed to load module assignments");
+      }
+    } catch (error) {
+      console.error("❌ Error loading module assignments:", error);
+      toastStore.error("Failed to load module assignments");
+    } finally {
+      moduleAssignmentLoading = false;
+    }
+  }
+
+  async function saveModuleAssignments() {
+    if (!selectedUserForModules) return;
+
+    moduleAssignmentLoading = true;
+
+    try {
+      const response = await fetch("/api/admin/user-module-assignments", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          userId: selectedUserForModules.id,
+          moduleIds: assignedModuleIds,
+          assignedBy: user?.id,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        toastStore.success(data.message);
+        moduleAssignmentDialogOpen = false;
+        selectedUserForModules = null;
+      } else {
+        toastStore.error(data.error || "Failed to save module assignments");
+      }
+    } catch (error) {
+      console.error("❌ Error saving module assignments:", error);
+      toastStore.error("Failed to save module assignments");
+    } finally {
+      moduleAssignmentLoading = false;
+    }
   }
 
   onMount(() => {
@@ -576,36 +655,49 @@
                     class={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
                       user.is_allowlisted
                         ? "bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-300"
-                        : user.status === "active"
+                        : user.canEdit
                           ? "bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-300"
                           : "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-300"
                     }`}
                   >
-                    {user.is_allowlisted ? "Allowlisted" : user.status}
+                    {user.is_allowlisted
+                      ? "Allowlisted"
+                      : user.canEdit
+                        ? "Active"
+                        : "Pending"}
                   </span>
                 </td>
                 <td
                   class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium"
                 >
-                  <div class="flex items-center justify-end space-x-2">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      on:click={() => openEditDialog(user)}
-                    >
-                      <Edit class="w-4 h-4" />
-                    </Button>
-                    {#if user.email !== "jdpinetta@gmail.com"}
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        on:click={() => openDeleteDialog(user)}
-                        class="text-destructive hover:text-destructive"
-                      >
-                        <Trash2 class="w-4 h-4" />
-                      </Button>
-                    {/if}
-                  </div>
+                                     <div class="flex items-center justify-end space-x-2">
+                     <Button
+                       variant="ghost"
+                       size="sm"
+                       on:click={() => openEditDialog(user)}
+                       disabled={!user.canEdit}
+                     >
+                       <Edit class="w-4 h-4" />
+                     </Button>
+                     <Button
+                       variant="ghost"
+                       size="sm"
+                       on:click={() => openModuleAssignmentDialog(user)}
+                       disabled={!user.canEdit}
+                     >
+                       <BookOpen class="w-4 h-4" />
+                     </Button>
+                     {#if user.email !== "jdpinetta@gmail.com"}
+                       <Button
+                         variant="ghost"
+                         size="sm"
+                         on:click={() => openDeleteDialog(user)}
+                         class="text-destructive hover:text-destructive"
+                       >
+                         <Trash2 class="w-4 h-4" />
+                       </Button>
+                     {/if}
+                   </div>
                 </td>
               </tr>
             {/each}
@@ -652,6 +744,7 @@
                     variant="ghost"
                     size="sm"
                     on:click={() => openEditDialog(user)}
+                    disabled={!user.canEdit}
                     class="h-8 w-8 p-0"
                   >
                     <Edit class="w-4 h-4" />
@@ -1029,7 +1122,72 @@
       <Button variant="outline" on:click={() => (deleteDialogOpen = false)}>
         Cancel
       </Button>
-      <Button variant="destructive" on:click={deleteUser}>Delete User</Button>
-    </div>
-  </Dialog>
-{/if}
+             <Button variant="destructive" on:click={deleteUser}>Delete User</Button>
+     </div>
+   </Dialog>
+
+   <!-- Module Assignment Dialog -->
+   <Dialog bind:open={moduleAssignmentDialogOpen} title="Assign Modules to User">
+     {#if selectedUserForModules}
+       <div class="space-y-4">
+         <div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-md p-4">
+           <div class="flex">
+             <BookOpen class="w-5 h-5 text-blue-600 dark:text-blue-400 flex-shrink-0" />
+             <div class="ml-3">
+               <h4 class="text-sm font-medium text-blue-800 dark:text-blue-200">
+                 Module Access Control
+               </h4>
+               <p class="mt-1 text-sm text-blue-700 dark:text-blue-300">
+                 Select which modules <strong>{selectedUserForModules.email}</strong> can access. 
+                 Students will only see assigned modules in their dashboard.
+               </p>
+             </div>
+           </div>
+         </div>
+
+         {#if moduleAssignmentLoading}
+           <div class="flex items-center justify-center py-8">
+             <Loader2 class="w-6 h-6 text-primary animate-spin" />
+             <span class="ml-2">Loading modules...</span>
+           </div>
+         {:else}
+           <div class="space-y-3">
+             <label class="block text-sm font-medium">Available Modules</label>
+             {#each availableModules as module}
+               <div class="flex items-center space-x-3 p-3 border rounded-md hover:bg-muted/25">
+                 <input
+                   type="checkbox"
+                   id={`module-${module.id}`}
+                   bind:group={assignedModuleIds}
+                   value={module.id}
+                   class="rounded border-input"
+                 />
+                 <label for={`module-${module.id}`} class="flex-1 cursor-pointer">
+                   <div class="font-medium">{module.title}</div>
+                   {#if module.description}
+                     <div class="text-sm text-muted-foreground">{module.description}</div>
+                   {/if}
+                 </label>
+               </div>
+             {/each}
+           </div>
+         {/if}
+       </div>
+     {/if}
+
+     <div slot="footer" class="flex justify-end space-x-2">
+       <Button variant="outline" on:click={() => (moduleAssignmentDialogOpen = false)}>
+         Cancel
+       </Button>
+       <Button 
+         on:click={saveModuleAssignments}
+         disabled={moduleAssignmentLoading}
+       >
+         {#if moduleAssignmentLoading}
+           <Loader2 class="w-4 h-4 mr-2 animate-spin" />
+         {/if}
+         Save Assignments
+       </Button>
+     </div>
+   </Dialog>
+ {/if}

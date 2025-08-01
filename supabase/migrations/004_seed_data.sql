@@ -112,10 +112,10 @@ Ready to start chatting with an AI agent?',
 
 -- Create a sample agent using the default persona and model
 INSERT INTO agents (id, name, description, persona_id, model_id, dataset_ids, is_active, created_at) VALUES
-('gggggggg-gggg-gggg-gggg-gggggggggggg', 'Introduction Tutor', 'An AI tutor specialized in helping students understand BigStepLabs platform basics', 
+('gggggggg-gggg-4ggg-gggg-gggggggggggg', 'Introduction Tutor', 'An AI tutor specialized in helping students understand BigStepLabs platform basics', 
 '11111111-1111-1111-1111-111111111111', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', '{}', true, NOW());
 
 -- Assign the agent to the sample units
 INSERT INTO unit_agents (unit_id, agent_id, is_active, created_at) VALUES
-('eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee', 'gggggggg-gggg-gggg-gggg-gggggggggggg', true, NOW()),
-('ffffffff-ffff-ffff-ffff-ffffffffffff', 'gggggggg-gggg-gggg-gggg-gggggggggggg', true, NOW()); 
+('eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee', 'gggggggg-gggg-4ggg-gggg-gggggggggggg', true, NOW()),
+('ffffffff-ffff-ffff-ffff-ffffffffffff', 'gggggggg-gggg-4ggg-gggg-gggggggggggg', true, NOW()); 

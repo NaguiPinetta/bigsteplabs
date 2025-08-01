@@ -6,6 +6,8 @@ interface DataLoadingState {
   lastLoaded: number | null;
   error: string | null;
   retryCount: number;
+  data: any | null; // Store actual data to prevent vanishing
+  loadingPromise: Promise<any> | null; // Track ongoing loading promises
 }
 
 interface DataManagerState {
@@ -18,7 +20,8 @@ interface DataManagerState {
   personas: DataLoadingState;
   files: DataLoadingState;
   chatSessions: DataLoadingState;
-  lessons: DataLoadingState; // Added lessons
+  lessons: DataLoadingState;
+  userModuleAccess: DataLoadingState;
 }
 
 const initialLoadingState: DataLoadingState = {
@@ -26,6 +29,8 @@ const initialLoadingState: DataLoadingState = {
   lastLoaded: null,
   error: null,
   retryCount: 0,
+  data: null,
+  loadingPromise: null,
 };
 
 const initialState: DataManagerState = {
@@ -38,7 +43,8 @@ const initialState: DataManagerState = {
   personas: { ...initialLoadingState },
   files: { ...initialLoadingState },
   chatSessions: { ...initialLoadingState },
-  lessons: { ...initialLoadingState }, // Initialize lessons
+  lessons: { ...initialLoadingState },
+  userModuleAccess: { ...initialLoadingState },
 };
 
 export const dataManagerStore = writable<DataManagerState>(initialState);
@@ -65,13 +71,15 @@ export const canLoadData = derived(authStore, ($authStore) => {
 // Helper functions to manage loading states
 export function setLoadingState(
   dataType: keyof DataManagerState,
-  isLoading: boolean
+  isLoading: boolean,
+  loadingPromise?: Promise<any>
 ) {
   dataManagerStore.update((state) => ({
     ...state,
     [dataType]: {
       ...state[dataType],
       isLoading,
+      loadingPromise: isLoading ? loadingPromise || null : null,
       error: isLoading ? null : state[dataType].error,
     },
   }));
@@ -83,20 +91,23 @@ export function setDataError(dataType: keyof DataManagerState, error: string) {
     [dataType]: {
       ...state[dataType],
       isLoading: false,
+      loadingPromise: null,
       error,
       retryCount: state[dataType].retryCount + 1,
     },
   }));
 }
 
-export function setDataLoaded(dataType: keyof DataManagerState) {
+export function setDataLoaded(dataType: keyof DataManagerState, data?: any) {
   dataManagerStore.update((state) => ({
     ...state,
     [dataType]: {
       ...state[dataType],
       isLoading: false,
+      loadingPromise: null,
       lastLoaded: Date.now(),
       error: null,
+      data: data !== undefined ? data : state[dataType].data, // Preserve existing data if not provided
     },
   }));
 }
@@ -111,7 +122,7 @@ export function clearDataError(dataType: keyof DataManagerState) {
   }));
 }
 
-// Check if data needs to be refreshed (older than 5 minutes)
+// Check if data needs to be refreshed (older than 10 minutes instead of 5)
 export function shouldRefreshData(dataType: keyof DataManagerState): boolean {
   const currentState = get(dataManagerStore);
   const lastLoaded = currentState[dataType].lastLoaded;
@@ -119,9 +130,35 @@ export function shouldRefreshData(dataType: keyof DataManagerState): boolean {
   if (!lastLoaded) {
     return true;
   } else {
-    const fiveMinutesAgo = Date.now() - 5 * 60 * 1000;
-    return lastLoaded < fiveMinutesAgo;
+    const tenMinutesAgo = Date.now() - 10 * 60 * 1000; // Increased from 5 to 10 minutes
+    return lastLoaded < tenMinutesAgo;
   }
+}
+
+// Get cached data if available and not stale
+export function getCachedData(dataType: keyof DataManagerState): any | null {
+  const currentState = get(dataManagerStore);
+  const state = currentState[dataType];
+
+  if (state.data && !shouldRefreshData(dataType)) {
+    return state.data;
+  }
+
+  return null;
+}
+
+// Check if data is currently loading to prevent race conditions
+export function isDataLoading(dataType: keyof DataManagerState): boolean {
+  const currentState = get(dataManagerStore);
+  return currentState[dataType].isLoading;
+}
+
+// Get the current loading promise to prevent duplicate loads
+export function getLoadingPromise(
+  dataType: keyof DataManagerState
+): Promise<any> | null {
+  const currentState = get(dataManagerStore);
+  return currentState[dataType].loadingPromise;
 }
 
 // Reset all loading states
@@ -147,10 +184,81 @@ export function getLoadingState(
   return currentState[dataType];
 }
 
+// Force refresh data regardless of cache
+export function forceRefreshData(dataType: keyof DataManagerState) {
+  dataManagerStore.update((state) => ({
+    ...state,
+    [dataType]: {
+      ...state[dataType],
+      lastLoaded: null, // Force refresh by clearing lastLoaded
+    },
+  }));
+}
+
+// Enhanced data loading function that prevents race conditions
+export async function safeDataLoad<T>(
+  dataType: keyof DataManagerState,
+  loader: () => Promise<T>,
+  forceRefresh = false
+): Promise<T> {
+  // Check if already loading
+  if (isDataLoading(dataType)) {
+    const existingPromise = getLoadingPromise(dataType);
+    if (existingPromise) {
+      console.log(
+        `🔄 ${dataType}: Already loading, waiting for existing promise...`
+      );
+      return existingPromise;
+    }
+  }
+
+  // Check cache first (unless force refresh)
+  if (!forceRefresh) {
+    const cachedData = getCachedData(dataType);
+    if (cachedData) {
+      console.log(`🔄 ${dataType}: Using cached data`);
+      return cachedData;
+    }
+  }
+
+  // Check if we should refresh
+  if (!forceRefresh && !shouldRefreshData(dataType)) {
+    const cachedData = getCachedData(dataType);
+    if (cachedData) {
+      console.log(`🔄 ${dataType}: Data is fresh, skipping load`);
+      return cachedData;
+    }
+  }
+
+  console.log(`🔄 ${dataType}: Starting data load...`);
+
+  // Create loading promise
+  const loadingPromise = loader()
+    .then((data) => {
+      console.log(`✅ ${dataType}: Data loaded successfully`);
+      setDataLoaded(dataType, data);
+      return data;
+    })
+    .catch((error) => {
+      console.error(`❌ ${dataType}: Data load failed:`, error);
+      setDataError(dataType, error.message || "Unknown error");
+      throw error;
+    });
+
+  // Set loading state with promise
+  setLoadingState(dataType, true, loadingPromise);
+
+  return loadingPromise;
+}
+
 // Make debug functions available globally
 if (typeof window !== "undefined") {
   (window as any).resetDataManager = resetDataManager;
   (window as any).resetDataType = resetDataType;
   (window as any).getLoadingState = getLoadingState;
-  console.log("🔧 Debug: Data manager functions available in console");
+  (window as any).forceRefreshData = forceRefreshData;
+  (window as any).getCachedData = getCachedData;
+  (window as any).safeDataLoad = safeDataLoad;
+  (window as any).isDataLoading = isDataLoading;
+  console.log("🔧 Debug: Enhanced data manager functions available in console");
 }

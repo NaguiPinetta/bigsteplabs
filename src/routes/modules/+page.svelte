@@ -8,15 +8,19 @@
     updateModule,
     deleteModule,
     reorderModules,
-    toggleModulePublication,
     setSelectedModule,
-    clearModulesError,
-    validateModule,
-    getModuleStats,
-    duplicateModule,
+    clearError,
   } from "$lib/stores/modules";
+  import {
+    userModuleAccessStore,
+    loadUserModuleAccess,
+    filterModulesByAccess,
+  } from "$lib/stores/user-module-access";
   import { reorderUnits } from "$lib/stores/units";
-  import { reorderLessons, loadLessons as loadGlobalLessons } from "$lib/stores/lessons";
+  import {
+    reorderLessons,
+    loadLessons as loadGlobalLessons,
+  } from "$lib/stores/lessons";
   import { supabase } from "$lib/supabase";
   import { toastStore } from "$lib/stores/toast";
   import { agentsStore, loadAgents } from "$lib/stores/agents";
@@ -126,9 +130,23 @@
   $: user = $authStore.user;
   $: canManage = $canManageContent;
   $: state = $modulesStore;
-  $: modules = state.modules;
+  $: allModules = state.modules;
   $: selectedModule = state.selectedModule;
   $: agents = $agentsStore.agents;
+
+  // Filter modules based on user access - use a more stable reactive statement
+  $: modules =
+    user && user.role === "Student"
+      ? filterModulesByAccess(allModules)
+      : allModules;
+
+  // Remove the problematic reactive statement that was causing multiple loads
+  // $: if (user && user.role === "Student") {
+  //   loadUserModuleAccess();
+  // }
+
+  // Track if user module access has been loaded to prevent multiple loads
+  let userModuleAccessLoaded = false;
 
   // Sync chat messages from global store to local arrays
   $: {
@@ -182,9 +200,44 @@
   }
 
   onMount(async () => {
-    await loadModules();
-    await loadAgents();
+    console.log("🔄 Modules page: Starting initialization...");
+
+    try {
+      // Load modules first
+      await loadModules();
+      console.log("✅ Modules page: Modules loaded");
+
+      // Load agents
+      await loadAgents();
+      console.log("✅ Modules page: Agents loaded");
+
+      // Load user module access for filtering (only once)
+      if (user && user.role === "Student" && !userModuleAccessLoaded) {
+        await loadUserModuleAccess();
+        userModuleAccessLoaded = true;
+        console.log("✅ Modules page: User module access loaded");
+      }
+    } catch (error) {
+      console.error("❌ Modules page: Initialization error:", error);
+    }
   });
+
+  // Watch for user changes and load module access when needed
+  $: if (user && user.role === "Student" && !userModuleAccessLoaded) {
+    // Use setTimeout to prevent immediate execution during reactive updates
+    setTimeout(async () => {
+      if (!userModuleAccessLoaded) {
+        await loadUserModuleAccess();
+        userModuleAccessLoaded = true;
+        console.log("✅ Modules page: User module access loaded (reactive)");
+      }
+    }, 100);
+  }
+
+  // Reset user module access flag when user changes
+  $: if (!user || user.role !== "Student") {
+    userModuleAccessLoaded = false;
+  }
 
   // Load units for a module
   async function loadUnits(moduleId: string) {
@@ -578,9 +631,12 @@
   async function handleCreateModule() {
     if (!user) return;
 
-    const validation = validateModule(newModule);
-    if (!validation.valid) {
-      validationErrors = validation.errors;
+    // Simple validation
+    validationErrors = [];
+    if (!newModule.title.trim()) {
+      validationErrors.push("Title is required");
+    }
+    if (validationErrors.length > 0) {
       return;
     }
 
@@ -609,12 +665,13 @@
       return;
     }
 
-    const validation = validateModule(editModule);
-    console.log("🔍 Validation result:", validation);
-
-    if (!validation.valid) {
-      console.log("❌ Validation failed:", validation.errors);
-      validationErrors = validation.errors;
+    // Simple validation
+    validationErrors = [];
+    if (!editModule.title.trim()) {
+      validationErrors.push("Title is required");
+    }
+    if (validationErrors.length > 0) {
+      console.log("❌ Validation failed:", validationErrors);
       return;
     }
 
@@ -648,18 +705,28 @@
   async function handleDeleteModule() {
     if (!moduleToDelete) return;
 
-    const result = await deleteModule(moduleToDelete.id);
-    if (result.success) {
+    const success = await deleteModule(moduleToDelete.id);
+    if (success) {
       deleteDialogOpen = false;
       moduleToDelete = null;
       toastStore.success("Module deleted successfully");
     } else {
-      toastStore.error(String(result.error) || "Failed to delete module");
+      toastStore.error("Failed to delete module");
     }
   }
 
   async function handleTogglePublication(moduleId: string) {
-    const result = await toggleModulePublication(moduleId);
+    // Find the module and toggle its publication status
+    const module = modules.find((m) => m.id === moduleId);
+    if (!module) {
+      toastStore.error("Module not found");
+      return;
+    }
+
+    const result = await updateModule(moduleId, {
+      is_published: !module.is_published,
+    });
+
     if (result.data) {
       toastStore.success("Module publication status updated");
     } else {
@@ -670,7 +737,20 @@
   }
 
   async function handleDuplicateModule(moduleId: string) {
-    const result = await duplicateModule(moduleId);
+    // Find the module to duplicate
+    const module = modules.find((m) => m.id === moduleId);
+    if (!module) {
+      toastStore.error("Module not found");
+      return;
+    }
+
+    // Create a new module with the same data but a new title
+    const result = await createModule({
+      title: `${module.title} (Copy)`,
+      description: module.description,
+      is_published: false,
+    });
+
     if (result.data) {
       toastStore.success("Module duplicated successfully");
     } else {
@@ -708,11 +788,22 @@
 
     loadingStats[moduleId] = true;
     try {
-      const stats = await getModuleStats(moduleId);
-      moduleStats[moduleId] = stats;
+      // Calculate stats from the module data
+      const module = modules.find((m) => m.id === moduleId);
+      if (module) {
+        const units = module.units?.length || 0;
+        const lessons =
+          module.units?.reduce(
+            (total: number, unit: any) => total + (unit.lessons?.length || 0),
+            0
+          ) || 0;
+        moduleStats[moduleId] = { units, lessons, students: 0 };
+      } else {
+        moduleStats[moduleId] = { units: 0, lessons: 0, students: 0 };
+      }
     } catch (err) {
       console.error("Error loading module stats:", err);
-      moduleStats[moduleId] = { units: 0, content: 0, students: 0 };
+      moduleStats[moduleId] = { units: 0, lessons: 0, students: 0 };
     } finally {
       loadingStats[moduleId] = false;
     }
@@ -1159,7 +1250,8 @@
                               <DraggableList
                                 items={lessonsData[unit.id] || []}
                                 disabled={!canManage}
-                                on:reorder={(event) => handleReorderLessons(event, unit.id)}
+                                on:reorder={(event) =>
+                                  handleReorderLessons(event, unit.id)}
                                 classList="space-y-2"
                               >
                                 <svelte:fragment

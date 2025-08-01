@@ -7,7 +7,16 @@
   // Initialize auth state on app load - only once
   onMount(() => {
     console.log("🔄 Root layout: Initializing auth...");
-    initAuth();
+
+    // Check if we're on the auth callback page
+    const isAuthCallback = window.location.pathname === "/auth/callback";
+
+    if (!isAuthCallback) {
+      console.log("🔄 Not on auth callback, initializing auth...");
+      initAuth();
+    } else {
+      console.log("🔄 On auth callback page, skipping auth initialization");
+    }
   });
 
   export let data: any;
