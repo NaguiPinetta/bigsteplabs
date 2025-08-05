@@ -62,7 +62,7 @@ export async function loadChatSessions(forceRefresh = false) {
   // Check if data is already loading
   const currentState = get(chatStore);
   if (currentState.loading) {
-    console.log("⏸️ Chat sessions already loading, skipping...");
+    console.log("⏸️ Chat sessions already loading, returning current data");
     return { data: currentState.sessions, error: null };
   }
 
@@ -72,11 +72,10 @@ export async function loadChatSessions(forceRefresh = false) {
     !shouldRefreshData("chatSessions") &&
     currentState.sessions.length > 0
   ) {
-    console.log("⏸️ Chat sessions data is fresh, skipping load...");
+    console.log("⏸️ Using cached chat sessions data");
     return { data: currentState.sessions, error: null };
   }
 
-  console.log("🔄 Loading chat sessions from Supabase...");
   setLoadingState("chatSessions", true);
   chatStore.update((state) => ({ ...state, loading: true, error: null }));
 
@@ -104,12 +103,11 @@ export async function loadChatSessions(forceRefresh = false) {
     }));
 
     setDataLoaded("chatSessions");
-    console.log("✅ Chat sessions loaded from database:", data?.length || 0);
+    console.log("✅ Chat sessions loaded successfully:", data?.length || 0);
     return { data, error: null };
   } catch (error) {
     const errorMessage =
       error instanceof Error ? error.message : "Failed to load chat sessions";
-    console.error("❌ Error loading chat sessions:", errorMessage);
     chatStore.update((state) => ({
       ...state,
       loading: false,
@@ -152,7 +150,6 @@ export async function loadAvailableAgents() {
   } catch (error) {
     const errorMessage =
       error instanceof Error ? error.message : "Failed to load agents";
-    console.error("❌ Error loading agents for chat:", errorMessage);
     chatStore.update((state) => ({ ...state, error: errorMessage }));
     return { data: null, error: errorMessage };
   }
@@ -163,7 +160,6 @@ export async function loadAvailableAgents() {
  */
 export async function createChatSession(agentId: string, userId: string) {
   try {
-    console.log("🚀 Creating chat session for agent:", agentId);
 
     // First get the agent details
     const { data: agent, error: agentError } = await supabase
@@ -213,12 +209,11 @@ export async function createChatSession(agentId: string, userId: string) {
       messages: [],
     }));
 
-    console.log("✅ Chat session created in database:", session.id);
+    console.log("✅ Chat session created successfully:", newSession.id);
     return { data: newSession, error: null };
   } catch (error) {
     const errorMessage =
       error instanceof Error ? error.message : "Failed to create chat session";
-    console.error("❌ Error creating chat session:", errorMessage);
     chatStore.update((state) => ({ ...state, error: errorMessage }));
     return { data: null, error: errorMessage };
   }
@@ -262,12 +257,14 @@ export async function setCurrentSession(session: ChatSessionWithAgent | null) {
 
     // Debug: Log message metadata
     if (data && data.length > 0) {
-      console.log("🎵 Loaded messages with metadata:", data.map(msg => ({
-        id: msg.id,
-        content: msg.content,
-        metadata: msg.metadata,
-        hasAudioUrl: !!msg.metadata?.audio_url
-      })));
+      data.forEach((msg) => {
+        console.log({
+          id: msg.id,
+          content: msg.content,
+          metadata: msg.metadata,
+          hasAudioUrl: !!msg.metadata?.audio_url
+        });
+      });
     }
 
     console.log(
@@ -278,7 +275,6 @@ export async function setCurrentSession(session: ChatSessionWithAgent | null) {
   } catch (error) {
     const errorMessage =
       error instanceof Error ? error.message : "Failed to load messages";
-    console.error("❌ Error loading messages:", errorMessage);
     chatStore.update((state) => ({
       ...state,
       loading: false,
@@ -296,7 +292,6 @@ export async function sendMessage(
   sessionId: string,
   audioUrl?: string
 ) {
-  console.log("💬 Sending message:", content, audioUrl ? "(with audio)" : "");
 
   chatStore.update((state) => ({
     ...state,
@@ -321,9 +316,7 @@ export async function sendMessage(
     if (audioUrl) {
       messageMetadata.audio_url = audioUrl;
       messageMetadata.is_voice_message = true;
-      console.log("🎵 Storing audio URL in message metadata:", audioUrl);
     } else {
-      console.log("🎵 No audio URL provided for message");
     }
 
     // Add current exercise context
@@ -369,7 +362,6 @@ export async function sendMessage(
         sessionId
       );
     } catch (error) {
-      console.error("❌ OpenAI API error:", error);
       throw new Error(
         error instanceof Error
           ? error.message
@@ -413,7 +405,7 @@ export async function sendMessage(
         .eq("id", sessionId);
 
       if (sessionError) {
-        console.warn(
+        console.log(
           "⚠️ Failed to update session message count:",
           sessionError
         );
@@ -428,12 +420,11 @@ export async function sendMessage(
       sendingMessage: false,
     }));
 
-    console.log("✅ Messages sent and received successfully via OpenAI API");
+    console.log("✅ Message sent successfully:", { userMessage: userMessage.id, aiMessage: aiMessage.id });
     return { data: { userMessage, aiMessage }, error: null };
   } catch (error) {
     const errorMessage =
       error instanceof Error ? error.message : "Failed to send message";
-    console.error("❌ Error sending message:", errorMessage);
 
     chatStore.update((state) => ({
       ...state,
@@ -450,7 +441,6 @@ export async function sendMessage(
  */
 export async function deleteChatSession(sessionId: string) {
   try {
-    console.log("🗑️ Starting delete process for session:", sessionId);
 
     // Check if user is authenticated
     const {
@@ -461,7 +451,6 @@ export async function deleteChatSession(sessionId: string) {
       throw new Error("User not authenticated");
     }
 
-    console.log("👤 Current user:", user.id);
 
     // Verify the session belongs to the current user
     const { data: session, error: sessionCheckError } = await supabase
@@ -478,21 +467,19 @@ export async function deleteChatSession(sessionId: string) {
       throw new Error("Unauthorized: Session does not belong to current user");
     }
 
-    console.log("✅ Session ownership verified");
+    console.log("🗑️ Deleting chat session:", sessionId);
 
     // Delete session (cascade will handle messages)
-    console.log("🗑️ Deleting chat session:", sessionId);
     const { error: sessionError } = await supabase
       .from("chat_sessions")
       .delete()
       .eq("id", sessionId);
 
     if (sessionError) {
-      console.error("❌ Error deleting session:", sessionError);
       throw sessionError;
     }
 
-    console.log("✅ Chat session deleted successfully");
+    
 
     // Update local state
     chatStore.update((state) => ({
@@ -503,12 +490,11 @@ export async function deleteChatSession(sessionId: string) {
       messages: state.currentSession?.id === sessionId ? [] : state.messages,
     }));
 
-    console.log("✅ Chat session deleted from database:", sessionId);
+    console.log("✅ Chat session deleted successfully:", sessionId);
     return { error: null };
   } catch (error) {
     const errorMessage =
       error instanceof Error ? error.message : "Failed to delete chat session";
-    console.error("❌ Error deleting chat session:", errorMessage);
     chatStore.update((state) => ({ ...state, error: errorMessage }));
     return { error: errorMessage };
   }
@@ -538,12 +524,11 @@ export async function endChatSession(sessionId: string) {
           : state.currentSession,
     }));
 
-    console.log("✅ Chat session ended:", sessionId);
+    
     return { error: null };
   } catch (error) {
     const errorMessage =
       error instanceof Error ? error.message : "Failed to end chat session";
-    console.error("❌ Error ending chat session:", errorMessage);
     return { error: errorMessage };
   }
 }

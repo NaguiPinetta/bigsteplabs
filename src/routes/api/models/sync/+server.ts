@@ -15,7 +15,7 @@ export const POST: RequestHandler = async ({ request }) => {
 
     // For now, we'll store the API key directly in the models table
     // In a production system, you'd want to encrypt this or use a separate secure storage
-    console.log("🔑 Storing API key for provider:", provider);
+
 
     // Test the API key based on provider
     if (provider === "openai") {
@@ -34,10 +34,7 @@ export const POST: RequestHandler = async ({ request }) => {
         }
 
         const models = await response.json();
-        console.log(
-          "✅ OpenAI API key validated, found models:",
-          models.data?.length || 0
-        );
+
 
         return json({
           success: true,
@@ -76,7 +73,7 @@ export const POST: RequestHandler = async ({ request }) => {
           );
         }
 
-        console.log("✅ Anthropic API key validated");
+
         return json({
           success: true,
           message: "Anthropic API key validated successfully",
@@ -94,7 +91,7 @@ export const POST: RequestHandler = async ({ request }) => {
       }
     } else if (provider === "google") {
       // Google AI validation is more complex, so we'll just accept the key for now
-      console.log("✅ Google AI API key accepted (validation not implemented)");
+
       return json({
         success: true,
         message: "Google AI API key accepted",
@@ -102,9 +99,7 @@ export const POST: RequestHandler = async ({ request }) => {
       });
     } else if (provider === "azure") {
       // Azure OpenAI validation is similar to OpenAI but with different endpoint
-      console.log(
-        "✅ Azure OpenAI API key accepted (validation not implemented)"
-      );
+
       return json({
         success: true,
         message: "Azure OpenAI API key accepted",

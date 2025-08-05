@@ -1,5 +1,7 @@
 import { writable, get } from "svelte/store";
-// import { supabase } from "$lib/supabase";  // Commented out for mock data
+import { supabase } from "$lib/supabase";
+import { agentsStore, loadAgents } from "./agents";
+import { authStore } from "./auth";
 
 interface TestResult {
   id: string;
@@ -42,9 +44,7 @@ function getInitialTestResults(): TestResult[] {
     if (stored) {
       try {
         return JSON.parse(stored);
-      } catch (e) {
-        console.warn("Failed to parse stored test results:", e);
-      }
+      } catch (e) {}
     }
   }
   return [];
@@ -56,9 +56,7 @@ function getInitialComparisons(): AgentComparison[] {
     if (stored) {
       try {
         return JSON.parse(stored);
-      } catch (e) {
-        console.warn("Failed to parse stored comparisons:", e);
-      }
+      } catch (e) {}
     }
   }
   return [];
@@ -93,49 +91,85 @@ function saveComparisons(comparisons: AgentComparison[]) {
 }
 
 /**
- * Load active agents for testing (mock implementation)
+ * Load active agents for testing from database
  */
 export async function loadActiveAgents() {
   workbenchStore.update((state) => ({ ...state, loading: true, error: null }));
 
-  // Simulate API delay
-  await new Promise((resolve) => setTimeout(resolve, 300));
-
   try {
-    // Get agents from localStorage (created via Agents page)
-    const storedAgents = localStorage.getItem("bigstep_agents");
-    const storedPersonas = localStorage.getItem("bigstep_personas");
-    const storedModels = localStorage.getItem("bigstep_models");
+    console.log("🔄 Workbench: Starting to load active agents...");
 
-    let agents = [];
-    let personas = [];
-    let models = [];
+    // Check auth state first
+    const authState = get(authStore);
+    console.log("🔄 Workbench: Auth state:", {
+      user: authState.user?.email,
+      role: authState.user?.role,
+      initialized: authState.initialized,
+      loading: authState.loading,
+    });
 
-    try {
-      agents = storedAgents ? JSON.parse(storedAgents) : [];
-      personas = storedPersonas ? JSON.parse(storedPersonas) : [];
-      models = storedModels ? JSON.parse(storedModels) : [];
-    } catch (e) {
-      console.warn("Failed to parse stored data for workbench:", e);
+    // Try to load agents directly from database first to debug
+    console.log("🔄 Workbench: Trying direct database query...");
+    const { data: directAgents, error: directError } = await supabase
+      .from("agents")
+      .select("*")
+      .order("name", { ascending: true });
+
+    console.log("🔄 Workbench: Direct database query result:", {
+      agentsCount: directAgents?.length || 0,
+      error: directError?.message || null,
+    });
+
+    // Load agents from the database using the agents store
+    let { data: agents, error } = await loadAgents();
+
+    console.log("🔄 Workbench: loadAgents result:", {
+      agentsCount: agents?.length || 0,
+      error: error || null,
+    });
+
+    if (error) {
+      console.log(
+        "⚠️ Workbench: Using direct database result due to loadAgents error"
+      );
+      if (directError) {
+        throw new Error(`Database error: ${directError.message}`);
+      }
+      // Use direct agents if available
+      if (directAgents && directAgents.length > 0) {
+        agents = directAgents;
+      } else {
+        throw new Error(error);
+      }
     }
 
-    // Create enriched agent data for workbench
+    if (!agents || agents.length === 0) {
+      console.log("⚠️ Workbench: No agents found in database");
+      workbenchStore.update((state) => ({
+        ...state,
+        activeAgents: [],
+        loading: false,
+      }));
+      return { data: [], error: null };
+    }
+
+    // Filter for active agents and format for workbench
     const activeAgents = agents
       .filter((agent: any) => agent.is_active !== false)
       .map((agent: any) => ({
         ...agent,
-        persona: personas.find((p: any) => p.id === agent.persona_id) || {
+        persona: agent.persona || {
           id: agent.persona_id,
           name: "Unknown Persona",
           response_style: "professional",
         },
-        model: models.find((m: any) => m.id === agent.model_id) || {
+        model: agent.model || {
           id: agent.model_id,
           name: "Unknown Model",
           provider: "unknown",
           engine: "unknown",
         },
-        dataset: null, // Would fetch from datasets store if needed
+        dataset: agent.dataset || null,
       }));
 
     workbenchStore.update((state) => ({
@@ -144,6 +178,7 @@ export async function loadActiveAgents() {
       loading: false,
     }));
 
+    console.log("✅ Workbench loaded active agents:", activeAgents.length);
     return { data: activeAgents, error: null };
   } catch (error) {
     const errorMessage =
@@ -153,20 +188,18 @@ export async function loadActiveAgents() {
       loading: false,
       error: errorMessage,
     }));
+    console.error("❌ Error loading active agents:", errorMessage);
     return { data: null, error: errorMessage };
   }
 }
 
 /**
- * Test a single agent (mock implementation)
+ * Test a single agent using real API
  */
 export async function testAgent(agentId: string, prompt: string) {
   workbenchStore.update((state) => ({ ...state, testing: true }));
 
-  // Simulate API delay
-  await new Promise((resolve) =>
-    setTimeout(resolve, 800 + Math.random() * 1200)
-  );
+  const startTime = Date.now();
 
   try {
     const state = workbenchStore;
@@ -178,37 +211,43 @@ export async function testAgent(agentId: string, prompt: string) {
       throw new Error("Agent not found");
     }
 
-    // Mock responses based on agent type
-    const responses = [
-      `Hello! I'm ${agent.name}. ${
-        prompt.includes("spanish")
-          ? "Hola! ¿Cómo puedo ayudarte con español?"
-          : "How can I help you learn today?"
-      }`,
-      `Great question! As ${agent.name}, I can help you with that. Let me break it down for you...`,
-      `That's an interesting topic! Based on my training, here's what I can tell you...`,
-      `I understand your question. Let me provide a detailed explanation...`,
-    ];
+    // Create a temporary chat session for testing
+    const { data: session, error: sessionError } = await supabase
+      .from("chat_sessions")
+      .insert({
+        agent_id: agentId,
+        title: `Test: ${prompt.substring(0, 50)}...`,
+        metadata: { is_test: true },
+      })
+      .select()
+      .single();
 
-    const response = responses[Math.floor(Math.random() * responses.length)];
-    const responseTime = 500 + Math.random() * 1500;
-    const success = Math.random() > 0.1; // 90% success rate
+    if (sessionError) {
+      throw new Error(`Failed to create test session: ${sessionError.message}`);
+    }
+
+    // Call the OpenAI service to generate a response
+    const { generateAIResponse } = await import("$lib/services/openai");
+    const response = await generateAIResponse(prompt, agentId, session.id);
+
+    const responseTime = Date.now() - startTime;
+    const success = !response.error;
 
     const testResult: TestResult = {
       id: `test-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
       agentId,
       agentName: agent.name,
       prompt,
-      response: success ? response : "",
+      response: success ? response.content : "",
       responseTime: Math.round(responseTime),
       timestamp: new Date().toISOString(),
       success,
-      error: success ? undefined : "Simulated network error",
+      error: success ? undefined : response.error || "Unknown error",
       metadata: {
-        tokenCount: success ? Math.floor(Math.random() * 150) + 50 : undefined,
+        tokenCount: response.usage?.total_tokens,
         modelUsed: agent.model?.name,
-        temperature: 0.7,
-        maxTokens: 1000,
+        temperature: agent.model?.temperature || 0.7,
+        maxTokens: agent.model?.max_tokens || 1000,
       },
     };
 
@@ -224,7 +263,8 @@ export async function testAgent(agentId: string, prompt: string) {
     console.log(
       "✅ Agent test completed:",
       agent.name,
-      success ? "Success" : "Failed"
+      success ? "Success" : "Failed",
+      `(${responseTime}ms)`
     );
     return { data: testResult, error: null };
   } catch (error) {
@@ -235,6 +275,7 @@ export async function testAgent(agentId: string, prompt: string) {
       testing: false,
       error: errorMessage,
     }));
+    console.error("❌ Agent test failed:", errorMessage);
     return { data: null, error: errorMessage };
   }
 }
@@ -274,7 +315,11 @@ export async function compareAgents(agentIds: string[], prompt: string) {
       testing: false,
     }));
 
-    console.log("✅ Agent comparison completed:", agentIds.length, "agents");
+    console.log(
+      "✅ Agent comparison completed:",
+      testResults.length,
+      "agents tested"
+    );
     return { data: comparison, error: null };
   } catch (error) {
     const errorMessage =
@@ -284,6 +329,7 @@ export async function compareAgents(agentIds: string[], prompt: string) {
       testing: false,
       error: errorMessage,
     }));
+    console.error("❌ Agent comparison failed:", errorMessage);
     return { data: null, error: errorMessage };
   }
 }
@@ -311,7 +357,7 @@ export async function runBatchTest(agentIds: string[], prompts: string[]) {
 
     workbenchStore.update((state) => ({ ...state, testing: false }));
 
-    console.log("✅ Batch test completed:", batchResults.length, "tests");
+    console.log("✅ Batch test completed:", batchResults.length, "tests run");
     return { data: batchResults, error: null };
   } catch (error) {
     const errorMessage =
@@ -321,6 +367,7 @@ export async function runBatchTest(agentIds: string[], prompts: string[]) {
       testing: false,
       error: errorMessage,
     }));
+    console.error("❌ Batch test failed:", errorMessage);
     return { data: null, error: errorMessage };
   }
 }
@@ -401,8 +448,6 @@ export function clearTestResults() {
     localStorage.removeItem("bigstep_workbench_results");
     localStorage.removeItem("bigstep_workbench_comparisons");
   }
-
-  console.log("✅ Test results cleared");
 }
 
 /**

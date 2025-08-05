@@ -105,26 +105,13 @@
   });
 
   async function handleCreateLesson() {
-    console.log("🚀 handleCreateLesson called");
-    console.log("Current state:", {
-      title: newLesson.title,
-      notion_url: newLesson.notion_url,
-      embed_url: newLesson.embed_url,
-      embedUrlValidated,
-      user: !!user,
-    });
-
     if (!newLesson.title.trim()) {
-      console.log("❌ No title provided");
       return;
     }
 
     // For embedded content, require Notion URL or embed URL
     if (newLesson.content_type === "embedded") {
       if (!newLesson.notion_url.trim() && !newLesson.embed_url.trim()) {
-        console.log(
-          "❌ No Notion URL or Embed URL provided for embedded content"
-        );
         return;
       }
     }
@@ -132,30 +119,18 @@
     // For agent chat, require agent selection
     if (newLesson.content_type === "agent_chat") {
       if (!newLesson.agent_id.trim()) {
-        console.log("❌ No Agent selected for agent chat");
         return;
       }
     }
 
     if (!user) {
-      console.log("❌ No user found");
       return;
     }
 
     // Require embed URL validation only for embedded content
     if (newLesson.content_type === "embedded" && !embedUrlValidated) {
-      console.log("❌ Embed URL not validated. Please click 'Apply' first.");
       return;
     }
-
-    console.log("🚀 Creating lesson with:", {
-      title: newLesson.title,
-      notion_url: newLesson.notion_url,
-      embed_url: newLesson.embed_url,
-      module_id: newLesson.module_id,
-      unit_id: newLesson.unit_id,
-      is_published: newLesson.is_published,
-    });
 
     isCreatingLesson = true;
 
@@ -183,7 +158,6 @@
       clearTimeout(timeoutId);
 
       if (result) {
-        console.log("✅ Lesson created successfully:", result);
         newLesson = {
           title: "",
           notion_url: "",
@@ -197,13 +171,9 @@
         embedUrlValidated = false;
         embedUrlError = "";
         createDialogOpen = false;
-      } else {
-        // If creation failed, show error but don't close dialog
-        console.error("Failed to create lesson - result was null");
       }
     } catch (error) {
       clearTimeout(timeoutId);
-      console.error("Error creating lesson:", error);
       // Don't close dialog on error, let user try again
     } finally {
       isCreatingLesson = false;
@@ -217,7 +187,6 @@
       editLesson.content_type === "embedded" &&
       !editLesson.notion_url.trim()
     ) {
-      console.log("❌ No Notion URL provided for embedded content");
       return;
     }
 
@@ -225,7 +194,6 @@
       editLesson.content_type === "agent_chat" &&
       !editLesson.agent_id.trim()
     ) {
-      console.log("❌ No Agent selected for agent chat");
       return;
     }
 
@@ -246,7 +214,7 @@
         editDialogOpen = false;
       }
     } catch (error) {
-      console.error("Error updating lesson:", error);
+      // Error handling
     } finally {
       isUpdatingLesson = false;
     }
@@ -305,7 +273,6 @@
     const iframeMatch = url.match(/src="([^"]+)"/);
     if (iframeMatch) {
       const srcUrl = iframeMatch[1];
-      console.log("🔍 Extracted URL from iframe:", srcUrl);
       return srcUrl;
     }
 
@@ -314,18 +281,12 @@
     const pageIdMatch = cleanUrl.match(/\/([a-f0-9]{32})/);
     if (pageIdMatch) {
       const pageId = pageIdMatch[1];
-      console.log("🔍 Extracted page ID:", pageId);
       return `https://bigstep-idiomas.notion.site/ebd/${pageId}`;
     }
-    console.log("❌ Could not extract page ID from URL:", cleanUrl);
     return null; // Return null instead of the original URL to indicate failure
   }
 
   function validateEmbedUrl() {
-    console.log("🔍 Validating embed URL");
-    console.log("Notion URL field:", newLesson.notion_url);
-    console.log("Embed URL field:", newLesson.embed_url);
-
     // Check if we have content in either field
     const hasNotionUrl = newLesson.notion_url.trim();
     const hasEmbedUrl = newLesson.embed_url.trim();
@@ -333,7 +294,6 @@
     if (!hasNotionUrl && !hasEmbedUrl) {
       embedUrlError = "Please enter a Notion URL or iframe snippet first";
       embedUrlValidated = false;
-      console.log("❌ No URL provided in either field");
       return false;
     }
 
@@ -344,7 +304,6 @@
         newLesson.embed_url = embedUrl;
         embedUrlValidated = true;
         embedUrlError = "";
-        console.log("✅ Embed URL validated from embed field:", embedUrl);
         return true;
       }
     }
@@ -356,7 +315,6 @@
         embedUrlError =
           "Please enter a real Notion page URL or iframe snippet (not the placeholder)";
         embedUrlValidated = false;
-        console.log("❌ Placeholder URL detected");
         return false;
       }
 
@@ -365,7 +323,6 @@
         newLesson.embed_url = embedUrl;
         embedUrlValidated = true;
         embedUrlError = "";
-        console.log("✅ Embed URL validated from notion field:", embedUrl);
         return true;
       }
     }
@@ -374,7 +331,6 @@
     embedUrlError =
       "Could not extract embed URL. Please paste either a Notion page URL or the iframe snippet from Notion's embed dialog.";
     embedUrlValidated = false;
-    console.log("❌ Failed to extract embed URL from both fields");
     return false;
   }
 
@@ -390,15 +346,10 @@
       editLesson.embed_url = embedUrl;
       editEmbedUrlValidated = true;
       editEmbedUrlError = "";
-      console.log("✅ Edit Embed URL validated:", embedUrl);
       return true;
     } else {
       editEmbedUrlError = "Could not extract embed URL from Notion URL";
       editEmbedUrlValidated = false;
-      console.log(
-        "❌ Failed to extract embed URL from:",
-        editLesson.notion_url
-      );
       return false;
     }
   }
@@ -408,7 +359,6 @@
     if (newLesson.notion_url) {
       const embedUrl = extractNotionEmbedUrl(newLesson.notion_url);
       if (embedUrl) {
-        console.log("🔍 Auto-extracted embed URL:", embedUrl);
         newLesson.embed_url = embedUrl;
         embedUrlValidated = true;
         embedUrlError = "";
@@ -424,7 +374,6 @@
     if (editLesson.notion_url) {
       const embedUrl = extractNotionEmbedUrl(editLesson.notion_url);
       if (embedUrl) {
-        console.log("🔍 Auto-extracted edit embed URL:", embedUrl);
         editLesson.embed_url = embedUrl;
         editEmbedUrlValidated = true;
         editEmbedUrlError = "";
@@ -436,14 +385,10 @@
   }
 
   function testButtonClick() {
-    console.log("🔘 Test button clicked!");
-    console.log("Current embedUrlValidated:", embedUrlValidated);
-    console.log("Current embedUrlError:", embedUrlError);
-    console.log("Current newLesson:", newLesson);
+    // Test function
   }
 
   function testApplyButton() {
-    console.log("🔘 Apply button clicked!");
     validateEmbedUrl();
   }
 </script>
@@ -698,7 +643,6 @@
             placeholder="https://bigstep-idiomas.notion.site/ebd/your-page-id"
             on:input={() => {
               if (newLesson.embed_url) {
-                console.log("🔍 Embed URL field changed:", newLesson.embed_url);
                 // Auto-validate if it looks like an iframe snippet
                 if (newLesson.embed_url.includes("<iframe")) {
                   validateEmbedUrl();

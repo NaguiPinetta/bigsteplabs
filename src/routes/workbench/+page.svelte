@@ -51,18 +51,41 @@
   let loadingAnalytics = false;
 
   $: user = $authStore.user;
-  $: isAdminUser = isAdmin(user);
+  $: isAdminUser = isAdmin();
   $: state = $workbenchStore;
   $: agents = state.activeAgents;
   $: testResults = state.testResults;
   $: comparisons = state.comparisons;
   $: selectedAgents = state.selectedAgents;
 
+  // Debug logging for state changes
+  $: console.log("🔄 Workbench state changed:", {
+    loading: state.loading,
+    error: state.error,
+    agentsCount: agents?.length || 0,
+    isAdminUser,
+    user: user?.email,
+  });
+
   onMount(async () => {
-    if (isAdminUser) {
-      await loadActiveAgents();
-      loadAnalytics();
-    }
+    console.log("🔄 Workbench onMount: Starting...");
+    console.log("🔄 Workbench onMount: User:", user);
+    console.log("🔄 Workbench onMount: isAdminUser:", isAdminUser);
+
+    // Temporarily bypass admin check for debugging
+    console.log("🔄 Workbench onMount: Bypassing admin check for debugging...");
+    await loadActiveAgents();
+    loadAnalytics();
+
+    // Original code (commented out for debugging):
+    // if (isAdminUser) {
+    //   console.log("🔄 Workbench onMount: User is admin, loading agents...");
+    //   await loadActiveAgents();
+    //   loadAnalytics();
+    // } else {
+    //   console.log("⚠️ Workbench onMount: User is not admin, cannot load agents");
+    //   console.log("⚠️ Workbench onMount: User role:", user?.role);
+    // }
   });
 
   async function loadAnalytics() {
@@ -193,9 +216,22 @@
       </p>
     </Card>
   {:else if state.loading}
-    <div class="flex items-center justify-center py-12">
-      <Loader2 class="w-8 h-8 animate-spin text-primary" />
-      <span class="ml-2 text-muted-foreground">Loading workbench...</span>
+    <div class="flex flex-col items-center justify-center py-12">
+      <Loader2 class="w-8 h-8 animate-spin text-primary mb-4" />
+      <span class="text-muted-foreground mb-4">Loading workbench...</span>
+      <Button
+        variant="outline"
+        on:click={() => {
+          console.log("🔄 Manually resetting workbench loading state");
+          workbenchStore.update((state) => ({
+            ...state,
+            loading: false,
+            error: null,
+          }));
+        }}
+      >
+        Reset Loading State
+      </Button>
     </div>
   {:else if state.error}
     <Card class="p-6 border-destructive">

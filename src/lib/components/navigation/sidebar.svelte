@@ -38,14 +38,7 @@
   // Auth is already initialized in root layout
   // No need to initialize here
 
-  // Log auth state changes for debugging
-  $: {
-    console.log("Sidebar - Auth state:", {
-      user: user ? { email: user.email, role: user.role } : null,
-      loading,
-      hasSession: !!authState.session,
-    });
-  }
+
 
   const navigationItems = [
     {

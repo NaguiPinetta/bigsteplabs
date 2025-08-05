@@ -42,24 +42,23 @@ export async function loadUnits(moduleId?: string, forceRefresh = false) {
   // Check if we should load data
   const loadCheck = get(canLoadData);
   if (!loadCheck.shouldLoad) {
-    console.log("⏸️ Skipping units load - auth not ready or user cannot manage");
+    
     return { data: null, error: "Not authorized or auth not ready" };
   }
 
   // Check if data is already loading
   const currentState = get(unitsStore);
   if (currentState.loading) {
-    console.log("⏸️ Units already loading, skipping...");
+    
     return { data: currentState.units, error: null };
   }
 
   // Check if we need to refresh data (only for non-filtered loads)
   if (!moduleId && !forceRefresh && !shouldRefreshData("units") && currentState.units.length > 0) {
-    console.log("⏸️ Units data is fresh, skipping load...");
+    
     return { data: currentState.units, error: null };
   }
 
-  console.log("🔄 Loading units from Supabase...");
   setLoadingState("units", true);
   unitsStore.update((state) => ({ ...state, loading: true, error: null }));
 
@@ -76,7 +75,6 @@ export async function loadUnits(moduleId?: string, forceRefresh = false) {
     const { data: units, error } = await query;
 
     if (error) {
-      console.error("❌ Error loading units:", error);
       setDataError("units", error.message);
       unitsStore.update((state) => ({
         ...state,
@@ -86,7 +84,7 @@ export async function loadUnits(moduleId?: string, forceRefresh = false) {
       return { data: null, error };
     }
 
-    console.log("✅ Units loaded successfully:", units?.length || 0, "units");
+    
     unitsStore.update((state) => ({
       ...state,
       units: units || [],
@@ -100,7 +98,6 @@ export async function loadUnits(moduleId?: string, forceRefresh = false) {
 
     return { data: units, error: null };
   } catch (error) {
-    console.error("❌ Unexpected error loading units:", error);
     const errorMessage =
       error instanceof Error ? error.message : "Failed to load units";
     
@@ -120,7 +117,6 @@ export async function loadUnits(moduleId?: string, forceRefresh = false) {
 export async function createUnit(
   unit: Omit<Unit, "id" | "created_at" | "updated_at" | "order_index" | "slug">
 ) {
-  console.log("🔍 Creating unit in Supabase:", unit);
   unitsStore.update((state) => ({ ...state, loading: true, error: null }));
 
   try {
@@ -136,7 +132,6 @@ export async function createUnit(
       .limit(1);
 
     if (countError) {
-      console.error("❌ Error getting order index:", countError);
       throw new Error(countError.message);
     }
 
@@ -155,7 +150,6 @@ export async function createUnit(
       .single();
 
     if (error) {
-      console.error("❌ Error creating unit:", error);
       unitsStore.update((state) => ({
         ...state,
         loading: false,
@@ -164,14 +158,13 @@ export async function createUnit(
       return { data: null, error: error.message };
     }
 
-    console.log("✅ Unit created successfully:", newUnit);
+    
 
     // Refresh the units list
     await loadUnits();
 
     return { data: newUnit, error: null };
   } catch (error) {
-    console.error("❌ Unexpected error creating unit:", error);
     const errorMessage =
       error instanceof Error ? error.message : "Failed to create unit";
     unitsStore.update((state) => ({
@@ -187,7 +180,6 @@ export async function createUnit(
  * Update a unit
  */
 export async function updateUnit(id: string, updates: Partial<Unit>) {
-  console.log("🔍 Updating unit in Supabase:", id, updates);
 
   try {
     const { data: updatedUnit, error } = await supabase
@@ -201,18 +193,16 @@ export async function updateUnit(id: string, updates: Partial<Unit>) {
       .single();
 
     if (error) {
-      console.error("❌ Error updating unit:", error);
       return { data: null, error: error.message };
     }
 
-    console.log("✅ Unit updated successfully:", updatedUnit);
+    
 
     // Refresh the units list
     await loadUnits();
 
     return { data: updatedUnit, error: null };
   } catch (error) {
-    console.error("❌ Unexpected error updating unit:", error);
     const errorMessage =
       error instanceof Error ? error.message : "Failed to update unit";
     return { data: null, error: errorMessage };
@@ -223,24 +213,21 @@ export async function updateUnit(id: string, updates: Partial<Unit>) {
  * Delete a unit
  */
 export async function deleteUnit(id: string) {
-  console.log("🔍 Deleting unit from Supabase:", id);
 
   try {
     const { error } = await supabase.from("units").delete().eq("id", id);
 
     if (error) {
-      console.error("❌ Error deleting unit:", error);
       return { data: null, error: error.message };
     }
 
-    console.log("✅ Unit deleted successfully:", id);
+    
 
     // Refresh the units list
     await loadUnits();
 
     return { data: { id }, error: null };
   } catch (error) {
-    console.error("❌ Unexpected error deleting unit:", error);
     const errorMessage =
       error instanceof Error ? error.message : "Failed to delete unit";
     return { data: null, error: errorMessage };
@@ -251,7 +238,6 @@ export async function deleteUnit(id: string) {
  * Reorder units
  */
 export async function reorderUnits(unitIds: string[]) {
-  console.log("🔍 Reordering units in Supabase:", unitIds);
 
   try {
     // Update each unit's order_index
@@ -262,19 +248,17 @@ export async function reorderUnits(unitIds: string[]) {
         .eq("id", unitIds[i]);
 
       if (error) {
-        console.error("❌ Error reordering unit:", error);
         return { data: null, error: error.message };
       }
     }
 
-    console.log("✅ Units reordered successfully");
+    
 
     // Refresh the units list
     await loadUnits();
 
     return { data: unitIds, error: null };
   } catch (error) {
-    console.error("❌ Unexpected error reordering units:", error);
     const errorMessage =
       error instanceof Error ? error.message : "Failed to reorder units";
     return { data: null, error: errorMessage };
@@ -285,7 +269,6 @@ export async function reorderUnits(unitIds: string[]) {
  * Toggle unit publication status
  */
 export async function toggleUnitPublication(id: string) {
-  console.log("🔍 Toggling unit publication:", id);
 
   try {
     // Get current unit
@@ -296,7 +279,6 @@ export async function toggleUnitPublication(id: string) {
       .single();
 
     if (fetchError) {
-      console.error("❌ Error fetching unit:", fetchError);
       return { data: null, error: fetchError.message };
     }
 
@@ -313,18 +295,16 @@ export async function toggleUnitPublication(id: string) {
       .single();
 
     if (error) {
-      console.error("❌ Error toggling publication:", error);
       return { data: null, error: error.message };
     }
 
-    console.log("✅ Unit publication toggled successfully:", updatedUnit);
+    
 
     // Refresh the units list
     await loadUnits();
 
     return { data: updatedUnit, error: null };
   } catch (error) {
-    console.error("❌ Unexpected error toggling publication:", error);
     const errorMessage =
       error instanceof Error ? error.message : "Failed to toggle publication";
     return { data: null, error: errorMessage };
@@ -388,7 +368,6 @@ export async function getUnitStats(unitId: string) {
  * Duplicate a unit
  */
 export async function duplicateUnit(unitId: string) {
-  console.log("🔍 Duplicating unit:", unitId);
 
   try {
     // Get the original unit
@@ -399,7 +378,6 @@ export async function duplicateUnit(unitId: string) {
       .single();
 
     if (fetchError) {
-      console.error("❌ Error fetching unit to duplicate:", fetchError);
       return { data: null, error: fetchError.message };
     }
 
@@ -421,18 +399,16 @@ export async function duplicateUnit(unitId: string) {
       .single();
 
     if (error) {
-      console.error("❌ Error duplicating unit:", error);
       return { data: null, error: error.message };
     }
 
-    console.log("✅ Unit duplicated successfully:", newUnit);
+    
 
     // Refresh the units list
     await loadUnits();
 
     return { data: newUnit, error: null };
   } catch (error) {
-    console.error("❌ Unexpected error duplicating unit:", error);
     const errorMessage =
       error instanceof Error ? error.message : "Failed to duplicate unit";
     return { data: null, error: errorMessage };

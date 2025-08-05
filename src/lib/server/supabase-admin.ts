@@ -7,7 +7,7 @@ import type { Database } from "../types/database";
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseServiceKey = SUPABASE_SERVICE_ROLE_KEY;
 
-console.log("🔍 Environment check:", {
+console.log({
   hasUrl: !!supabaseUrl,
   hasServiceKey: !!supabaseServiceKey,
   url: supabaseUrl,
@@ -36,7 +36,6 @@ export const supabaseAdmin = createClient<Database>(
   }
 );
 
-console.log("✅ Supabase admin client created successfully");
 
 // Helper functions for admin operations
 export async function createUserProfile(

@@ -13,7 +13,7 @@ export const POST: RequestHandler = async ({ request }) => {
       );
     }
 
-    console.log("🔄 Reordering lessons via admin API:", lessonIds);
+
 
     // Call the reorder function using admin client
     const { error } = await supabaseAdmin.rpc("reorder_lessons", {
@@ -25,7 +25,7 @@ export const POST: RequestHandler = async ({ request }) => {
       return json({ success: false, error: error.message }, { status: 500 });
     }
 
-    console.log("✅ Lessons reordered successfully via admin API");
+
     return json({ success: true, message: "Lessons reordered successfully" });
   } catch (error) {
     console.error("❌ Error in reorder lessons API:", error);

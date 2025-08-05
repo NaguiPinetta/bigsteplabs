@@ -34,7 +34,6 @@
     error = null;
 
     try {
-      console.log("🔍 Loading lesson:", lessonId);
       lesson = await getLessonById(lessonId);
 
       if (!lesson) {
@@ -43,13 +42,9 @@
       }
 
       // Initialize embed after lesson is loaded
-      console.log("Loading lesson:", lesson.title);
-      console.log("Getting lesson by ID:", lesson.id);
-      console.log("Retrieved lesson:", lesson);
 
       // Check if we have a stored embed URL - if so, use it directly
       if (lesson.embed_url) {
-        console.log("✅ Using stored embed URL directly:", lesson.embed_url);
         // Don't set loading state - let iframe load naturally
         embedLoading = false;
         embedError = false;
@@ -66,12 +61,6 @@
       }
 
       // Log lesson view for analytics (stub for future implementation)
-      console.log("📊 Lesson viewed:", {
-        lessonId: lesson.id,
-        title: lesson.title,
-        userId: user?.id,
-        timestamp: new Date().toISOString(),
-      });
     } catch (err) {
       console.error("❌ Error loading lesson:", err);
       error = "Failed to load lesson";
@@ -104,10 +93,8 @@
     const pageIdMatch = cleanUrl.match(/\/([a-f0-9]{32})/);
     if (pageIdMatch) {
       const pageId = pageIdMatch[1];
-      console.log("🔍 Extracted page ID:", pageId);
       return `https://bigstep-idiomas.notion.site/ebd/${pageId}`;
     }
-    console.log("❌ Could not extract page ID from URL:", cleanUrl);
     return null; // Return null instead of the original URL to indicate failure
   }
 
@@ -127,7 +114,6 @@
   let embedTimeout: ReturnType<typeof setTimeout> | null = null;
 
   function handleEmbedLoad() {
-    console.log("✅ Embed loaded successfully");
     if (embedTimeout) clearTimeout(embedTimeout);
     embedLoading = false;
     embedError = false;
@@ -145,19 +131,16 @@
 
     // If lesson has a stored embed_url, use it directly (skip automatic extraction)
     if (lesson.embed_url) {
-      console.log("🔗 Using stored embed URL directly:", lesson.embed_url);
       return lesson.embed_url;
     }
 
     // Only try automatic extraction if no stored embed_url
     const embedUrl = getNotionEmbedUrl(lesson.notion_url);
     if (embedUrl) {
-      console.log("🔗 Using automatic embed URL:", embedUrl);
       return embedUrl;
     }
 
     // If automatic method fails, return null to trigger manual embed
-    console.log("❌ Automatic embed failed, prompting for manual embed");
     return null;
   }
 
@@ -181,7 +164,6 @@
       // Clean up the URL
       embedUrl = embedUrl.trim();
 
-      console.log("🔧 Applying manual embed URL:", embedUrl);
 
       manualEmbedUrl = embedUrl;
       showManualEmbed = false;
@@ -429,32 +411,6 @@
                 • If embedding fails, click "Open in Notion" to view the content
               </li>
             </ul>
-          </div>
-
-          <!-- Debug Panel -->
-          <div
-            class="mt-4 p-4 bg-gray-50 dark:bg-gray-900/20 border border-gray-200 dark:border-gray-800 rounded-lg"
-          >
-            <h4
-              class="text-sm font-semibold text-gray-800 dark:text-gray-200 mb-2"
-            >
-              🔍 Debug Info
-            </h4>
-            <div class="text-xs text-gray-600 dark:text-gray-400 space-y-1">
-              <div>
-                <strong>Status:</strong>
-                {embedLoading ? "Loading" : embedError ? "Failed" : "Success"}
-              </div>
-              <div>
-                <strong>Method:</strong>
-                {showManualEmbed ? "Manual" : "Automatic"}
-              </div>
-              <div>
-                <strong>Current URL:</strong>
-                {getCurrentEmbedUrl() || "None"}
-              </div>
-              <div><strong>Original URL:</strong> {lesson?.notion_url}</div>
-            </div>
           </div>
         </div>
       </Card>

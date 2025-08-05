@@ -44,7 +44,6 @@ export async function loadLessons(forceRefresh = false): Promise<void> {
   const dataType = "lessons";
 
   if (!forceRefresh && !shouldRefreshData(dataType)) {
-    console.log("🔄 Skipping lessons load - data is fresh");
     return;
   }
 
@@ -52,7 +51,6 @@ export async function loadLessons(forceRefresh = false): Promise<void> {
   lessonsStore.update((state) => ({ ...state, loading: true, error: null }));
 
   try {
-    console.log("🔄 Loading lessons...");
 
     const { data, error } = await supabase
       .from("lessons")
@@ -68,7 +66,6 @@ export async function loadLessons(forceRefresh = false): Promise<void> {
       .order("created_at", { ascending: false });
 
     if (error) {
-      console.error("❌ Error loading lessons:", error);
       setDataError(dataType, error.message);
       lessonsStore.update((state) => ({
         ...state,
@@ -78,7 +75,7 @@ export async function loadLessons(forceRefresh = false): Promise<void> {
       return;
     }
 
-    console.log("✅ Loaded", data?.length || 0, "lessons");
+    
     setDataLoaded(dataType);
 
     lessonsStore.update((state) => ({
@@ -88,7 +85,6 @@ export async function loadLessons(forceRefresh = false): Promise<void> {
       error: null,
     }));
   } catch (error) {
-    console.error("❌ Error loading lessons:", error);
     const errorMessage =
       error instanceof Error ? error.message : "Failed to load lessons";
     setDataError(dataType, errorMessage);
@@ -129,7 +125,6 @@ export async function createLesson(lessonData: {
 
     return data;
   } catch (error) {
-    console.error("Error creating lesson:", error);
     lessonsStore.update((state) => ({
       ...state,
       error: error instanceof Error ? error.message : "Failed to create lesson",
@@ -174,7 +169,6 @@ export async function updateLesson(
 
     return data;
   } catch (error) {
-    console.error("Error updating lesson:", error);
     lessonsStore.update((state) => ({
       ...state,
       error: error instanceof Error ? error.message : "Failed to update lesson",
@@ -186,16 +180,14 @@ export async function updateLesson(
 
 export async function deleteLesson(id: string): Promise<boolean> {
   try {
-    console.log("🔍 Deleting lesson:", id);
 
     const { error } = await supabase.from("lessons").delete().eq("id", id);
 
     if (error) {
-      console.error("❌ Error deleting lesson:", error);
       throw error;
     }
 
-    console.log("✅ Lesson deleted successfully");
+    
 
     // Update the store
     lessonsStore.update((state) => ({
@@ -205,7 +197,6 @@ export async function deleteLesson(id: string): Promise<boolean> {
 
     return true;
   } catch (error) {
-    console.error("❌ Error deleting lesson:", error);
     lessonsStore.update((state) => ({
       ...state,
       error: error instanceof Error ? error.message : "Failed to delete lesson",
@@ -218,7 +209,6 @@ export async function getLessonById(
   id: string
 ): Promise<LessonWithRelations | null> {
   try {
-    console.log("🔍 Getting lesson by ID:", id);
 
     const { data, error } = await supabase
       .from("lessons")
@@ -233,14 +223,12 @@ export async function getLessonById(
       .single();
 
     if (error) {
-      console.error("❌ Error getting lesson:", error);
       return null;
     }
 
-    console.log("✅ Retrieved lesson:", data);
+    
     return data;
   } catch (error) {
-    console.error("❌ Error getting lesson:", error);
     return null;
   }
 }
@@ -249,7 +237,6 @@ export async function getLessonsByModule(
   moduleId: string
 ): Promise<LessonWithRelations[]> {
   try {
-    console.log("🔍 Getting lessons by module:", moduleId);
 
     const { data, error } = await supabase
       .from("lessons")
@@ -265,14 +252,12 @@ export async function getLessonsByModule(
       .order("created_at", { ascending: false });
 
     if (error) {
-      console.error("❌ Error getting lessons by module:", error);
       return [];
     }
 
-    console.log("✅ Retrieved", data?.length || 0, "lessons for module");
+    
     return data || [];
   } catch (error) {
-    console.error("❌ Error getting lessons by module:", error);
     return [];
   }
 }
@@ -281,7 +266,6 @@ export async function getLessonsByUnit(
   unitId: string
 ): Promise<LessonWithRelations[]> {
   try {
-    console.log("🔍 Getting lessons by unit:", unitId);
 
     const { data, error } = await supabase
       .from("lessons")
@@ -298,21 +282,18 @@ export async function getLessonsByUnit(
       .order("created_at", { ascending: false });
 
     if (error) {
-      console.error("❌ Error getting lessons by unit:", error);
       return [];
     }
 
-    console.log("✅ Retrieved", data?.length || 0, "lessons for unit");
+    
     return data || [];
   } catch (error) {
-    console.error("❌ Error getting lessons by unit:", error);
     return [];
   }
 }
 
 export async function reorderLessons(lessonIds: string[]): Promise<boolean> {
   try {
-    console.log("🔄 Reordering lessons:", lessonIds);
 
     const response = await fetch("/api/reorder-lessons-manual", {
       method: "POST",
@@ -325,14 +306,12 @@ export async function reorderLessons(lessonIds: string[]): Promise<boolean> {
     const result = await response.json();
 
     if (!result.success) {
-      console.error("❌ Error reordering lessons:", result.error);
       return false;
     }
 
-    console.log("✅ Lessons reordered successfully");
+    
     return true;
   } catch (error) {
-    console.error("❌ Error reordering lessons:", error);
     return false;
   }
 }

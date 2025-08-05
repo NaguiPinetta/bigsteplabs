@@ -2,27 +2,33 @@
   import "../app.css";
   import { onMount } from "svelte";
   import { page } from "$app/stores";
-  import { initAuth, authStore } from "$lib/stores/auth";
-
-  // Initialize auth state on app load - only once
-  onMount(() => {
-    console.log("🔄 Root layout: Initializing auth...");
-
-    // Check if we're on the auth callback page
-    const isAuthCallback = window.location.pathname === "/auth/callback";
-
-    if (!isAuthCallback) {
-      console.log("🔄 Not on auth callback, initializing auth...");
-      initAuth();
-    } else {
-      console.log("🔄 On auth callback page, skipping auth initialization");
-    }
-  });
+  import { initAuth, authStore, initializeAuthManually } from "$lib/stores/auth";
 
   export let data: any;
 
-  // Update auth store with server data
-  $: if (data?.session && data?.user) {
+  // Initialize auth state on app load
+  onMount(async () => {
+    console.log("🔄 Layout: Initializing auth...");
+    
+    // If we have server data, use it
+    if (data?.session && data?.user) {
+      console.log("🔄 Layout: Using server auth data");
+      authStore.set({
+        session: data.session,
+        user: data.user,
+        loading: false,
+        initialized: true,
+      });
+    } else {
+      // Otherwise, initialize auth manually
+      console.log("🔄 Layout: No server data, initializing auth manually");
+      await initializeAuthManually();
+    }
+  });
+
+  // Update auth store with server data if it changes
+  $: if (data?.session && data?.user && !$authStore.initialized) {
+    console.log("🔄 Layout: Updating auth store with server data");
     authStore.set({
       session: data.session,
       user: data.user,

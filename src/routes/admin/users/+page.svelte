@@ -157,7 +157,7 @@
         throw allowlistError;
       }
 
-      console.log("✅ User added to allowlist:", newUser.email);
+
 
       // Reload users to show the new allowlisted user
       await loadUsers();
@@ -195,10 +195,7 @@
         return;
       }
 
-      console.log("🔍 Creating user:", {
-        email: newUser.email,
-        role: newUser.role,
-      });
+
 
       const response = await fetch("/api/admin/create-user", {
         method: "POST",
@@ -218,7 +215,7 @@
         throw new Error(result.error || "Failed to create user");
       }
 
-      console.log("✅ User created successfully:", result.user);
+
 
       // Reload users to show the new user
       await loadUsers();
@@ -263,7 +260,7 @@
           return;
         }
 
-        console.log("🔍 Updating user:", editUser.email);
+
 
         const response = await fetch("/api/admin/update-user", {
           method: "POST",
@@ -283,10 +280,10 @@
           throw new Error(result.error || "Failed to update user password");
         }
 
-        console.log("✅ User password updated successfully");
+        // Password updated successfully
       }
 
-      console.log("✅ User updated:", editUser.email);
+      // User updated successfully
 
       // Reload users
       await loadUsers();
@@ -319,7 +316,7 @@
           .eq("id", userToDelete.id);
 
         if (deleteError) throw deleteError;
-        console.log("✅ User removed from allowlist:", userToDelete.email);
+
       } else {
         // Delete existing user
         const { error: deleteError } = await supabase
@@ -328,7 +325,7 @@
           .eq("id", userToDelete.id);
 
         if (deleteError) throw deleteError;
-        console.log("✅ User deleted:", userToDelete.email);
+
       }
 
       // Store email before clearing userToDelete

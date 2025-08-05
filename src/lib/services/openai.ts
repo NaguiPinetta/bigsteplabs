@@ -98,8 +98,6 @@ export async function buildAgentContext(
   conversationHistory: ChatMessage[];
 }> {
   try {
-    console.log("🔍 Building agent context for:", agentId);
-
     // Get agent details
     const { data: agent } = await supabase
       .from("agents")
@@ -145,8 +143,6 @@ export async function buildAgentContext(
 
     // Add dataset context if available
     if (agent.dataset_ids && agent.dataset_ids.length > 0) {
-      console.log("🔍 Agent has datasets:", agent.dataset_ids);
-
       const { data: datasets } = await supabase
         .from("datasets")
         .select("id, name, description, metadata")
@@ -264,7 +260,6 @@ export async function buildAgentContext(
               systemPrompt += `Status: No structured exercises available.\n\n`;
             }
           } else {
-            console.log(`⚠️ No chunks found for dataset: ${dataset.name}`);
             systemPrompt += `Status: No content available yet.\n\n`;
           }
         }
@@ -288,7 +283,6 @@ export async function buildAgentContext(
 Current Exercise State: [Track which exercise number the user is on, starting with 1]\n\n`;
       }
     } else {
-      console.log("🔍 Agent has no datasets assigned");
     }
 
     // Add behavioral instructions
@@ -311,7 +305,6 @@ If no structured exercises are found in the dataset, inform the user that no exe
 
 Current Exercise State: [Track which exercise number the user is on, starting with 1]`;
 
-    console.log("🔍 Final system prompt length:", systemPrompt.length);
     console.log(
       "🔍 System prompt preview (first 500 chars):",
       systemPrompt.substring(0, 500)
@@ -483,7 +476,7 @@ export async function generateAIResponse(
       }
     }
 
-    console.log("🤖 Calling OpenAI API with:", {
+    console.log({
       model,
       temperature,
       maxTokens,
@@ -494,7 +487,7 @@ export async function generateAIResponse(
     // Call OpenAI
     const response = await callOpenAI(messages, model, temperature, maxTokens);
 
-    console.log("✅ OpenAI response received:", {
+    console.log({
       contentLength: response.content.length,
       usage: response.usage,
     });

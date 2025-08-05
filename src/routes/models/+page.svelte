@@ -87,12 +87,7 @@
   $: user = $authStore.user;
   $: canManage = $canManageContent;
 
-  // Debug logging
-  $: if (user) {
-    console.log("👤 Current user:", user);
-    console.log("🔐 User role:", user.role);
-    console.log("✅ Can manage:", canManage);
-  }
+
   $: state = $modelsStore;
   $: models = state.models || []; // Ensure models is always an array
   $: selectedModel = state.selectedModel;
@@ -109,7 +104,6 @@
 
   onMount(() => {
     // Load models immediately - don't wait for permission checks
-    console.log("🔄 Loading models on page mount...");
     loadModels();
     hasLoadedModels = true;
   });
@@ -123,7 +117,6 @@
     models &&
     models.length === 0
   ) {
-    console.log("🔄 Fallback: Loading models for authenticated user...");
     loadModels();
     hasLoadedModels = true;
   }
@@ -200,18 +193,12 @@
 
       if (response.ok) {
         syncResult = { success: true, message: result.message };
-        console.log(
-          "✅ Models synced successfully:",
-          result.availableModels?.length || 0,
-          "models available"
-        );
+        // Models synced successfully
       } else {
         syncResult = { success: false, error: result.error || "Sync failed" };
-        console.error("❌ Sync failed:", result.error);
       }
     } catch (error) {
       syncResult = { success: false, error: "Network error during sync" };
-      console.error("❌ Network error during sync:", error);
     } finally {
       syncingModels = false;
     }
@@ -249,18 +236,10 @@
 
   async function confirmDeleteModel() {
     if (!modelToDelete) {
-      console.warn("⚠️ No model to delete");
       return;
     }
 
-    console.log("🗑️ Confirming delete for model:", modelToDelete.id);
     const result = await deleteModel(modelToDelete.id);
-
-    if (result.error) {
-      console.error("❌ Delete failed:", result.error);
-    } else {
-      console.log("✅ Delete successful");
-    }
 
     deleteDialogOpen = false;
     modelToDelete = null;

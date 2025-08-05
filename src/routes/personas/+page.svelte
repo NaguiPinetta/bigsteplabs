@@ -63,19 +63,6 @@
   $: personas = state.personas;
   $: selectedPersona = state.selectedPersona;
 
-  // Debug form state
-  $: {
-    console.log("🔍 Form state changed:", {
-      name: newPersona.name,
-      description: newPersona.description,
-      system_prompt: newPersona.system_prompt,
-      nameValid: newPersona.name.trim().length >= 2,
-      promptValid: newPersona.system_prompt.trim().length >= 10,
-      buttonDisabled:
-        !newPersona.name.trim() || !newPersona.system_prompt.trim(),
-    });
-  }
-
   onMount(() => {
     if (canManage) {
       loadPersonas();
@@ -92,21 +79,14 @@
   }
 
   async function handleCreatePersona() {
-    console.log("🔍 handleCreatePersona called");
-    console.log("🔍 User:", user);
-    console.log("🔍 New persona data:", newPersona);
-
     if (!user) {
-      console.log("❌ No user found, returning");
       return;
     }
 
     const validation = validatePersona(newPersona);
-    console.log("🔍 Validation result:", validation);
 
     if (!validation.valid) {
       validationErrors = validation.errors;
-      console.log("❌ Validation failed:", validationErrors);
       return;
     }
 
@@ -118,18 +98,11 @@
       created_by: user.id,
     };
 
-    console.log("🔍 Calling createPersona with:", personaData);
-
     const result = await createPersona(personaData);
 
-    console.log("🔍 createPersona result:", result);
-
     if (result.data) {
-      console.log("✅ Persona created successfully:", result.data);
       resetNewPersona();
       createDialogOpen = false;
-    } else {
-      console.log("❌ Persona creation failed:", result.error);
     }
   }
 
@@ -159,18 +132,10 @@
 
   async function confirmDeletePersona() {
     if (!personaToDelete) {
-      console.warn("⚠️ No persona to delete");
       return;
     }
 
-    console.log("🗑️ Confirming delete for persona:", personaToDelete.id);
     const result = await deletePersona(personaToDelete.id);
-
-    if (result.error) {
-      console.error("❌ Delete failed:", result.error);
-    } else {
-      console.log("✅ Delete successful");
-    }
 
     deleteDialogOpen = false;
     personaToDelete = null;
@@ -198,7 +163,6 @@
   }
 
   function openCreateDialog() {
-    console.log("🔍 openCreateDialog called");
     resetNewPersona();
     createDialogOpen = true;
   }
@@ -471,7 +435,7 @@
         bind:value={newPersona.name}
         placeholder="e.g., Friendly Tutor, Grammar Expert"
         required
-        on:input={() => console.log("🔍 Name input changed:", newPersona.name)}
+
       />
     </div>
 
@@ -497,11 +461,7 @@
         placeholder="Define how this AI persona should behave, respond, and interact with students..."
         rows={8}
         class="font-mono text-sm"
-        on:input={() =>
-          console.log(
-            "🔍 System prompt input changed:",
-            newPersona.system_prompt
-          )}
+
       />
       <div class="flex justify-between text-xs text-muted-foreground mt-1">
         <span>This defines how the AI will behave and respond</span>
@@ -515,10 +475,7 @@
       Cancel
     </Button>
     <Button
-      on:click={() => {
-        console.log("🔍 Create Persona button clicked");
-        handleCreatePersona();
-      }}
+      on:click={handleCreatePersona}
       disabled={!newPersona.name.trim() || !newPersona.system_prompt.trim()}
     >
       Create Persona
@@ -671,17 +628,15 @@
 <Dialog bind:open={deleteDialogOpen} title="Confirm Deletion" size="sm">
   <div class="space-y-4 text-center">
     <p class="text-muted-foreground">
-      Are you sure you want to delete the persona "<strong>{personaToDelete?.name}</strong>"?
+      Are you sure you want to delete the persona "<strong
+        >{personaToDelete?.name}</strong
+      >"?
     </p>
-    <p class="text-sm text-muted-foreground">
-      This action cannot be undone.
-    </p>
+    <p class="text-sm text-muted-foreground">This action cannot be undone.</p>
   </div>
 
   <div slot="footer" class="flex justify-end space-x-2">
-    <Button variant="outline" on:click={cancelDeletePersona}>
-      Cancel
-    </Button>
+    <Button variant="outline" on:click={cancelDeletePersona}>Cancel</Button>
     <Button variant="destructive" on:click={confirmDeletePersona}>
       Delete
     </Button>

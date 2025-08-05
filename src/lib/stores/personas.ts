@@ -41,7 +41,7 @@ export async function loadPersonas(forceRefresh = false) {
   // Check if data is already loading
   const currentState = get(personasStore);
   if (currentState.loading) {
-    console.log("⏸️ Personas already loading, skipping...");
+    console.log("⏸️ Personas already loading, returning current data");
     return { data: currentState.personas, error: null };
   }
 
@@ -51,11 +51,10 @@ export async function loadPersonas(forceRefresh = false) {
     !shouldRefreshData("personas") &&
     currentState.personas.length > 0
   ) {
-    console.log("⏸️ Personas data is fresh, skipping load...");
+    console.log("⏸️ Using cached personas data");
     return { data: currentState.personas, error: null };
   }
 
-  console.log("🔄 Loading personas from Supabase...");
   setLoadingState("personas", true);
   personasStore.update((state) => ({ ...state, loading: true, error: null }));
 
@@ -74,12 +73,11 @@ export async function loadPersonas(forceRefresh = false) {
     }));
 
     setDataLoaded("personas");
-    console.log("✅ Personas loaded from database:", data?.length || 0);
+    console.log("✅ Personas loaded successfully:", data?.length || 0);
     return { data: data || [], error: null };
   } catch (error) {
     const errorMessage =
       error instanceof Error ? error.message : "Failed to load personas";
-    console.error("❌ Error loading personas:", errorMessage);
     personasStore.update((state) => ({
       ...state,
       loading: false,
@@ -96,12 +94,10 @@ export async function loadPersonas(forceRefresh = false) {
 export async function createPersona(
   persona: Omit<Persona, "id" | "created_at" | "updated_at">
 ) {
-  console.log("🔍 createPersona called with:", persona);
   
   personasStore.update((state) => ({ ...state, loading: true, error: null }));
 
   try {
-    console.log("🔍 Inserting persona into Supabase...");
     
     const { data, error } = await supabase
       .from("personas")
@@ -115,10 +111,8 @@ export async function createPersona(
       .select()
       .single();
 
-    console.log("🔍 Supabase response - data:", data, "error:", error);
 
     if (error) {
-      console.error("❌ Supabase error:", error);
       throw error;
     }
 
@@ -129,13 +123,11 @@ export async function createPersona(
       loading: false,
     }));
 
-    console.log("✅ Persona created successfully:", data.name);
+    console.log("✅ Persona created successfully:", data.id);
     return { data, error: null };
   } catch (error) {
     const errorMessage =
       error instanceof Error ? error.message : "Failed to create persona";
-    console.error("❌ Error creating persona:", errorMessage);
-    console.error("❌ Full error object:", error);
     personasStore.update((state) => ({
       ...state,
       loading: false,
@@ -168,12 +160,11 @@ export async function updatePersona(id: string, updates: Partial<Persona>) {
       loading: false,
     }));
 
-    console.log("✅ Persona updated successfully:", data.name);
+    
     return { data, error: null };
   } catch (error) {
     const errorMessage =
       error instanceof Error ? error.message : "Failed to update persona";
-    console.error("❌ Error updating persona:", errorMessage);
     personasStore.update((state) => ({
       ...state,
       loading: false,
@@ -201,12 +192,11 @@ export async function deletePersona(id: string) {
       loading: false,
     }));
 
-    console.log("✅ Persona deleted successfully");
+    
     return { error: null };
   } catch (error) {
     const errorMessage =
       error instanceof Error ? error.message : "Failed to delete persona";
-    console.error("❌ Error deleting persona:", errorMessage);
     personasStore.update((state) => ({
       ...state,
       loading: false,
@@ -240,7 +230,6 @@ export function validatePersona(persona: Partial<Persona>): {
   valid: boolean;
   errors: string[];
 } {
-  console.log("🔍 validatePersona called with:", persona);
   
   const errors: string[] = [];
 
@@ -269,7 +258,6 @@ export function validatePersona(persona: Partial<Persona>): {
     errors,
   };
   
-  console.log("🔍 Validation result:", result);
   return result;
 }
 

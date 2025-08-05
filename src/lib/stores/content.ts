@@ -42,7 +42,6 @@ export async function loadContent(unitId?: string, forceRefresh = false) {
   // Check if we should load data
   const loadCheck = get(canLoadData);
   if (!loadCheck.shouldLoad) {
-    console.log(
       "⏸️ Skipping content load - auth not ready or user cannot manage"
     );
     return { data: null, error: "Not authorized or auth not ready" };
@@ -51,7 +50,7 @@ export async function loadContent(unitId?: string, forceRefresh = false) {
   // Check if data is already loading
   const currentState = get(contentStore);
   if (currentState.loading) {
-    console.log("⏸️ Content already loading, skipping...");
+    
     return { data: currentState.content, error: null };
   }
 
@@ -61,11 +60,10 @@ export async function loadContent(unitId?: string, forceRefresh = false) {
     !shouldRefreshData("content") &&
     currentState.content.length > 0
   ) {
-    console.log("⏸️ Content data is fresh, skipping load...");
+    
     return { data: currentState.content, error: null };
   }
 
-  console.log("🔍 Loading content from Supabase...");
   setLoadingState("content", true);
   contentStore.update((state) => ({ ...state, loading: true, error: null }));
 
@@ -82,7 +80,6 @@ export async function loadContent(unitId?: string, forceRefresh = false) {
     const { data: content, error } = await query;
 
     if (error) {
-      console.error("❌ Error loading content:", error);
       contentStore.update((state) => ({
         ...state,
         loading: false,
@@ -92,7 +89,6 @@ export async function loadContent(unitId?: string, forceRefresh = false) {
       return { data: null, error };
     }
 
-    console.log(
       "✅ Content loaded successfully:",
       content?.length || 0,
       "items"
@@ -106,7 +102,6 @@ export async function loadContent(unitId?: string, forceRefresh = false) {
     setDataLoaded("content");
     return { data: content, error: null };
   } catch (error) {
-    console.error("❌ Unexpected error loading content:", error);
     const errorMessage =
       error instanceof Error ? error.message : "Failed to load content";
     contentStore.update((state) => ({
@@ -161,7 +156,6 @@ export async function createContent(
       .single();
 
     if (error) {
-      console.error("❌ Error creating content:", error);
       contentStore.update((state) => ({
         ...state,
         loading: false,
@@ -170,7 +164,7 @@ export async function createContent(
       return { data: null, error };
     }
 
-    console.log("✅ Content created successfully:", newContent.title);
+    
     contentStore.update((state) => ({
       ...state,
       content: [...state.content, newContent],
@@ -179,7 +173,6 @@ export async function createContent(
 
     return { data: newContent, error: null };
   } catch (error) {
-    console.error("❌ Unexpected error creating content:", error);
     const errorMessage =
       error instanceof Error ? error.message : "Failed to create content";
     contentStore.update((state) => ({
@@ -209,7 +202,6 @@ export async function updateContent(id: string, updates: Partial<Content>) {
       .single();
 
     if (error) {
-      console.error("❌ Error updating content:", error);
       contentStore.update((state) => ({
         ...state,
         loading: false,
@@ -218,7 +210,7 @@ export async function updateContent(id: string, updates: Partial<Content>) {
       return { data: null, error };
     }
 
-    console.log("✅ Content updated successfully:", updatedContent.title);
+    
     contentStore.update((state) => ({
       ...state,
       content: state.content.map((c) => (c.id === id ? updatedContent : c)),
@@ -227,7 +219,6 @@ export async function updateContent(id: string, updates: Partial<Content>) {
 
     return { data: updatedContent, error: null };
   } catch (error) {
-    console.error("❌ Unexpected error updating content:", error);
     const errorMessage =
       error instanceof Error ? error.message : "Failed to update content";
     contentStore.update((state) => ({ ...state, error: errorMessage }));
@@ -245,7 +236,6 @@ export async function deleteContent(id: string) {
     const { error } = await supabase.from("content").delete().eq("id", id);
 
     if (error) {
-      console.error("❌ Error deleting content:", error);
       contentStore.update((state) => ({
         ...state,
         loading: false,
@@ -254,7 +244,7 @@ export async function deleteContent(id: string) {
       return { success: false, error };
     }
 
-    console.log("✅ Content deleted successfully:", id);
+    
     contentStore.update((state) => ({
       ...state,
       content: state.content.filter((c) => c.id !== id),
@@ -263,7 +253,6 @@ export async function deleteContent(id: string) {
 
     return { success: true, error: null };
   } catch (error) {
-    console.error("❌ Unexpected error deleting content:", error);
     const errorMessage =
       error instanceof Error ? error.message : "Failed to delete content";
     contentStore.update((state) => ({ ...state, error: errorMessage }));

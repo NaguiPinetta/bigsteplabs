@@ -52,7 +52,6 @@ interface AuthResult {
  */
 export async function handleMagicLinkAuth(): Promise<AuthResult> {
   try {
-    console.log("🔍 Handling magic link authentication");
 
     // Check for hash fragment (older Supabase versions)
     const hashParams = new URLSearchParams(window.location.hash.substring(1));
@@ -60,7 +59,6 @@ export async function handleMagicLinkAuth(): Promise<AuthResult> {
     const refreshToken = hashParams.get("refresh_token");
 
     if (accessToken && refreshToken) {
-      console.log("🔍 Found tokens in hash fragment");
       const { data, error } = await supabase.auth.setSession({
         access_token: accessToken,
         refresh_token: refreshToken,
@@ -79,7 +77,6 @@ export async function handleMagicLinkAuth(): Promise<AuthResult> {
       }
 
       if (data.session) {
-        console.log("✅ Hash authentication successful");
         return { success: true, session: data.session };
       }
     }
@@ -90,7 +87,6 @@ export async function handleMagicLinkAuth(): Promise<AuthResult> {
     const next = urlParams.get("next");
 
     if (code) {
-      console.log("🔍 Found auth code in query parameters");
       const { data, error } = await supabase.auth.exchangeCodeForSession(code);
 
       if (error) {
@@ -106,7 +102,6 @@ export async function handleMagicLinkAuth(): Promise<AuthResult> {
       }
 
       if (data.session) {
-        console.log("✅ Code exchange successful");
         return {
           success: true,
           session: data.session,
@@ -115,7 +110,6 @@ export async function handleMagicLinkAuth(): Promise<AuthResult> {
       }
     }
 
-    console.log("❌ No authentication tokens found");
     return {
       success: false,
       error: {
@@ -144,8 +138,6 @@ async function handleAccessTokenAuth(
   refreshToken: string
 ): Promise<AuthResult> {
   try {
-    console.log("🔍 Processing access token authentication...");
-    console.log("🔍 Token authentication in progress");
 
     // Set the session manually
     const { data, error } = await supabase.auth.setSession({
@@ -153,7 +145,7 @@ async function handleAccessTokenAuth(
       refresh_token: refreshToken,
     });
 
-    console.log("🔍 setSession result:", {
+    console.log({
       hasData: !!data,
       hasSession: !!data?.session,
       hasUser: !!data?.user,
@@ -183,8 +175,7 @@ async function handleAccessTokenAuth(
       };
     }
 
-    console.log("✅ Access token authentication successful");
-    console.log("🔍 Session user:", {
+    console.log({
       id: data.session.user.id,
       email: data.session.user.email,
     });
@@ -218,7 +209,6 @@ async function handleAccessTokenAuth(
  */
 async function handleCodeAuth(code: string): Promise<AuthResult> {
   try {
-    console.log("🔍 Processing code authentication...");
 
     const { data, error } = await supabase.auth.exchangeCodeForSession(code);
 
@@ -245,7 +235,7 @@ async function handleCodeAuth(code: string): Promise<AuthResult> {
       };
     }
 
-    console.log("✅ Code authentication successful");
+    console.log("✅ Code exchange successful, session created");
 
     // Create user profile if needed
     await ensureUserProfile(data.session);
@@ -276,7 +266,6 @@ async function handleCodeAuth(code: string): Promise<AuthResult> {
  */
 export async function ensureUserProfile(session: Session): Promise<AuthResult> {
   try {
-    console.log("🔍 Ensuring user profile exists");
 
     // Check if user profile exists
     const { data: existingUser, error: fetchError } = await supabase
@@ -287,7 +276,6 @@ export async function ensureUserProfile(session: Session): Promise<AuthResult> {
 
     if (fetchError && fetchError.code === "PGRST116") {
       // User doesn't exist, create profile
-      console.log("🔍 Creating new user profile");
 
       // Check if user is in allowlist to get their role
       const { data: allowlistEntry } = await supabase
@@ -297,7 +285,6 @@ export async function ensureUserProfile(session: Session): Promise<AuthResult> {
         .single();
 
       const role = allowlistEntry?.role || "Student"; // Default to Student if not in allowlist
-      console.log("🔍 Assigning role:", role, "for email:", session.user.email);
 
       const { data: newUser, error: createError } = await supabase
         .from("users")
@@ -323,11 +310,9 @@ export async function ensureUserProfile(session: Session): Promise<AuthResult> {
         };
       }
 
-      console.log("✅ User profile created successfully");
 
       // Remove user from allowlist if they were allowlisted
       if (allowlistEntry) {
-        console.log("🔍 Removing user from allowlist");
         const { error: deleteError } = await supabase
           .from("allowlist")
           .delete()
@@ -336,7 +321,6 @@ export async function ensureUserProfile(session: Session): Promise<AuthResult> {
         if (deleteError) {
           console.error("❌ Failed to remove from allowlist:", deleteError);
         } else {
-          console.log("✅ Removed from allowlist");
         }
       }
 
@@ -353,7 +337,6 @@ export async function ensureUserProfile(session: Session): Promise<AuthResult> {
       };
     }
 
-    console.log("✅ User profile already exists");
     return { success: true, user: existingUser };
   } catch (error) {
     console.error("❌ User profile error:", error);
@@ -376,14 +359,12 @@ export async function sendMagicLink(
   redirectTo?: string
 ): Promise<AuthResult> {
   try {
-    console.log("🔍 Sending magic link to:", email);
 
     // Detect mobile device
     const isMobile =
       /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
         navigator.userAgent
       );
-    console.log("🔍 Device type:", isMobile ? "Mobile" : "Desktop");
 
     // Determine the correct callback URL based on environment
     let callbackUrl;
@@ -402,7 +383,6 @@ export async function sendMagicLink(
         : `${baseUrl}/auth/callback`;
     }
 
-    console.log("🔍 Using callback URL:", callbackUrl);
 
     // Allow user creation for magic links - the allowlist check will be handled in the auth callback
     const { error } = await supabase.auth.signInWithOtp({
@@ -425,7 +405,6 @@ export async function sendMagicLink(
       };
     }
 
-    console.log("✅ Magic link sent successfully");
     return { success: true };
   } catch (error) {
     console.error("❌ Magic link send error:", error);
@@ -445,7 +424,6 @@ export async function sendMagicLink(
  */
 export async function signOut(redirectTo?: string): Promise<void> {
   try {
-    console.log("🔍 Signing out user...");
 
     // Clear any stored session data first
     if (typeof window !== "undefined") {
@@ -485,7 +463,6 @@ export async function signOut(redirectTo?: string): Promise<void> {
         console.error("❌ Supabase sign out error:", error);
         // Continue with local cleanup even if Supabase fails
       } else {
-        console.log("✅ Supabase sign out successful");
       }
     } catch (supabaseError) {
       console.error("❌ Supabase sign out exception:", supabaseError);
@@ -493,7 +470,6 @@ export async function signOut(redirectTo?: string): Promise<void> {
     }
 
     const redirectUrl = redirectTo || "/auth/login";
-    console.log("🔄 Redirecting to:", redirectUrl);
 
     // Use window.location for hard redirect to ensure complete session cleanup
     if (typeof window !== "undefined") {
@@ -541,37 +517,37 @@ export async function isAuthenticated(): Promise<boolean> {
 
 export async function redirectAuthenticatedUser(): Promise<void> {
   try {
-    console.log("🔍 Checking authentication status for redirect...");
-    
+
+    // Check if we're already on the login page to prevent loops
+    if (
+      typeof window !== "undefined" &&
+      window.location.pathname === "/auth/login"
+    ) {
+      return;
+    }
+
     // Check both Supabase session and auth store
     const {
       data: { session },
     } = await supabase.auth.getSession();
-    
-    console.log("🔍 Supabase session check:", {
+
+    console.log({
       hasSession: !!session,
       userId: session?.user?.id,
     });
-    
+
     if (session) {
-      console.log("✅ User authenticated, redirecting to dashboard");
-      
+
       // Use replace to prevent back button issues
       if (typeof window !== "undefined") {
         window.location.replace("/dashboard");
       }
     } else {
-      console.log("❌ No session found, redirecting to login");
-      if (typeof window !== "undefined") {
-        window.location.replace("/auth/login");
-      }
+      // Don't redirect to login if we're already on login page
     }
   } catch (error) {
     console.error("❌ Redirect check failed:", error);
-    // Fallback to login page
-    if (typeof window !== "undefined") {
-      window.location.replace("/auth/login");
-    }
+    // Don't redirect on error to prevent loops
   }
 }
 
@@ -581,7 +557,6 @@ export async function redirectUnauthenticatedUser(): Promise<void> {
       data: { session },
     } = await supabase.auth.getSession();
     if (!session) {
-      console.log("🔍 User not authenticated, redirecting to login");
       window.location.href = "/auth/login";
     }
   } catch (error) {

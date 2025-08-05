@@ -50,7 +50,6 @@ export async function loadModules(forceRefresh = false): Promise<void> {
     const data = await safeDataLoad(
       dataType,
       async () => {
-        console.log("🔄 Loading modules from database...");
 
         const { data, error } = await supabase
           .from("modules")
@@ -79,11 +78,10 @@ export async function loadModules(forceRefresh = false): Promise<void> {
           .order("created_at", { ascending: false });
 
         if (error) {
-          console.error("❌ Error loading modules:", error);
           throw new Error(error.message);
         }
 
-        console.log("✅ Loaded", data?.length || 0, "modules from database");
+        
         return data || [];
       },
       forceRefresh
@@ -97,7 +95,6 @@ export async function loadModules(forceRefresh = false): Promise<void> {
       error: null,
     }));
   } catch (error) {
-    console.error("❌ Error in loadModules:", error);
     const errorMessage =
       error instanceof Error ? error.message : "Failed to load modules";
 
@@ -136,7 +133,6 @@ export async function createModule(moduleData: {
 
     return data;
   } catch (error) {
-    console.error("Error creating module:", error);
     modulesStore.update((state) => ({
       ...state,
       error: error instanceof Error ? error.message : "Failed to create module",
@@ -183,7 +179,6 @@ export async function updateModule(
 
     return data;
   } catch (error) {
-    console.error("Error updating module:", error);
     modulesStore.update((state) => ({
       ...state,
       error: error instanceof Error ? error.message : "Failed to update module",
@@ -195,16 +190,14 @@ export async function updateModule(
 
 export async function deleteModule(id: string): Promise<boolean> {
   try {
-    console.log("🔍 Deleting module:", id);
 
     const { error } = await supabase.from("modules").delete().eq("id", id);
 
     if (error) {
-      console.error("❌ Error deleting module:", error);
       throw error;
     }
 
-    console.log("✅ Module deleted successfully");
+    
 
     // Update the store
     modulesStore.update((state) => ({
@@ -219,7 +212,6 @@ export async function deleteModule(id: string): Promise<boolean> {
 
     return true;
   } catch (error) {
-    console.error("❌ Error deleting module:", error);
     modulesStore.update((state) => ({
       ...state,
       error: error instanceof Error ? error.message : "Failed to delete module",
@@ -230,7 +222,6 @@ export async function deleteModule(id: string): Promise<boolean> {
 
 export async function reorderModules(moduleIds: string[]): Promise<boolean> {
   try {
-    console.log("🔄 Reordering modules:", moduleIds);
 
     const response = await fetch("/api/reorder-modules", {
       method: "POST",
@@ -243,18 +234,16 @@ export async function reorderModules(moduleIds: string[]): Promise<boolean> {
     const result = await response.json();
 
     if (!result.success) {
-      console.error("❌ Error reordering modules:", result.error);
       return false;
     }
 
-    console.log("✅ Modules reordered successfully");
+    
 
     // Force refresh to get updated order
     await loadModules(true);
 
     return true;
   } catch (error) {
-    console.error("❌ Error reordering modules:", error);
     return false;
   }
 }
@@ -263,7 +252,6 @@ export async function getModuleById(
   id: string
 ): Promise<ModuleWithRelations | null> {
   try {
-    console.log("🔍 Getting module by ID:", id);
 
     const { data, error } = await supabase
       .from("modules")
@@ -283,14 +271,12 @@ export async function getModuleById(
       .single();
 
     if (error) {
-      console.error("❌ Error getting module:", error);
       return null;
     }
 
-    console.log("✅ Retrieved module:", data);
+    
     return data;
   } catch (error) {
-    console.error("❌ Error getting module:", error);
     return null;
   }
 }

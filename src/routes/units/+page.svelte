@@ -53,14 +53,8 @@
   }));
 
   onMount(async () => {
-    console.log("🔍 Units page onMount - Debug info:");
-    console.log("  - User:", user);
-    console.log("  - Can manage:", canManage);
-    console.log("  - Auth store state:", $authStore);
-
     // Wait for auth to be ready
     if ($authStore.loading) {
-      console.log("⏳ Waiting for auth to initialize...");
       const unsubscribe = authStore.subscribe((auth) => {
         if (!auth.loading && auth.initialized) {
           unsubscribe();
@@ -74,17 +68,8 @@
 
   async function loadData() {
     if (canManage) {
-      console.log("✅ Loading units and modules...");
       // Load both units and modules
       await Promise.all([loadUnits(), loadModules()]);
-      console.log(
-        "📋 Load complete - Units:",
-        units.length,
-        "Modules:",
-        modules.length
-      );
-    } else {
-      console.log("❌ Cannot manage content - not loading data");
     }
   }
 
@@ -128,18 +113,10 @@
 
   async function confirmDeleteUnit() {
     if (!unitToDelete) {
-      console.warn("⚠️ No unit to delete");
       return;
     }
 
-    console.log("🗑️ Confirming delete for unit:", unitToDelete.id);
     const result = await deleteUnit(unitToDelete.id);
-
-    if (result.error) {
-      console.error("❌ Delete failed:", result.error);
-    } else {
-      console.log("✅ Delete successful");
-    }
 
     deleteDialogOpen = false;
     unitToDelete = null;

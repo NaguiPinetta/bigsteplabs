@@ -263,7 +263,6 @@ export async function enhancedDataLoad<T>(
   if (!forceRefresh) {
     const cachedData = getCachedData(dataType as any);
     if (cachedData) {
-      console.log(`🔄 Using cached ${dataType} data`);
       return cachedData;
     }
   }
@@ -367,12 +366,10 @@ export class LoadingStateMonitor {
 
   startMonitoring() {
     if (this.isMonitoring) {
-      console.log("🔄 Loading state monitor already running");
       return;
     }
 
     this.isMonitoring = true;
-    console.log("🔍 Starting loading state monitor...");
 
     // Monitor auth store changes
     const authUnsubscribe = authStore.subscribe((auth) => {
@@ -401,7 +398,6 @@ export class LoadingStateMonitor {
       (window as any).getLoadingEvents = () => this.getRecentEvents();
       (window as any).clearLoadingEvents = () => this.clearEvents();
       (window as any).analyzeLoadingPatterns = () => this.analyzePatterns();
-      console.log(
         "🔧 Debug: Loading state monitor functions available in console"
       );
     }
@@ -413,7 +409,6 @@ export class LoadingStateMonitor {
     }
 
     this.isMonitoring = false;
-    console.log("🛑 Stopping loading state monitor...");
 
     // Unsubscribe from all stores
     if (this.unsubscribeFunctions) {
@@ -478,7 +473,6 @@ export class LoadingStateMonitor {
 
   clearEvents(): void {
     this.loadingEvents = [];
-    console.log("🧹 Loading events cleared");
   }
 
   analyzePatterns(): {

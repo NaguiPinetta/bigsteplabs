@@ -10,7 +10,7 @@ export const POST: RequestHandler = async ({ request }) => {
       return json({ success: false, error: "Invalid lesson IDs provided" }, { status: 400 });
     }
 
-    console.log("🔄 Manually reordering lessons:", lessonIds);
+
 
     // Update each lesson's order_index manually
     for (let i = 0; i < lessonIds.length; i++) {
@@ -27,10 +27,10 @@ export const POST: RequestHandler = async ({ request }) => {
         return json({ success: false, error: error.message }, { status: 500 });
       }
 
-      console.log(`✅ Updated lesson ${lessonId} to order_index ${newOrderIndex}`);
+      
     }
 
-    console.log("✅ All lessons reordered successfully");
+
 
     // Fetch the updated lessons to confirm
     const { data: lessons, error: fetchError } = await supabaseAdmin

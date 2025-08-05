@@ -21,27 +21,15 @@
 
   async function processAuthentication() {
     try {
-      console.log("🔍 Processing authentication in callback...");
-      console.log("🔍 Current URL:", window.location.href);
 
       const result = await handleMagicLinkAuth();
 
-      console.log("🔍 Auth result:", {
-        success: result.success,
-        errorType: result.error?.type,
-        hasSession: !!result.session,
-        hasUser: !!result.user,
-      });
-
       if (result.success && result.session) {
-        console.log("✅ Authentication successful");
 
         // Ensure user profile exists
-        console.log("🔍 Ensuring user profile exists...");
         const profileResult = await ensureUserProfile(result.session);
 
         if (profileResult.success) {
-          console.log("✅ User profile ensured:", profileResult.user);
 
           // Update the auth store with the session and user
           authStore.set({
@@ -51,13 +39,11 @@
             initialized: true,
           });
 
-          console.log("✅ Auth store updated with session and user");
 
           // Force a small delay to ensure the store is updated
           await new Promise((resolve) => setTimeout(resolve, 100));
 
           // Double-check the auth store state
-          console.log("🔍 Auth store state after update:", $authStore);
         } else {
           console.error(
             "❌ Failed to ensure user profile:",
@@ -74,13 +60,10 @@
           url.hash = "";
           url.search = "";
           window.history.replaceState({}, "", url.toString());
-          console.log("🔍 Cleared URL parameters");
         }
 
         // Redirect to dashboard after a short delay
         setTimeout(async () => {
-          console.log("🔍 Redirecting to dashboard...");
-          console.log("🔍 Current auth store state:", $authStore);
 
           // Try the redirect function first
           try {
@@ -88,7 +71,6 @@
           } catch (error) {
             console.error("❌ Redirect function failed:", error);
             // Fallback to direct redirect
-            console.log("🔄 Using fallback redirect to dashboard");
             window.location.replace("/dashboard");
           }
         }, 1000);

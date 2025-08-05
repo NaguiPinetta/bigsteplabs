@@ -15,7 +15,7 @@ export const POST: RequestHandler = async ({ request }) => {
       });
     }
 
-    console.log('🔍 Confirming email for user:', email);
+
 
     // Get user by email
     const { data: users, error: fetchError } = await supabaseAdmin.auth.admin.listUsers();
@@ -60,7 +60,7 @@ export const POST: RequestHandler = async ({ request }) => {
       });
     }
 
-    console.log('✅ Email confirmed successfully for:', email);
+
 
     return new Response(JSON.stringify({ 
       success: true,

@@ -125,14 +125,8 @@
   $: statusOptions = statuses.map((s) => ({ value: s.value, label: s.label }));
 
   onMount(async () => {
-    console.log("🔍 Agents page onMount - Debug info:");
-    console.log("  - User:", user);
-    console.log("  - Can manage:", canManage);
-    console.log("  - Auth store state:", $authStore);
-
     // Wait for auth to be ready
     if ($authStore.loading) {
-      console.log("⏳ Waiting for auth to initialize...");
       const unsubscribe = authStore.subscribe((auth) => {
         if (!auth.loading && auth.initialized) {
           unsubscribe();
@@ -146,7 +140,6 @@
 
   async function loadData() {
     if (canManage) {
-      console.log("✅ Loading agents and related data...");
       // Load all required data in parallel
       await Promise.all([
         loadAgents(),
@@ -154,9 +147,6 @@
         loadModels(),
         loadDatasets(),
       ]);
-      console.log("📋 Load complete - Agents:", agents.length, "Personas:", personas.length, "Models:", models.length, "Datasets:", datasets.length);
-    } else {
-      console.log("❌ Cannot manage content - not loading data");
     }
   }
 
@@ -230,18 +220,10 @@
 
   async function confirmDeleteAgent() {
     if (!agentToDelete) {
-      console.warn("⚠️ No agent to delete");
       return;
     }
 
-    console.log("🗑️ Confirming delete for agent:", agentToDelete.id);
     const result = await deleteAgent(agentToDelete.id);
-
-    if (result.error) {
-      console.error("❌ Delete failed:", result.error);
-    } else {
-      console.log("✅ Delete successful");
-    }
 
     deleteDialogOpen = false;
     agentToDelete = null;
@@ -339,7 +321,6 @@
   async function handleStartChat(agent: any) {
     if (!agent) return;
 
-    console.log("🚀 Starting chat with agent:", agent.name);
     // Close the test dialog
     testDialogOpen = false;
     // Navigate to chat page - the agent should be available there now

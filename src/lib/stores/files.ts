@@ -69,7 +69,7 @@ export async function loadFiles(folder: string = "/", forceRefresh = false) {
   // Check if data is already loading
   const currentState = get(filesStore);
   if (currentState.loading) {
-    console.log("⏸️ Files already loading, skipping...");
+    console.log("⏸️ Files already loading, returning current data");
     return { files: currentState.files, error: null };
   }
 
@@ -79,11 +79,10 @@ export async function loadFiles(folder: string = "/", forceRefresh = false) {
     !shouldRefreshData("files") &&
     currentState.files.length > 0
   ) {
-    console.log("⏸️ Files data is fresh, skipping load...");
+    console.log("⏸️ Using cached files data");
     return { files: currentState.files, error: null };
   }
 
-  console.log("🔄 Loading files from folder:", folder);
   setLoadingState("files", true);
   filesStore.update((state) => ({ ...state, loading: true, error: null }));
 
@@ -131,12 +130,11 @@ export async function loadFiles(folder: string = "/", forceRefresh = false) {
     }));
 
     setDataLoaded("files");
-    console.log("✅ Files loaded successfully:", fileItems.length, "files");
+    console.log("✅ Files loaded successfully:", fileItems.length);
     return { files: fileItems, error: null };
   } catch (error) {
     const errorMessage =
       error instanceof Error ? error.message : "Failed to load files";
-    console.error("❌ Error loading files:", errorMessage);
     filesStore.update((state) => ({
       ...state,
       loading: false,

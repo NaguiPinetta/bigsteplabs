@@ -41,7 +41,7 @@ export async function loadModels(forceRefresh = false) {
   // Check if data is already loading
   const currentState = get(modelsStore);
   if (currentState.loading) {
-    console.log("⏸️ Models already loading, skipping...");
+    console.log("⏸️ Models already loading, returning current data");
     return { data: currentState.models, error: null };
   }
 
@@ -51,11 +51,10 @@ export async function loadModels(forceRefresh = false) {
     !shouldRefreshData("models") &&
     currentState.models.length > 0
   ) {
-    console.log("⏸️ Models data is fresh, skipping load...");
+    console.log("⏸️ Using cached models data");
     return { data: currentState.models, error: null };
   }
 
-  console.log("🔄 Loading models from Supabase...");
   setLoadingState("models", true);
   modelsStore.update((state) => ({ ...state, loading: true, error: null }));
 
@@ -74,12 +73,11 @@ export async function loadModels(forceRefresh = false) {
     }));
 
     setDataLoaded("models");
-    console.log("✅ Models loaded from database:", data?.length || 0);
+    console.log("✅ Models loaded successfully:", data?.length || 0);
     return { data: data || [], error: null };
   } catch (error) {
     const errorMessage =
       error instanceof Error ? error.message : "Failed to load models";
-    console.error("❌ Error loading models:", errorMessage);
     modelsStore.update((state) => ({
       ...state,
       loading: false,
@@ -124,12 +122,11 @@ export async function createModel(
       loading: false,
     }));
 
-    console.log("✅ Model created successfully:", data.name);
+    console.log("✅ Model created successfully:", data.id);
     return { data, error: null };
   } catch (error) {
     const errorMessage =
       error instanceof Error ? error.message : "Failed to create model";
-    console.error("❌ Error creating model:", errorMessage);
     modelsStore.update((state) => ({
       ...state,
       loading: false,
@@ -162,12 +159,11 @@ export async function updateModel(id: string, updates: Partial<Model>) {
       loading: false,
     }));
 
-    console.log("✅ Model updated successfully:", data.name);
+    
     return { data, error: null };
   } catch (error) {
     const errorMessage =
       error instanceof Error ? error.message : "Failed to update model";
-    console.error("❌ Error updating model:", errorMessage);
     modelsStore.update((state) => ({
       ...state,
       loading: false,
@@ -195,12 +191,11 @@ export async function deleteModel(id: string) {
       loading: false,
     }));
 
-    console.log("✅ Model deleted successfully");
+    
     return { error: null };
   } catch (error) {
     const errorMessage =
       error instanceof Error ? error.message : "Failed to delete model";
-    console.error("❌ Error deleting model:", errorMessage);
     modelsStore.update((state) => ({
       ...state,
       loading: false,
@@ -221,7 +216,7 @@ export async function testModel(id: string) {
     // For now, we'll simulate a successful test
     await new Promise((resolve) => setTimeout(resolve, 2000));
 
-    console.log("✅ Model test successful:", id);
+    
     modelsStore.update((state) => ({ ...state, loading: false }));
     return {
       success: true,
@@ -231,7 +226,6 @@ export async function testModel(id: string) {
   } catch (error) {
     const errorMessage =
       error instanceof Error ? error.message : "Failed to test model";
-    console.error("❌ Error testing model:", errorMessage);
     modelsStore.update((state) => ({
       ...state,
       loading: false,

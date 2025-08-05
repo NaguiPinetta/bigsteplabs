@@ -216,7 +216,6 @@ export async function safeDataLoad<T>(
   if (!forceRefresh) {
     const cachedData = getCachedData(dataType);
     if (cachedData) {
-      console.log(`🔄 ${dataType}: Using cached data`);
       return cachedData;
     }
   }
@@ -225,12 +224,10 @@ export async function safeDataLoad<T>(
   if (!forceRefresh && !shouldRefreshData(dataType)) {
     const cachedData = getCachedData(dataType);
     if (cachedData) {
-      console.log(`🔄 ${dataType}: Data is fresh, skipping load`);
       return cachedData;
     }
   }
 
-  console.log(`🔄 ${dataType}: Starting data load...`);
 
   // Create loading promise
   const loadingPromise = loader()
@@ -240,7 +237,6 @@ export async function safeDataLoad<T>(
       return data;
     })
     .catch((error) => {
-      console.error(`❌ ${dataType}: Data load failed:`, error);
       setDataError(dataType, error.message || "Unknown error");
       throw error;
     });
@@ -260,5 +256,4 @@ if (typeof window !== "undefined") {
   (window as any).getCachedData = getCachedData;
   (window as any).safeDataLoad = safeDataLoad;
   (window as any).isDataLoading = isDataLoading;
-  console.log("🔧 Debug: Enhanced data manager functions available in console");
 }

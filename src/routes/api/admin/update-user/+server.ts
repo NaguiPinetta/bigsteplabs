@@ -15,7 +15,7 @@ export const POST: RequestHandler = async ({ request }) => {
       });
     }
 
-    console.log('🔍 Updating user:', { userId, email, role, hasPassword: !!password });
+
 
     // Update user in auth system if password is provided
     if (password) {
@@ -72,7 +72,7 @@ export const POST: RequestHandler = async ({ request }) => {
       });
     }
 
-    console.log('✅ User updated successfully:', { userId, email, role });
+
 
     return new Response(JSON.stringify({ 
       success: true,

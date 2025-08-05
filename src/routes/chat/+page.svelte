@@ -50,13 +50,6 @@
     error: state,
   } = $chatStore);
 
-  // Debug reactive statement to track currentSession changes
-  $: {
-    console.log("🔄 currentSession changed:", currentSession);
-    console.log("🔄 currentSession ID:", currentSession?.id);
-    console.log("🔄 messages count:", messages.length);
-  }
-
   // Local state
   let messageInput = "";
   let messagesContainer: HTMLElement;
@@ -83,7 +76,6 @@
 
   // Load data on mount
   onMount(async () => {
-    console.log("🔄 Loading chat data...");
     await loadChatSessions();
     await loadAvailableAgents();
 
@@ -93,7 +85,6 @@
     if (agentFromUrl && agents.length > 0) {
       const agent = agents.find((a) => a.id === agentFromUrl);
       if (agent) {
-        console.log("🎯 Found agent from URL, creating session:", agent.name);
         await handleCreateSession(agentFromUrl);
       }
     }
@@ -126,7 +117,6 @@
   async function handleCreateSession(agentId: string) {
     if (!user || !agentId) return;
 
-    console.log("🚀 Creating new chat session for agent:", agentId);
     newChatDialogOpen = false;
     await createChatSession(agentId, user.id);
   }
@@ -137,16 +127,8 @@
     const content = messageInput.trim();
     const audioUrl = currentAudioUrl; // Store reference before clearing
 
-    console.log(
-      "🔍 handleSendMessage - currentAudioUrl before clearing:",
-      currentAudioUrl
-    );
-    console.log("🔍 handleSendMessage - stored audioUrl:", audioUrl);
-
     messageInput = "";
     currentAudioUrl = null; // Clear the audio URL
-
-    console.log("📤 Sending message with audio URL:", audioUrl);
 
     // Clear any previous errors
     await clearChatError();
@@ -172,24 +154,20 @@
   }
 
   function handleDeleteSession(session: any) {
-    console.log("🗑️ Delete button clicked for session:", session);
     sessionToDelete = session;
     deleteDialogOpen = true;
   }
 
   async function confirmDeleteSession() {
     if (!sessionToDelete) {
-      console.warn("⚠️ No session to delete");
       return;
     }
 
-    console.log("🗑️ Confirming delete for session:", sessionToDelete.id);
     const result = await deleteChatSession(sessionToDelete.id);
 
     if (result.error) {
-      console.error("❌ Delete failed:", result.error);
+      // Handle error silently or show user-friendly message
     } else {
-      console.log("✅ Delete successful");
     }
 
     deleteDialogOpen = false;
@@ -208,17 +186,14 @@
 
   async function confirmEndSession() {
     if (!sessionToEnd) {
-      console.warn("⚠️ No session to end");
       return;
     }
 
-    console.log("🔚 Confirming end for session:", sessionToEnd.id);
     const result = await endChatSession(sessionToEnd.id);
 
     if (result.error) {
-      console.error("❌ End failed:", result.error);
+      // Handle error silently or show user-friendly message
     } else {
-      console.log("✅ End successful");
     }
 
     endSessionDialogOpen = false;
@@ -281,7 +256,6 @@
     try {
       recordingError = "";
       recordingDuration = 0;
-      console.log("🎙️ Starting audio recording...");
 
       // Get microphone-only stream with strict constraints
       const stream = await navigator.mediaDevices.getUserMedia({
@@ -307,7 +281,7 @@
       for (const mimeType of mimeTypes) {
         if (MediaRecorder.isTypeSupported(mimeType)) {
           selectedMimeType = mimeType;
-          console.log(`✅ Using MIME type: ${mimeType}`);
+
           break;
         }
       }
@@ -325,12 +299,10 @@
       mediaRecorder.ondataavailable = (event) => {
         if (event.data.size > 0) {
           audioChunks.push(event.data);
-          console.log("📦 Audio chunk received:", event.data.size, "bytes");
         }
       };
 
       mediaRecorder.onstop = async () => {
-        console.log("⏹️ Recording stopped, processing audio...");
         if (recordingTimer) {
           clearInterval(recordingTimer);
           recordingTimer = null;
@@ -343,20 +315,12 @@
       isRecording = true;
 
       // Start recording timer for 10-second limit
-      recordingTimer = setInterval(() => {
+      recordingTimer = window.setInterval(() => {
         recordingDuration += 1;
         if (recordingDuration >= 10) {
-          console.log(
-            "⏰ 10-second recording limit reached, stopping automatically"
-          );
           stopRecording();
         }
       }, 1000);
-
-      console.log(
-        "🎙️ Recording started successfully with MIME type:",
-        selectedMimeType
-      );
     } catch (error) {
       console.error("❌ Error starting recording:", error);
       recordingError = "Failed to access microphone. Please check permissions.";
@@ -371,7 +335,6 @@
         clearInterval(recordingTimer);
         recordingTimer = null;
       }
-      console.log("⏹️ Recording stopped");
     }
   }
 
@@ -382,23 +345,9 @@
     recordingError = "";
 
     try {
-      console.log("🔧 Processing audio chunks...");
-      console.log("📦 Total audio chunks:", audioChunks.length);
-      console.log(
-        "📊 Total audio size:",
-        audioChunks.reduce((sum, chunk) => sum + chunk.size, 0),
-        "bytes"
-      );
-
       const audioBlob = new Blob(audioChunks, {
         type: "audio/webm",
       });
-      console.log(
-        "🎵 Created audio blob:",
-        audioBlob.size,
-        "bytes, type:",
-        audioBlob.type
-      );
 
       // Test the audio blob to ensure it's valid
       if (audioBlob.size < 1000) {
@@ -418,11 +367,6 @@
         setTimeout(() => reject(new Error("Audio loading timeout")), 5000);
       });
 
-      console.log(
-        "✅ Audio blob validation passed - duration:",
-        testAudio.duration,
-        "seconds"
-      );
       URL.revokeObjectURL(testUrl);
 
       // Convert to WAV format for better Whisper compatibility
@@ -431,68 +375,74 @@
       formData.append("sessionId", currentSession?.id || "default");
       formData.append("agentId", currentSession?.agent_id || "");
 
-      console.log(
-        "🎵 SessionId being sent to transcription API:",
-        currentSession?.id || "default"
-      );
-      console.log("🎵 Current session:", currentSession);
-      console.log("🎵 Agent ID:", currentSession?.agent_id || "");
-      console.log("🎵 Current session ID check:", {
-        hasCurrentSession: !!currentSession,
-        sessionId: currentSession?.id,
-        sessionIdType: typeof currentSession?.id,
-        sessionIdLength: currentSession?.id?.length,
-      });
-
-      console.log("📤 Sending audio to transcription API...");
-
       const response = await fetch("/api/whisper-transcribe", {
         method: "POST",
         body: formData,
       });
 
-      console.log("📡 Transcription API response status:", response.status);
-
       if (!response.ok) {
-        const errorText = await response.text();
+        let errorText;
+        try {
+          const errorData = await response.json();
+          errorText =
+            errorData.error || errorData.details || JSON.stringify(errorData);
+        } catch (parseError) {
+          // If JSON parsing fails, get the raw text
+          errorText = await response.text();
+        }
+
         console.error("❌ Transcription API error:", errorText);
-        throw new Error(
-          `Transcription failed: ${response.statusText} - ${errorText}`
-        );
+
+        // Provide more specific error messages
+        let userErrorMessage = "Failed to transcribe audio. Please try again.";
+
+        if (errorText.includes("OpenAI API key not configured")) {
+          userErrorMessage =
+            "Audio transcription service is not configured. Please contact support.";
+        } else if (errorText.includes("Invalid OpenAI API key")) {
+          userErrorMessage =
+            "Audio transcription service configuration error. Please contact support.";
+        } else if (errorText.includes("No speech detected")) {
+          userErrorMessage =
+            "No speech detected in the recording. Please speak clearly and try again.";
+        } else if (errorText.includes("Invalid audio content")) {
+          userErrorMessage =
+            "Invalid audio content detected. Please try recording again.";
+        } else if (errorText.includes("File too large")) {
+          userErrorMessage =
+            "Audio file is too large. Please record a shorter message.";
+        } else if (errorText.includes("Received non-JSON response")) {
+          userErrorMessage =
+            "Audio transcription service is temporarily unavailable. Please try again later.";
+        }
+
+        throw new Error(userErrorMessage);
       }
 
-      const result = await response.json();
-      console.log("📋 Transcription API result:", result);
+      let result;
+      try {
+        result = await response.json();
+      } catch (parseError) {
+        console.error("❌ Failed to parse transcription response:", parseError);
+        throw new Error(
+          "Invalid response from transcription service. Please try again."
+        );
+      }
 
       if (result.text && result.text.trim()) {
         // Insert transcribed text into the input
         messageInput = result.text.trim();
-        console.log("✅ Transcription completed:", result.text);
 
-        // Log if the transcription was cleaned
-        if (result.wasCleaned) {
-          console.warn(
-            "⚠️ Transcription was cleaned due to subtitle metadata detection"
-          );
-          console.log("🔍 Original transcription:", result.originalText);
-          console.log("🧹 Cleaned transcription:", result.text);
-        }
+        // Note: Transcription was cleaned if needed
 
         // Store audio URL for later use (we'll attach it to the message when sent)
         if (result.audioUrl) {
           currentAudioUrl = result.audioUrl;
-          console.log("✅ Audio stored and URL captured:", result.audioUrl);
-          console.log("🔍 Current audio URL state:", currentAudioUrl);
-        } else {
-          console.warn("⚠️ No audio URL returned from transcription API");
-          console.log("🔍 Full transcription result:", result);
         }
       } else {
         recordingError = "No speech detected. Please try again.";
-        console.warn("⚠️ No speech detected in audio");
       }
     } catch (error) {
-      console.error("❌ Transcription error:", error);
       recordingError = "Failed to transcribe audio. Please try again.";
     } finally {
       isTranscribing = false;
@@ -562,22 +512,7 @@
                 ? 'ring-2 ring-primary'
                 : ''}"
               on:click={() => {
-                console.log("🔍 Chat session clicked:", session);
-                console.log("🔍 Current session before click:", currentSession);
-                console.log("🔍 Session ID:", session.id);
-                console.log("🔍 Session agent:", session.agent);
-                console.log("🔍 Calling setCurrentSession...");
-                setCurrentSession(session)
-                  .then((result) => {
-                    console.log("🔍 setCurrentSession result:", result);
-                    console.log(
-                      "🔍 Current session after setCurrentSession:",
-                      $chatStore.currentSession
-                    );
-                  })
-                  .catch((error) => {
-                    console.error("❌ Error in setCurrentSession:", error);
-                  });
+                setCurrentSession(session);
               }}
             >
               <div class="flex items-start justify-between">
@@ -732,9 +667,8 @@
                         />
                       </div>
                     {:else if message.metadata?.is_voice_message}
-                      <!-- Debug: Show when voice message flag is set but no audio URL -->
                       <div class="mt-2 text-xs text-muted-foreground">
-                        🎵 Voice message (audio URL missing)
+                        🎵 Voice message
                       </div>
                     {/if}
 

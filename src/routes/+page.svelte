@@ -7,7 +7,9 @@
   let loading = true;
   let error = "";
 
-  onMount(() => {
+  onMount(async () => {
+    console.log("🔄 Main page: Starting...");
+
     // Check if Supabase is configured
     if (!PUBLIC_SUPABASE_URL || PUBLIC_SUPABASE_URL.includes("your-project")) {
       error = "Supabase not configured";
@@ -15,21 +17,40 @@
       return;
     }
 
-    // Set up auth state subscription
-    const unsubscribe = authStore.subscribe((auth) => {
-      if (!auth.loading) {
-        loading = false;
-        if (auth.user) {
-          goto("/dashboard");
-        } else {
-          goto("/auth/login");
+    // Wait for auth to initialize
+    console.log("🔄 Main page: Waiting for auth to initialize...");
+    await new Promise((resolve) => {
+      const unsubscribe = authStore.subscribe((state) => {
+        if (state.initialized) {
+          console.log("🔄 Main page: Auth initialized, redirecting...");
+          unsubscribe();
+          resolve(null);
         }
-      }
+      });
     });
 
-    // Auth is already initialized in root layout, no need to call initAuth here
-    // Cleanup
-    return unsubscribe;
+    // Redirect based on authentication status
+    let authState: any;
+    authStore.subscribe((state) => {
+      authState = state;
+    })();
+
+    console.log("🔄 Main page: Auth state:", {
+      hasUser: !!authState.user,
+      userRole: authState.user?.role,
+    });
+
+    if (authState.user) {
+      // User is authenticated, redirect to dashboard
+      console.log("🔄 Main page: Redirecting to dashboard...");
+      await goto("/dashboard");
+    } else {
+      // User is not authenticated, redirect to login
+      console.log("🔄 Main page: Redirecting to login...");
+      await goto("/auth/login");
+    }
+
+    loading = false;
   });
 </script>
 

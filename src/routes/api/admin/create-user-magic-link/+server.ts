@@ -46,7 +46,7 @@ export const POST: RequestHandler = async ({ request }) => {
       );
     }
 
-    console.log("🔍 Creating user with magic link:", { email, role });
+
 
     // Create auth user without password (magic link only)
     const { data, error } = await supabaseAdmin.auth.admin.createUser({
@@ -109,7 +109,7 @@ export const POST: RequestHandler = async ({ request }) => {
       );
     }
 
-    console.log("✅ User created successfully:", { userId, email, role });
+
 
     return new Response(
       JSON.stringify({

@@ -1,6 +1,88 @@
 import type { RequestHandler } from "@sveltejs/kit";
 import { supabaseAdmin } from "$lib/server/supabase-admin";
 
+// Test endpoint to check OpenAI API key
+export const GET: RequestHandler = async () => {
+  try {
+    const openaiApiKey = import.meta.env.VITE_OPENAI_API_KEY;
+
+    if (!openaiApiKey) {
+      return new Response(
+        JSON.stringify({
+          error: "OpenAI API key not configured",
+          status: "error",
+        }),
+        {
+          status: 500,
+          headers: { "Content-Type": "application/json" },
+        }
+      );
+    }
+
+    if (!openaiApiKey.startsWith("sk-")) {
+      return new Response(
+        JSON.stringify({
+          error: "Invalid OpenAI API key format",
+          status: "error",
+        }),
+        {
+          status: 500,
+          headers: { "Content-Type": "application/json" },
+        }
+      );
+    }
+
+    // Test OpenAI API connection with a simple request
+    const testResponse = await fetch("https://api.openai.com/v1/models", {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${openaiApiKey}`,
+        "Content-Type": "application/json",
+      },
+    });
+
+    if (!testResponse.ok) {
+      const errorText = await testResponse.text();
+      return new Response(
+        JSON.stringify({
+          error: "OpenAI API test failed",
+          details: `Status: ${
+            testResponse.status
+          }, Response: ${errorText.substring(0, 200)}`,
+          status: "error",
+        }),
+        {
+          status: 500,
+          headers: { "Content-Type": "application/json" },
+        }
+      );
+    }
+
+    return new Response(
+      JSON.stringify({
+        message: "OpenAI API key is valid and working",
+        status: "success",
+      }),
+      {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }
+    );
+  } catch (error) {
+    return new Response(
+      JSON.stringify({
+        error: "OpenAI API test failed",
+        details: error instanceof Error ? error.message : "Unknown error",
+        status: "error",
+      }),
+      {
+        status: 500,
+        headers: { "Content-Type": "application/json" },
+      }
+    );
+  }
+};
+
 export const POST: RequestHandler = async ({ request }) => {
   try {
     const formData = await request.formData();
@@ -43,6 +125,7 @@ export const POST: RequestHandler = async ({ request }) => {
     // Check for OpenAI API key
     const openaiApiKey = import.meta.env.VITE_OPENAI_API_KEY;
     if (!openaiApiKey) {
+      console.error("❌ OpenAI API key not configured");
       return new Response(
         JSON.stringify({ error: "OpenAI API key not configured" }),
         {
@@ -51,6 +134,20 @@ export const POST: RequestHandler = async ({ request }) => {
         }
       );
     }
+
+    // Validate API key format (should start with 'sk-')
+    if (!openaiApiKey.startsWith("sk-")) {
+      console.error("❌ Invalid OpenAI API key format");
+      return new Response(
+        JSON.stringify({ error: "Invalid OpenAI API key format" }),
+        {
+          status: 500,
+          headers: { "Content-Type": "application/json" },
+        }
+      );
+    }
+
+
 
     // Get agent's language configuration
     let whisperLanguage = "en"; // Default to English
@@ -63,18 +160,9 @@ export const POST: RequestHandler = async ({ request }) => {
           .single();
 
         if (!agentError && agent) {
-          console.log(
-            `🔍 Agent "${agent.name}" whisper_language: ${agent.whisper_language}`
-          );
-
           // Use the configured whisper_language field directly
           if (agent.whisper_language && agent.whisper_language !== "auto") {
             whisperLanguage = agent.whisper_language;
-            console.log(`🌍 Using configured language: ${whisperLanguage}`);
-          } else {
-            console.log(
-              `🌍 Agent has auto-detect or no language configured, using default: ${whisperLanguage}`
-            );
           }
         }
       } catch (error) {
@@ -85,15 +173,9 @@ export const POST: RequestHandler = async ({ request }) => {
       }
     }
 
-    console.log(`🎤 Final whisper language setting: ${whisperLanguage}`);
-
     // Convert file to buffer
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
-
-    console.log(
-      `📁 Audio file size: ${buffer.length} bytes, type: ${file.type}`
-    );
 
     // Prepare form data for OpenAI
     const openaiFormData = new FormData();
@@ -107,14 +189,9 @@ export const POST: RequestHandler = async ({ request }) => {
     // Only set language if not auto-detect
     if (whisperLanguage !== "auto") {
       openaiFormData.append("language", whisperLanguage);
-      console.log(`🌍 Setting Whisper language to: ${whisperLanguage}`);
-    } else {
-      console.log(`🌍 Using auto-detect for language`);
     }
 
     openaiFormData.append("response_format", "json");
-
-    console.log(`🎤 Calling OpenAI Whisper API...`);
 
     // Call OpenAI Whisper API
     const openaiResponse = await fetch(
@@ -128,15 +205,44 @@ export const POST: RequestHandler = async ({ request }) => {
       }
     );
 
-    console.log(`📡 OpenAI response status: ${openaiResponse.status}`);
+
 
     if (!openaiResponse.ok) {
-      const errorData = await openaiResponse.json();
+      let errorData;
+      const responseText = await openaiResponse.text();
+
+      try {
+        errorData = JSON.parse(responseText);
+      } catch (parseError) {
+        console.error(
+          "❌ Failed to parse OpenAI error response as JSON:",
+          parseError
+        );
+        console.error("❌ Raw response text:", responseText);
+
+        // Handle non-JSON responses (like HTML error pages)
+        return new Response(
+          JSON.stringify({
+            error: "OpenAI API error",
+            details: `Received non-JSON response (${
+              openaiResponse.status
+            }): ${responseText.substring(0, 200)}...`,
+            status: openaiResponse.status,
+            statusText: openaiResponse.statusText,
+          }),
+          {
+            status: 500,
+            headers: { "Content-Type": "application/json" },
+          }
+        );
+      }
+
       console.error("❌ OpenAI Whisper API error:", errorData);
       return new Response(
         JSON.stringify({
           error: "Transcription failed",
           details: errorData.error?.message || "Unknown error",
+          status: openaiResponse.status,
         }),
         {
           status: 500,
@@ -145,14 +251,33 @@ export const POST: RequestHandler = async ({ request }) => {
       );
     }
 
-    const transcriptionData = await openaiResponse.json();
+    // Try to parse the successful response
+    let transcriptionData;
+    try {
+      const responseText = await openaiResponse.text();
+      transcriptionData = JSON.parse(responseText);
+    } catch (parseError) {
+      console.error(
+        "❌ Failed to parse OpenAI success response as JSON:",
+        parseError
+      );
+      console.error("❌ Raw response text:", await openaiResponse.text());
+
+      return new Response(
+        JSON.stringify({
+          error: "Invalid response from OpenAI",
+          details: "Received non-JSON response from OpenAI API",
+        }),
+        {
+          status: 500,
+          headers: { "Content-Type": "application/json" },
+        }
+      );
+    }
+
     const transcribedText = transcriptionData.text;
 
-    console.log("✅ Transcription successful:", transcribedText);
-    console.log(
-      "📊 Transcription data:",
-      JSON.stringify(transcriptionData, null, 2)
-    );
+
 
     // Enhanced detection and handling of problematic transcriptions
     let finalTranscribedText = transcribedText;
@@ -187,7 +312,7 @@ export const POST: RequestHandler = async ({ request }) => {
         .replace(/\s+/g, " ")
         .trim();
 
-      console.log("🧹 Cleaned transcription:", finalTranscribedText);
+
 
       // If the cleaned text is too short, it might be invalid
       if (finalTranscribedText.length < 5) {
@@ -227,29 +352,16 @@ export const POST: RequestHandler = async ({ request }) => {
 
     // Upload audio file to Supabase Storage
     let audioUrl = null;
-    console.log("🎵 Starting audio upload process...");
-    console.log("🎵 SessionId:", sessionId);
-    console.log("🎵 File info:", {
-      name: file.name,
-      size: buffer.length,
-      type: file.type,
-    });
 
     if (sessionId) {
       try {
         const fileName = `${sessionId}/${Date.now()}_audio.webm`;
-        console.log("🎵 Attempting to upload file:", fileName);
 
         // Check if bucket exists first
         const { data: buckets, error: bucketsError } =
           await supabaseAdmin.storage.listBuckets();
         if (bucketsError) {
           console.error("❌ Error listing buckets:", bucketsError);
-        } else {
-          console.log(
-            "📦 Available buckets:",
-            buckets?.map((b) => b.name) || []
-          );
         }
 
         const { data: uploadData, error: uploadError } =
@@ -267,18 +379,12 @@ export const POST: RequestHandler = async ({ request }) => {
             JSON.stringify(uploadError, null, 2)
           );
           console.error("❌ Upload error message:", uploadError.message);
-          console.error("❌ Upload error statusCode:", uploadError.statusCode);
         } else {
-          console.log("✅ Upload successful, getting public URL...");
-          console.log("✅ Upload data:", uploadData);
-
           const { data: urlData } = supabaseAdmin.storage
             .from("audio-messages")
             .getPublicUrl(fileName);
 
           audioUrl = urlData.publicUrl;
-          console.log("✅ Audio file uploaded:", audioUrl);
-          console.log("✅ URL data:", urlData);
         }
       } catch (storageError) {
         console.error("❌ Storage error:", storageError);
@@ -286,8 +392,10 @@ export const POST: RequestHandler = async ({ request }) => {
           "❌ Storage error details:",
           JSON.stringify(storageError, null, 2)
         );
-        console.error("❌ Storage error name:", storageError.name);
-        console.error("❌ Storage error message:", storageError.message);
+        if (storageError instanceof Error) {
+          console.error("❌ Storage error name:", storageError.name);
+          console.error("❌ Storage error message:", storageError.message);
+        }
       }
     } else {
       console.warn("⚠️ No sessionId provided, skipping audio upload");
@@ -297,7 +405,7 @@ export const POST: RequestHandler = async ({ request }) => {
       JSON.stringify({
         text: finalTranscribedText,
         audioUrl: audioUrl,
-        originalText: transcribedText, // Include original for debugging
+        originalText: transcribedText,
         wasCleaned: finalTranscribedText !== transcribedText,
       }),
       {

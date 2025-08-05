@@ -31,16 +31,12 @@ export async function loadDatasets(forceRefresh = false): Promise<void> {
   // Check if we should load data
   const loadCheck = get(canLoadData);
   if (!loadCheck.shouldLoad) {
-    console.log(
-      "⏸️ Skipping datasets load - auth not ready or user cannot manage"
-    );
     return;
   }
 
   // Check if data is already loading
   const currentState = get(datasetsStore);
   if (currentState.loading) {
-    console.log("⏸️ Datasets already loading, skipping...");
     return;
   }
 
@@ -50,11 +46,8 @@ export async function loadDatasets(forceRefresh = false): Promise<void> {
     !shouldRefreshData("datasets") &&
     currentState.datasets.length > 0
   ) {
-    console.log("⏸️ Datasets data is fresh, skipping load...");
     return;
   }
-
-  console.log("🔄 Loading datasets from Supabase...");
   setLoadingState("datasets", true);
   datasetsStore.update((state) => ({ ...state, loading: true, error: null }));
 
@@ -75,9 +68,7 @@ export async function loadDatasets(forceRefresh = false): Promise<void> {
     }));
 
     setDataLoaded("datasets");
-    console.log("✅ Datasets loaded from database:", data?.length || 0);
   } catch (error) {
-    console.error("Error loading datasets:", error);
     const errorMessage =
       error instanceof Error ? error.message : "Failed to load datasets";
     datasetsStore.update((state) => ({
@@ -92,7 +83,6 @@ export async function loadDatasets(forceRefresh = false): Promise<void> {
 export async function createDataset(
   dataset: Omit<Dataset, "id" | "created_at" | "updated_at">
 ): Promise<Dataset | null> {
-  console.log("🔍 createDataset called with:", dataset);
 
   try {
     // Prepare the dataset data
@@ -114,23 +104,17 @@ export async function createDataset(
       updated_at: new Date().toISOString(),
     };
 
-    console.log("🔍 Prepared dataset data for insertion:", datasetData);
-    console.log("🔍 Inserting into Supabase...");
-
     const { data, error } = await supabase
       .from("datasets")
       .insert(datasetData)
       .select()
       .single();
 
-    console.log("🔍 Supabase response - data:", data, "error:", error);
-
     if (error) {
-      console.error("❌ Supabase error:", error);
       throw error;
     }
 
-    console.log("✅ Dataset inserted successfully:", data);
+    
 
     // Update store
     datasetsStore.update((state) => ({
@@ -138,10 +122,9 @@ export async function createDataset(
       datasets: [data, ...state.datasets],
     }));
 
-    console.log("✅ Store updated successfully");
+
     return data;
   } catch (error) {
-    console.error("❌ Error creating dataset:", error);
     datasetsStore.update((state) => ({
       ...state,
       error:
@@ -180,7 +163,6 @@ export async function updateDataset(
 
     return data;
   } catch (error) {
-    console.error("Error updating dataset:", error);
     datasetsStore.update((state) => ({
       ...state,
       error:
@@ -206,7 +188,6 @@ export async function deleteDataset(id: string): Promise<boolean> {
 
     return true;
   } catch (error) {
-    console.error("Error deleting dataset:", error);
     datasetsStore.update((state) => ({
       ...state,
       error:
@@ -218,7 +199,6 @@ export async function deleteDataset(id: string): Promise<boolean> {
 
 export async function loadDatasetChunks(datasetId: string): Promise<any[]> {
   try {
-    console.log("🔍 Loading chunks for dataset:", datasetId);
     const { data, error } = await supabase
       .from("dataset_chunks")
       .select("*")
@@ -226,16 +206,10 @@ export async function loadDatasetChunks(datasetId: string): Promise<any[]> {
       .order("index", { ascending: true });
 
     if (error) {
-      console.error("❌ Error loading dataset chunks:", error);
       throw error;
     }
 
-    console.log(
-      "✅ Loaded",
-      data?.length || 0,
-      "chunks for dataset:",
-      datasetId
-    );
+
 
     // Update the store with the loaded chunks
     datasetsStore.update((state) => ({
@@ -248,7 +222,6 @@ export async function loadDatasetChunks(datasetId: string): Promise<any[]> {
 
     return data || [];
   } catch (error) {
-    console.error("❌ Error loading dataset chunks:", error);
     return [];
   }
 }
@@ -289,9 +262,6 @@ export async function createChunks(
   overlap: number = 200
 ): Promise<{ data: any[] | null; error: string | null }> {
   try {
-    console.log("🔍 Creating chunks for dataset:", datasetId);
-    console.log("🔍 Content length:", content.length);
-    console.log("🔍 Chunk size:", chunkSize, "Overlap:", overlap);
 
     // Simple text chunking algorithm
     const chunks: any[] = [];
@@ -319,7 +289,6 @@ export async function createChunks(
       index++;
     }
 
-    console.log("🔍 Created", chunks.length, "chunks");
 
     // Insert chunks into database
     const { data, error } = await supabase
@@ -328,11 +297,10 @@ export async function createChunks(
       .select();
 
     if (error) {
-      console.error("❌ Error inserting chunks:", error);
       throw error;
     }
 
-    console.log("✅ Successfully inserted", data?.length || 0, "chunks");
+    
 
     // Update dataset total_chunks count
     await supabase
@@ -363,7 +331,6 @@ export async function createChunks(
   } catch (error) {
     const errorMessage =
       error instanceof Error ? error.message : "Failed to create chunks";
-    console.error("❌ Error creating chunks:", errorMessage);
     return { data: null, error: errorMessage };
   }
 }
@@ -376,14 +343,12 @@ export async function processFileToStructuredChunks(
   file: File
 ): Promise<{ data: any[] | null; error: string | null }> {
   try {
-    console.log("🔍 Processing file:", file.name, "for dataset:", datasetId);
 
     const text = await file.text();
     return await createStructuredChunks(datasetId, text, `file:${file.name}`);
   } catch (error) {
     const errorMessage =
       error instanceof Error ? error.message : "Failed to process file";
-    console.error("❌ Error processing file:", errorMessage);
     return { data: null, error: errorMessage };
   }
 }
@@ -398,22 +363,15 @@ export async function createStructuredChunks(
   source: string
 ): Promise<{ data: any[] | null; error: string | null }> {
   try {
-    console.log("🔍 createStructuredChunks called for dataset:", datasetId);
-    console.log("🔍 Content length:", content.length);
-    console.log("🔍 Source:", source);
 
     // Parse content into structured chunks
-    console.log("🔍 Parsing structured content...");
     const chunks = parseStructuredContent(content);
-    console.log("🔍 Parsed into", chunks.length, "structured chunks");
 
     if (chunks.length === 0) {
-      console.warn("⚠️ No chunks created from content");
       return { data: [], error: null };
     }
 
     // Prepare chunks for database insertion
-    console.log("🔍 Preparing chunks for database insertion...");
     const dbChunks = chunks.map((chunk, index) => ({
       dataset_id: datasetId,
       index: index,
@@ -431,8 +389,6 @@ export async function createStructuredChunks(
       },
     }));
 
-    console.log("🔍 Prepared", dbChunks.length, "chunks for insertion");
-    console.log("🔍 Inserting chunks into database...");
 
     // Insert chunks into database
     const { data, error } = await supabase
@@ -441,7 +397,6 @@ export async function createStructuredChunks(
       .select();
 
     if (error) {
-      console.error("❌ Error inserting structured chunks:", error);
       throw error;
     }
 
@@ -452,13 +407,12 @@ export async function createStructuredChunks(
     );
 
     // Update dataset total_chunks count
-    console.log("🔍 Updating dataset total_chunks count...");
     await supabase
       .from("datasets")
       .update({ total_chunks: data?.length || 0 })
       .eq("id", datasetId);
 
-    console.log("✅ Dataset total_chunks updated successfully");
+    
 
     return { data, error: null };
   } catch (error) {
@@ -466,7 +420,6 @@ export async function createStructuredChunks(
       error instanceof Error
         ? error.message
         : "Failed to create structured chunks";
-    console.error("❌ Error creating structured chunks:", errorMessage);
     return { data: null, error: errorMessage };
   }
 }
@@ -497,14 +450,13 @@ export function parseStructuredContent(content: string): Array<{
     matchCount++;
     if (matchCount <= 3) {
       // Show first 3 matches
-      console.log(`🔍 Found Portuguese translation match ${matchCount}:`, {
+      console.log({
         exerciseNumber: match[1],
         prompt: match[2]?.trim(),
         response: match[3]?.trim(),
       });
     }
   }
-  console.log(`🔍 Total Portuguese translation matches found: ${matchCount}`);
 
   // Also test for language direction indicator
   const langDirectionMatch = content.match(/\[pt-BR>(\w+)\]/);
@@ -580,7 +532,6 @@ export function parseStructuredContent(content: string): Array<{
   for (const format of formatPatterns) {
     if (format.exercisePattern && format.exercisePattern.test(content)) {
       detectedFormat = format;
-      console.log(`🔍 Detected format: ${format.name}`);
       break;
     }
   }
@@ -607,20 +558,18 @@ export function parseStructuredContent(content: string): Array<{
   );
 
   if (detectedFormat.name === "PortugueseGerman") {
-    console.log("🔍 Portuguese-German sections:");
     sections.forEach((section, index) => {
-      console.log(`Section ${index}:`, section.substring(0, 100) + "...");
 
       // Test the regex pattern on this section
       const testMatch = section.match(detectedFormat.exercisePattern!);
       if (testMatch) {
-        console.log(`✅ Section ${index} matches pattern:`, {
+        console.log({
           exerciseNumber: testMatch[1],
           prompt: testMatch[2]?.substring(0, 50) + "...",
           response: testMatch[3]?.substring(0, 30) + "...",
         });
       } else {
-        console.log(`❌ Section ${index} does NOT match pattern`);
+        console.log("❌ No match found in section", index);
       }
     });
   }
@@ -649,7 +598,6 @@ export function parseStructuredContent(content: string): Array<{
         type: "metadata",
         metadata,
       });
-      console.log("🔍 Added metadata chunk:", metadata);
     }
   }
 
@@ -673,7 +621,7 @@ export function parseStructuredContent(content: string): Array<{
 
       // Skip if we don't have all required parts
       if (!exerciseNumber || !prompt || !expectedResponse) {
-        console.log(`⚠️ Skipping incomplete exercise match in section ${i}:`, {
+        console.log({
           exerciseNumber,
           prompt: prompt || "undefined",
           expectedResponse: expectedResponse || "undefined",
@@ -775,7 +723,7 @@ export function parseStructuredContent(content: string): Array<{
     const expectedResponse = match[3]?.trim();
 
     if (exerciseNumber && prompt && expectedResponse) {
-      console.log(`🔍 Direct match ${matchIndex}: Exercise ${exerciseNumber}`, {
+      console.log({
         prompt: prompt.substring(0, 50) + "...",
         expectedResponse: expectedResponse.substring(0, 30) + "...",
       });
@@ -809,7 +757,6 @@ export function parseStructuredContent(content: string): Array<{
   }
 
   if (chunks.length === 0) {
-    console.log("🔍 No structured content found, treating as single chunk");
     chunks.push({
       content: content.trim(),
       type: "instruction",
@@ -820,7 +767,6 @@ export function parseStructuredContent(content: string): Array<{
     });
   }
 
-  console.log("🔍 Final chunks created:", chunks.length);
   chunks.forEach((chunk, index) => {
     console.log(
       `  Chunk ${index}: type=${chunk.type}, exerciseNumber=${chunk.exerciseNumber}, content length=${chunk.content.length}`

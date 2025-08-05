@@ -43,14 +43,6 @@
   let recentActivity: any[] = [];
 
   $: user = $authStore.user;
-  $: console.log("Dashboard auth state:", {
-    loading: $authStore.loading,
-    user: $authStore.user,
-    hasUser: !!$authStore.user,
-    userRole: $authStore.user?.role,
-    isAdmin: isAdmin(),
-    canManageContent: $canManageContent,
-  });
 
   onMount(async () => {
     if (user) {
@@ -187,28 +179,6 @@
     Welcome to BigStepLabs 2.0
   </p>
 </div>
-
-<!-- Debug Panel -->
-{#if !user}
-  <div
-    class="mb-6 p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-md"
-  >
-    <h3 class="font-medium text-yellow-800 dark:text-yellow-200 mb-2">
-      Debug Information
-    </h3>
-    <div class="text-sm space-y-1">
-      <p><strong>Loading:</strong> {$authStore.loading}</p>
-      <p><strong>Has User:</strong> {!!$authStore.user}</p>
-      <p><strong>User Role:</strong> {$authStore.user?.role || "None"}</p>
-      <p><strong>Is Admin:</strong> {isAdmin()}</p>
-      <p><strong>Can Manage:</strong> {$canManageContent}</p>
-      <p>
-        <strong>User Object:</strong>
-        {JSON.stringify($authStore.user, null, 2)}
-      </p>
-    </div>
-  </div>
-{/if}
 
 <!-- Loading user data... -->
 {#if $authStore.loading || loading}

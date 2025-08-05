@@ -200,25 +200,20 @@
   }
 
   onMount(async () => {
-    console.log("🔄 Modules page: Starting initialization...");
-
     try {
       // Load modules first
       await loadModules();
-      console.log("✅ Modules page: Modules loaded");
 
       // Load agents
       await loadAgents();
-      console.log("✅ Modules page: Agents loaded");
 
       // Load user module access for filtering (only once)
       if (user && user.role === "Student" && !userModuleAccessLoaded) {
         await loadUserModuleAccess();
         userModuleAccessLoaded = true;
-        console.log("✅ Modules page: User module access loaded");
       }
     } catch (error) {
-      console.error("❌ Modules page: Initialization error:", error);
+      console.error("Modules page initialization error:", error);
     }
   });
 
@@ -229,7 +224,6 @@
       if (!userModuleAccessLoaded) {
         await loadUserModuleAccess();
         userModuleAccessLoaded = true;
-        console.log("✅ Modules page: User module access loaded (reactive)");
       }
     }, 100);
   }
@@ -411,7 +405,6 @@
     try {
       recordingError[lessonId] = "";
       recordingDuration[lessonId] = 0;
-      console.log("🎙️ Starting audio recording for lesson:", lessonId);
 
       // Get microphone-only stream with strict constraints
       const stream = await navigator.mediaDevices.getUserMedia({
@@ -437,7 +430,6 @@
       for (const mimeType of mimeTypes) {
         if (MediaRecorder.isTypeSupported(mimeType)) {
           selectedMimeType = mimeType;
-          console.log(`✅ Using MIME type: ${mimeType}`);
           break;
         }
       }
@@ -455,12 +447,10 @@
       mediaRecorder[lessonId]!.ondataavailable = (event) => {
         if (event.data.size > 0) {
           audioChunks[lessonId].push(event.data);
-          console.log("📦 Audio chunk received:", event.data.size, "bytes");
         }
       };
 
       mediaRecorder[lessonId]!.onstop = async () => {
-        console.log("⏹️ Recording stopped, processing audio...");
         if (recordingTimer[lessonId]) {
           clearInterval(recordingTimer[lessonId]!);
           recordingTimer[lessonId] = null;
@@ -476,14 +466,9 @@
       recordingTimer[lessonId] = setInterval(() => {
         recordingDuration[lessonId] += 1;
         if (recordingDuration[lessonId] >= 10) {
-          console.log(
-            "⏰ 10-second recording limit reached, stopping automatically"
-          );
           stopRecording(lessonId);
         }
       }, 1000);
-
-      console.log("🎙️ Recording started successfully");
     } catch (error) {
       console.error("❌ Error starting recording:", error);
       recordingError[lessonId] =
@@ -499,7 +484,6 @@
         clearInterval(recordingTimer[lessonId]!);
         recordingTimer[lessonId] = null;
       }
-      console.log("⏹️ Recording stopped");
     }
   }
 
@@ -511,13 +495,10 @@
     recordingError[lessonId] = "";
 
     try {
-      console.log("🔧 Processing audio chunks...");
-      console.log("📦 Total audio chunks:", audioChunks[lessonId].length);
-
       const audioBlob = new Blob(audioChunks[lessonId], {
         type: "audio/webm",
       });
-      console.log("🎵 Created audio blob:", audioBlob.size, "bytes");
+      
 
       if (audioBlob.size < 1000) {
         throw new Error("Audio recording too small - may not contain speech");
@@ -534,11 +515,7 @@
         setTimeout(() => reject(new Error("Audio loading timeout")), 5000);
       });
 
-      console.log(
-        "✅ Audio blob validation passed - duration:",
-        testAudio.duration,
-        "seconds"
-      );
+
       URL.revokeObjectURL(testUrl);
 
       // Send to transcription API
@@ -546,19 +523,7 @@
       formData.append("file", audioBlob, "recording.webm");
       formData.append("sessionId", activeChatSessions[lessonId]);
 
-      console.log(
-        "🎵 SessionId being sent to transcription API:",
-        activeChatSessions[lessonId]
-      );
-      console.log("🎵 LessonId:", lessonId);
-      console.log("🎵 Active chat sessions:", activeChatSessions);
-      console.log("🎵 Session ID check:", {
-        hasActiveSession: !!activeChatSessions[lessonId],
-        sessionId: activeChatSessions[lessonId],
-        sessionIdType: typeof activeChatSessions[lessonId],
-        sessionIdLength: activeChatSessions[lessonId]?.length,
-        allActiveSessions: Object.keys(activeChatSessions),
-      });
+
 
       // Get the agent ID from the lesson data
       let agentId = "";
@@ -572,14 +537,14 @@
       }
       formData.append("agentId", agentId);
 
-      console.log("📤 Sending audio to transcription API...");
+
 
       const response = await fetch("/api/whisper-transcribe", {
         method: "POST",
         body: formData,
       });
 
-      console.log("📡 Transcription API response status:", response.status);
+
 
       if (!response.ok) {
         const errorText = await response.text();
@@ -590,17 +555,17 @@
       }
 
       const result = await response.json();
-      console.log("📋 Transcription API result:", result);
+
 
       if (result.text && result.text.trim()) {
         // Insert transcribed text into the input
         newMessageText[lessonId] = result.text.trim();
-        console.log("✅ Transcription completed:", result.text);
+
 
         // Store audio URL for later use
         if (result.audioUrl) {
           currentAudioUrl[lessonId] = result.audioUrl;
-          console.log("✅ Audio stored and URL captured:", result.audioUrl);
+
         } else {
           console.warn("⚠️ No audio URL returned from transcription API");
         }
@@ -656,12 +621,8 @@
   }
 
   async function handleUpdateModule() {
-    console.log("🔍 handleUpdateModule called");
-    console.log("🔍 Current user:", user);
-    console.log("🔍 Edit module data:", editModule);
 
     if (!user) {
-      console.log("❌ No user found, returning");
       return;
     }
 
@@ -671,18 +632,10 @@
       validationErrors.push("Title is required");
     }
     if (validationErrors.length > 0) {
-      console.log("❌ Validation failed:", validationErrors);
       return;
     }
 
-    console.log("🔍 Calling updateModule with:", {
-      id: editModule.id,
-      updates: {
-        title: editModule.title.trim(),
-        description: editModule.description.trim() || "No description provided",
-        is_published: editModule.is_published,
-      },
-    });
+
 
     const result = await updateModule(editModule.id, {
       title: editModule.title.trim(),
@@ -690,14 +643,11 @@
       is_published: editModule.is_published,
     });
 
-    console.log("🔍 Update result:", result);
 
     if (result.data) {
-      console.log("✅ Update successful, closing dialog");
       editDialogOpen = false;
       toastStore.success("Module updated successfully");
     } else {
-      console.log("❌ Update failed:", result.error);
       toastStore.error(String(result.error) || "Failed to update module");
     }
   }
@@ -1488,12 +1438,10 @@
                                                             />
                                                           </div>
                                                         {:else if message.metadata?.is_voice_message}
-                                                          <!-- Debug: Show when voice message flag is set but no audio URL -->
                                                           <div
                                                             class="mt-2 text-xs text-muted-foreground"
                                                           >
                                                             🎵 Voice message
-                                                            (audio URL missing)
                                                           </div>
                                                         {/if}
 

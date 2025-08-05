@@ -37,7 +37,6 @@ export async function loadUserModuleAccess(): Promise<void> {
 
   // Prevent multiple concurrent loads
   if (isLoading) {
-    console.log("🔄 User module access already loading, skipping...");
     return;
   }
 
@@ -49,7 +48,6 @@ export async function loadUserModuleAccess(): Promise<void> {
   }));
 
   try {
-    console.log("🔍 Loading user module access for:", auth.user.email);
 
     // Use safe data loading to prevent race conditions
     const data = await safeDataLoad(
@@ -64,7 +62,6 @@ export async function loadUserModuleAccess(): Promise<void> {
         );
 
         if (error) {
-          console.error("❌ Error loading user module access:", error);
           throw new Error(error.message);
         }
 
@@ -78,7 +75,7 @@ export async function loadUserModuleAccess(): Promise<void> {
       (module: any) => module.module_id
     );
 
-    console.log("✅ User module access loaded:", {
+    console.log({
       accessibleModules: accessibleModules.length,
       assignedModuleIds: assignedModuleIds.length,
     });
@@ -92,7 +89,6 @@ export async function loadUserModuleAccess(): Promise<void> {
       lastLoaded: Date.now(),
     }));
   } catch (error) {
-    console.error("❌ Error in loadUserModuleAccess:", error);
     userModuleAccessStore.update((state) => ({
       ...state,
       loading: false,
@@ -120,13 +116,11 @@ export async function checkModuleAccess(moduleId: string): Promise<boolean> {
     });
 
     if (error) {
-      console.error("❌ Error checking module access:", error);
       return false;
     }
 
     return data === true;
   } catch (error) {
-    console.error("❌ Error in checkModuleAccess:", error);
     return false;
   }
 }
@@ -144,7 +138,7 @@ export function filterModulesByAccess(allModules: any[]): any[] {
 
   // If there's an error, return all modules (fail open for now)
   if (access.error) {
-    console.warn(
+    console.log(
       "⚠️ Error in module access, showing all modules:",
       access.error
     );
@@ -156,7 +150,7 @@ export function filterModulesByAccess(allModules: any[]): any[] {
     access.assignedModuleIds.includes(module.id)
   );
 
-  console.log("🔍 Filtered modules:", {
+  console.log({
     total: allModules.length,
     accessible: filteredModules.length,
     assignedIds: access.assignedModuleIds,

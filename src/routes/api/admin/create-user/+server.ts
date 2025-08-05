@@ -59,7 +59,7 @@ export const POST: RequestHandler = async ({ request }) => {
       );
     }
 
-    console.log("🔍 Creating user with password:", { email, role });
+
 
     // Create auth user with password (no email confirmation required)
     const { data, error } = await supabaseAdmin.auth.admin.createUser({
@@ -124,7 +124,7 @@ export const POST: RequestHandler = async ({ request }) => {
       );
     }
 
-    console.log("✅ User created successfully:", { userId, email, role });
+
 
     return new Response(
       JSON.stringify({

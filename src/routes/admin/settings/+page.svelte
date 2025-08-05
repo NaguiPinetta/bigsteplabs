@@ -198,7 +198,6 @@
       }));
 
       modelSyncStatus = "success";
-      console.log(`✅ Synced ${aiModels.length} models from OpenAI`);
     } catch (error) {
       console.error("Failed to sync models:", error);
       modelSyncStatus = "error";

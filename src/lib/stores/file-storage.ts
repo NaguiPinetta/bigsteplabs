@@ -82,7 +82,6 @@ export async function uploadFile(
       publicUrl = urlData.publicUrl;
     } catch (urlError) {
       // Public URL might not be available for all buckets
-      console.warn("Could not get public URL:", urlError);
     }
 
     // Update store with success

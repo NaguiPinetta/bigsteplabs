@@ -18,14 +18,7 @@
   let progressBar: HTMLDivElement;
   let volumeSlider: HTMLInputElement;
 
-  // Debug logging
-  $: {
-    console.log("🎵 AudioPlayer received src:", src);
-    console.log("🎵 AudioPlayer received title:", title);
-  }
-
   onMount(() => {
-    console.log("🎵 AudioPlayer mounted with src:", src);
     if (audio) {
       audio.addEventListener("loadedmetadata", handleLoadedMetadata);
       audio.addEventListener("timeupdate", handleTimeUpdate);
@@ -50,12 +43,6 @@
   });
 
   function handleLoadedMetadata() {
-    console.log(
-      "🎵 AudioPlayer loaded metadata for src:",
-      src,
-      "duration:",
-      audio.duration
-    );
     duration = audio.duration;
     isLoading = false;
   }
@@ -70,7 +57,6 @@
   }
 
   function handleError() {
-    console.error("🎵 AudioPlayer error occurred for src:", src);
     hasError = true;
     isLoading = false;
   }
@@ -122,7 +108,8 @@
   }
 
   function formatTime(seconds: number): string {
-    if (isNaN(seconds)) return "0:00";
+    if (isNaN(seconds) || seconds === Infinity || seconds === -Infinity)
+      return "0:00";
 
     const mins = Math.floor(seconds / 60);
     const secs = Math.floor(seconds % 60);
@@ -130,7 +117,7 @@
   }
 
   function getProgressPercentage(): number {
-    if (duration === 0) return 0;
+    if (duration === 0 || isNaN(duration) || duration === Infinity) return 0;
     return (currentTime / duration) * 100;
   }
 </script>
@@ -138,11 +125,6 @@
 <div
   class="audio-player bg-background/50 rounded-md border border-border/50 p-3"
 >
-  <!-- Title -->
-  {#if title}
-    <div class="text-sm font-medium text-foreground mb-2">{title}</div>
-  {/if}
-
   <!-- Voice Message Label -->
   <div class="flex items-center space-x-2 mb-2">
     <svg

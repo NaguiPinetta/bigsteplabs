@@ -72,7 +72,7 @@ export const POST: RequestHandler = async ({ request }) => {
       return json({ error: "User ID and module IDs array are required" }, { status: 400 });
     }
 
-    console.log("🔧 Assigning modules to user:", { userId, moduleIds });
+
 
     // First, deactivate all current assignments for this user
     const { error: deactivateError } = await supabaseAdmin
@@ -104,7 +104,7 @@ export const POST: RequestHandler = async ({ request }) => {
       }
     }
 
-    console.log("✅ Modules assigned successfully");
+
 
     return json({
       success: true,

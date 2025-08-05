@@ -4,7 +4,6 @@ import { supabaseAdmin } from '$lib/server/supabase-admin';
 
 export const POST: RequestHandler = async () => {
   try {
-    console.log("🔧 Setting up audio storage bucket...");
 
     // Check if the bucket exists
     const { data: buckets, error: bucketsError } = await supabaseAdmin.storage.listBuckets();
@@ -14,12 +13,10 @@ export const POST: RequestHandler = async () => {
       return json({ error: "Failed to list buckets", details: bucketsError }, { status: 500 });
     }
 
-    console.log("📦 Available buckets:", buckets.map(b => b.name));
     
     const audioBucket = buckets.find(bucket => bucket.name === 'audio-messages');
     
     if (!audioBucket) {
-      console.log("🔧 Creating audio-messages bucket...");
       
       // Create the bucket
       const { data: newBucket, error: createError } = await supabaseAdmin.storage.createBucket('audio-messages', {
@@ -33,13 +30,10 @@ export const POST: RequestHandler = async () => {
         return json({ error: "Failed to create bucket", details: createError }, { status: 500 });
       }
 
-      console.log("✅ Audio-messages bucket created:", newBucket);
     } else {
-      console.log("✅ Audio-messages bucket already exists:", audioBucket);
     }
 
     // Set up RLS policies
-    console.log("🔧 Setting up RLS policies...");
     
     // Allow authenticated users to upload audio files
     const { error: insertPolicyError } = await supabaseAdmin.rpc('create_policy_if_not_exists', {
@@ -63,7 +57,6 @@ export const POST: RequestHandler = async () => {
       console.warn("⚠️ Select policy error (might already exist):", selectPolicyError);
     }
 
-    console.log("✅ Audio storage setup completed");
 
     return json({
       success: true,

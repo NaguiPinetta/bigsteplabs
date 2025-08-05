@@ -1,12 +1,13 @@
 <script lang="ts">
   import { goto } from "$app/navigation";
-  import { sendMagicLink, redirectAuthenticatedUser } from "$lib/auth";
+  import { sendMagicLink } from "$lib/auth";
   import { signInWithEmail } from "$lib/stores/auth";
   import { onMount } from "svelte";
   import Button from "$lib/components/ui/button.svelte";
   import Input from "$lib/components/ui/input.svelte";
   import Card from "$lib/components/ui/card.svelte";
   import { Loader2, Mail, Shield, Eye, EyeOff } from "lucide-svelte";
+  import { supabase } from "$lib/supabase";
 
   let email = "";
   let password = "";
@@ -17,8 +18,8 @@
   let loginMethod: "magic" | "password" = "magic";
 
   onMount(async () => {
-    // Redirect if already authenticated
-    await redirectAuthenticatedUser();
+    // Completely disable redirect logic to prevent loops
+    // The user should be able to access the login page without being redirected
   });
 
   async function handleMagicLinkLogin() {
@@ -305,6 +306,21 @@
           <a href="/privacy" class="text-primary hover:underline"
             >Privacy Policy</a
           >
+        </div>
+
+        <!-- Dashboard link for authenticated users -->
+        <div class="mt-4 pt-4 border-t border-border">
+          <p class="text-sm text-muted-foreground mb-2">
+            Already have an account?
+          </p>
+          <Button
+            variant="outline"
+            size="sm"
+            on:click={() => goto("/dashboard")}
+            class="w-full"
+          >
+            Go to Dashboard
+          </Button>
         </div>
       </div>
     </div>

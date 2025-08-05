@@ -32,24 +32,23 @@ export async function loadAgents(forceRefresh = false) {
   // Check if we should load data
   const loadCheck = get(canLoadData);
   if (!loadCheck.shouldLoad) {
-    console.log("⏸️ Skipping agents load - auth not ready or user cannot manage");
+    
     return { data: null, error: "Not authorized or auth not ready" };
   }
 
   // Check if data is already loading
   const currentState = get(agentsStore);
   if (currentState.loading) {
-    console.log("⏸️ Agents already loading, skipping...");
+    
     return { data: currentState.agents, error: null };
   }
 
   // Check if we need to refresh data
   if (!forceRefresh && !shouldRefreshData("agents") && currentState.agents.length > 0) {
-    console.log("⏸️ Agents data is fresh, skipping load...");
+    
     return { data: currentState.agents, error: null };
   }
 
-  console.log("🔄 Loading agents from Supabase...");
   setLoadingState("agents", true);
   agentsStore.update((state) => ({ ...state, loading: true, error: null }));
 
@@ -102,7 +101,6 @@ export async function loadAgents(forceRefresh = false) {
   } catch (error) {
     const errorMessage =
       error instanceof Error ? error.message : "Failed to load agents";
-    console.error("❌ Error loading agents:", errorMessage);
     
     setDataError("agents", errorMessage);
     agentsStore.update((state) => ({
@@ -175,7 +173,6 @@ export async function createAgent(agent: any) {
         datasets = datasetData || [];
       }
     } catch (relationError) {
-      console.warn("⚠️ Warning: Could not load some related data:", relationError);
     }
 
     const enrichedAgent = {
@@ -193,12 +190,11 @@ export async function createAgent(agent: any) {
       loading: false,
     }));
 
-    console.log("✅ Agent created successfully:", data.name);
+    console.log("✅ Agent created successfully:", enrichedAgent.id);
     return { data: enrichedAgent, error: null };
   } catch (error) {
     const errorMessage =
       error instanceof Error ? error.message : "Failed to create agent";
-    console.error("❌ Error creating agent:", errorMessage);
     agentsStore.update((state) => ({
       ...state,
       loading: false,
@@ -262,12 +258,11 @@ export async function updateAgent(agentId: string, updates: any) {
       loading: false,
     }));
 
-    console.log("✅ Agent updated successfully:", data.name);
+    
     return { data: enrichedAgent, error: null };
   } catch (error) {
     const errorMessage =
       error instanceof Error ? error.message : "Failed to update agent";
-    console.error("❌ Error updating agent:", errorMessage);
     agentsStore.update((state) => ({
       ...state,
       loading: false,
@@ -295,12 +290,11 @@ export async function deleteAgent(id: string) {
       loading: false,
     }));
 
-    console.log("✅ Agent deleted successfully");
+    
     return { error: null };
   } catch (error) {
     const errorMessage =
       error instanceof Error ? error.message : "Failed to delete agent";
-    console.error("❌ Error deleting agent:", errorMessage);
     agentsStore.update((state) => ({
       ...state,
       loading: false,
@@ -319,7 +313,7 @@ export async function testAgent(id: string) {
     // For now, we'll simulate a successful test
     await new Promise((resolve) => setTimeout(resolve, 2000));
 
-    console.log("✅ Agent test successful:", id);
+    
     return {
       success: true,
       response:
@@ -329,7 +323,6 @@ export async function testAgent(id: string) {
   } catch (error) {
     const errorMessage =
       error instanceof Error ? error.message : "Failed to test agent";
-    console.error("❌ Error testing agent:", errorMessage);
     return { success: false, error: errorMessage };
   }
 }
