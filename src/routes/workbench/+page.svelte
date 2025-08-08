@@ -18,6 +18,7 @@
   import Card from "$lib/components/ui/card.svelte";
   import Dialog from "$lib/components/ui/dialog.svelte";
   import Input from "$lib/components/ui/input.svelte";
+  import Select from "$lib/components/ui/select.svelte";
   import Textarea from "$lib/components/ui/textarea.svelte";
   import {
     TestTube,
@@ -311,17 +312,14 @@
                 <label class="block text-sm font-medium mb-2"
                   >Select Agent</label
                 >
-                <select
+                <Select
                   bind:value={selectedAgentId}
-                  class="w-full px-3 py-2 border border-input bg-background text-foreground rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
-                >
-                  <option value="">Choose an agent...</option>
-                  {#each agents as agent}
-                    <option value={agent.id}>
-                      {agent.name} ({agent.persona?.response_style})
-                    </option>
-                  {/each}
-                </select>
+                  placeholder="Choose an agent..."
+                  options={agents.map((agent) => ({
+                    value: agent.id,
+                    label: `${agent.name} (${agent.persona?.response_style})`,
+                  }))}
+                />
               </div>
 
               <!-- Test Prompt -->

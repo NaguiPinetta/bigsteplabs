@@ -206,6 +206,13 @@ export async function testAgent(agentId: string, prompt: string) {
     let currentState: WorkbenchState;
     state.subscribe((s) => (currentState = s))();
 
+    // Ensure we have an authenticated user; chat_sessions.user_id is NOT NULL
+    const currentAuth = get(authStore);
+    const currentUserId = currentAuth.user?.id;
+    if (!currentUserId) {
+      throw new Error("You must be signed in to run a workbench test");
+    }
+
     const agent = currentState.activeAgents.find((a) => a.id === agentId);
     if (!agent) {
       throw new Error("Agent not found");
@@ -215,6 +222,7 @@ export async function testAgent(agentId: string, prompt: string) {
     const { data: session, error: sessionError } = await supabase
       .from("chat_sessions")
       .insert({
+        user_id: currentUserId,
         agent_id: agentId,
         title: `Test: ${prompt.substring(0, 50)}...`,
         metadata: { is_test: true },
@@ -398,6 +406,17 @@ export async function getAgentAnalytics() {
         )
       : 0;
 
+  // Average token count across tests (only count results that report tokens)
+  const tokenCounts = results
+    .map((r) => r.metadata?.tokenCount)
+    .filter((v): v is number => typeof v === "number" && !Number.isNaN(v));
+  const averageTokenCount =
+    tokenCounts.length > 0
+      ? Math.round(
+          tokenCounts.reduce((sum, v) => sum + v, 0) / tokenCounts.length
+        )
+      : 0;
+
   const agentStats = agents.map((agent) => {
     const agentResults = results.filter((r) => r.agentId === agent.id);
     const agentSuccesses = agentResults.filter((r) => r.success).length;
@@ -422,11 +441,19 @@ export async function getAgentAnalytics() {
   });
 
   return {
+    // Flattened fields to align with existing UI expectations
+    totalTests,
+    successRate,
+    averageResponseTime: avgResponseTime,
+    averageTokenCount,
+
+    // Structured overview for programmatic use
     overview: {
       totalTests,
       successRate,
       avgResponseTime,
       totalAgents: agents.length,
+      averageTokenCount,
     },
     agents: agentStats,
     recentTests: results.slice(-10).reverse(),

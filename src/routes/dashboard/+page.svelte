@@ -44,80 +44,110 @@
 
   $: user = $authStore.user;
 
+  // Debug logging for auth state
+  $: console.log("🔄 Dashboard auth state:", {
+    user: user?.email || "no user",
+    authLoading: $authStore.loading,
+    authInitialized: $authStore.initialized,
+    dashboardLoading: loading,
+  });
+
   onMount(async () => {
+    console.log("🔄 Dashboard onMount: Starting...");
     if (user) {
+      console.log("🔄 Dashboard onMount: User found, loading data...");
       await loadDashboardData();
+    } else {
+      console.log("🔄 Dashboard onMount: No user found");
     }
   });
 
   async function loadDashboardData() {
+    console.log("🔄 Dashboard: Starting to load data...");
     loading = true;
     error = "";
 
     try {
+      console.log("🔄 Dashboard: Loading stats, modules, and activity...");
       await Promise.all([
         loadStats(),
         loadRecentModules(),
         loadRecentActivity(),
       ]);
+      console.log("🔄 Dashboard: All data loaded successfully");
     } catch (err) {
       error =
         err instanceof Error ? err.message : "Failed to load dashboard data";
-      console.error("Dashboard error:", err);
+      console.error("❌ Dashboard error:", err);
     } finally {
+      console.log("🔄 Dashboard: Setting loading to false");
       loading = false;
     }
   }
 
   async function loadStats() {
-    // Get modules count
-    const { count: totalModules } = await supabase
-      .from("modules")
-      .select("*", { count: "exact", head: true });
+    console.log("🔄 Dashboard: Loading stats...");
 
-    const { count: publishedModules } = await supabase
-      .from("modules")
-      .select("*", { count: "exact", head: true })
-      .eq("is_published", true);
-
-    // Get units count
-    const { count: totalUnits } = await supabase
-      .from("units")
-      .select("*", { count: "exact", head: true });
-
-    const { count: publishedUnits } = await supabase
-      .from("units")
-      .select("*", { count: "exact", head: true })
-      .eq("is_published", true);
-
-    // Get content count
-    const { count: totalContent } = await supabase
-      .from("content")
-      .select("*", { count: "exact", head: true });
-
-    // Get users count (admin only)
-    let totalUsers = 0;
-    if (isAdmin()) {
-      const { count } = await supabase
-        .from("users")
+    try {
+      // Get modules count
+      console.log("🔄 Dashboard: Loading modules count...");
+      const { count: totalModules } = await supabase
+        .from("modules")
         .select("*", { count: "exact", head: true });
-      totalUsers = count || 0;
+
+      const { count: publishedModules } = await supabase
+        .from("modules")
+        .select("*", { count: "exact", head: true })
+        .eq("is_published", true);
+
+      // Get units count
+      console.log("🔄 Dashboard: Loading units count...");
+      const { count: totalUnits } = await supabase
+        .from("units")
+        .select("*", { count: "exact", head: true });
+
+      const { count: publishedUnits } = await supabase
+        .from("units")
+        .select("*", { count: "exact", head: true })
+        .eq("is_published", true);
+
+      // Get content count
+      console.log("🔄 Dashboard: Loading content count...");
+      const { count: totalContent } = await supabase
+        .from("content")
+        .select("*", { count: "exact", head: true });
+
+      // Get users count (admin only)
+      let totalUsers = 0;
+      if (isAdmin()) {
+        console.log("🔄 Dashboard: Loading users count...");
+        const { count } = await supabase
+          .from("users")
+          .select("*", { count: "exact", head: true });
+        totalUsers = count || 0;
+      }
+
+      // Get chat sessions count
+      console.log("🔄 Dashboard: Loading chat sessions count...");
+      const { count: totalChatSessions } = await supabase
+        .from("chat_sessions")
+        .select("*", { count: "exact", head: true });
+
+      stats = {
+        totalModules: totalModules || 0,
+        publishedModules: publishedModules || 0,
+        totalUnits: totalUnits || 0,
+        publishedUnits: publishedUnits || 0,
+        totalContent: totalContent || 0,
+        totalUsers,
+        totalChatSessions: totalChatSessions || 0,
+      };
+
+      console.log("🔄 Dashboard: Stats loaded successfully:", stats);
+    } catch (error) {
+      console.error("❌ Dashboard: Error loading stats:", error);
+      throw error;
     }
-
-    // Get chat sessions count
-    const { count: totalChatSessions } = await supabase
-      .from("chat_sessions")
-      .select("*", { count: "exact", head: true });
-
-    stats = {
-      totalModules: totalModules || 0,
-      publishedModules: publishedModules || 0,
-      totalUnits: totalUnits || 0,
-      publishedUnits: publishedUnits || 0,
-      totalContent: totalContent || 0,
-      totalUsers,
-      totalChatSessions: totalChatSessions || 0,
-    };
   }
 
   async function loadRecentModules() {
