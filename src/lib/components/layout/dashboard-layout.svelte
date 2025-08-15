@@ -2,7 +2,7 @@
   import { onMount } from "svelte";
   import Sidebar from "../navigation/sidebar.svelte";
   import ToastContainer from "../ui/toast-container.svelte";
-  import { authStore, initializeAuthManually } from "$lib/stores/auth";
+  import { authStore } from "$lib/stores/auth";
   import { signOut } from "$lib/auth";
   import { goto } from "$app/navigation";
   import { LogOut } from "lucide-svelte";
@@ -28,14 +28,14 @@
   $: canManage = user?.role === "Admin" || user?.role === "Collaborator";
   $: isAdminUser = user?.role === "Admin";
 
-  // Initialize auth manually when dashboard loads
-  onMount(async () => {
-    await initializeAuthManually();
-  });
+  // Don't reinitialize auth when dashboard loads - let the main layout handle it
+  // onMount(async () => {
+  //   await initializeAuthManually();
+  // });
 
   // Disable automatic redirects to prevent loops
   // $: if (!loading && !user) {
-  //   goto("/auth/login");
+  //   goto("/app/auth/login");
   // }
 
   async function handleSignOut() {
@@ -53,7 +53,7 @@
     } catch (error) {
       // Force redirect even if sign out fails
       if (typeof window !== "undefined") {
-        window.location.replace("/auth/login");
+        window.location.replace("/app/auth/login");
       }
     }
   }

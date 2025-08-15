@@ -1,41 +1,26 @@
 import { createClient } from "@supabase/supabase-js";
 import { SUPABASE_SERVICE_ROLE_KEY } from "$env/static/private";
+import { PUBLIC_SUPABASE_URL } from "$env/static/public";
 import type { Database } from "../types/database";
 
-// Server-side Supabase client with service role key (admin privileges)
-// This should ONLY be used in server-side code (API routes, load functions, etc.)
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-const supabaseServiceKey = SUPABASE_SERVICE_ROLE_KEY;
-
-console.log({
-  hasUrl: !!supabaseUrl,
-  hasServiceKey: !!supabaseServiceKey,
-  url: supabaseUrl,
-  serviceKeyLength: supabaseServiceKey?.length || 0,
-});
-
-if (!supabaseUrl || !supabaseServiceKey) {
-  console.error("❌ Missing Supabase service role configuration");
-  console.error("Please check your .env file has:");
-  console.error("- VITE_SUPABASE_URL");
-  console.error("- SUPABASE_SERVICE_ROLE_KEY (without VITE_ prefix)");
-
-  throw new Error(
-    "Missing Supabase service role configuration for server-side operations. Please check your .env file."
-  );
+// Server-only Supabase admin client
+if (!PUBLIC_SUPABASE_URL) throw new Error("PUBLIC_SUPABASE_URL is missing");
+if (!SUPABASE_SERVICE_ROLE_KEY) {
+  // Be explicit to speed debugging, but keep message generic (no secrets)
+  throw new Error("SUPABASE_SERVICE_ROLE_KEY is missing (server-side)");
 }
 
 export const supabaseAdmin = createClient<Database>(
-  supabaseUrl,
-  supabaseServiceKey,
+  PUBLIC_SUPABASE_URL,
+  SUPABASE_SERVICE_ROLE_KEY,
   {
     auth: {
-      autoRefreshToken: false,
       persistSession: false,
+      autoRefreshToken: false,
+      detectSessionInUrl: false,
     },
   }
 );
-
 
 // Helper functions for admin operations
 export async function createUserProfile(

@@ -22,6 +22,26 @@ let authInitialized = false;
 let authListener: any = null;
 let authUpdateTimeout: NodeJS.Timeout | null = null;
 
+// Sign up using Supabase email/password
+export async function signUpWithEmail(email: string, password: string) {
+  const { data, error } = await supabase.auth.signUp({
+    email,
+    password,
+  });
+  if (error) return { success: false, error: error.message };
+
+  if (data.user) {
+    await updateAuthState(data.session);
+    return {
+      success: true,
+      message:
+        "Account created successfully! Please check your email for verification.",
+    };
+  }
+
+  return { success: false, error: "Failed to create account" };
+}
+
 // Sign in using Supabase email/password (for admin or regular users)
 export async function signInWithEmail(email: string, password: string) {
   const { data, error } = await supabase.auth.signInWithPassword({
@@ -54,70 +74,92 @@ async function updateAuthState(session: Session | null) {
     }
 
     try {
-      // Fetch the corresponding profile from your users table
-      const { data: profile, error } = await supabase
-        .from("users")
-        .select("*")
-        .eq("id", session.user.id)
-        .single();
+      // Try to fetch user profile, but handle missing tables gracefully
+      let profile = null;
+      let role = "Student"; // Default role
 
-      if (error && error.code === "PGRST116") {
-        // User doesn't exist, create profile
-
-        // Determine role based on email
-        let role = "Student"; // Default role
-        if (session.user.email === "jdpinetta@gmail.com") {
-          role = "Admin";
-        }
-
-        const { data: newUser, error: createError } = await supabase
+      try {
+        const { data: userProfile, error } = await supabase
           .from("users")
-          .insert({
-            id: session.user.id,
-            email: session.user.email || "",
-            role: role,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          })
-          .select()
+          .select("*")
+          .eq("id", session.user.id)
           .single();
 
-        if (createError) {
-          authStore.set({
-            session,
-            user: null,
-            loading: false,
-            initialized: true,
-          });
+        if (!error && userProfile) {
+          profile = userProfile;
+          role = userProfile.role || "Student";
+          console.log("✅ Existing user loaded successfully");
+        } else if (error && error.code === "PGRST116") {
+          // User doesn't exist, try to create profile
+          console.log("🔄 User not found, attempting to create profile...");
+
+          // Determine role based on email
+          if (session.user.email === "jdpinetta@gmail.com") {
+            role = "Admin";
+          }
+
+          try {
+            const { data: newUser, error: createError } = await supabase
+              .from("users")
+              .insert({
+                id: session.user.id,
+                email: session.user.email || "",
+                role: role,
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString(),
+              })
+              .select()
+              .single();
+
+            if (!createError && newUser) {
+              profile = newUser;
+              console.log("✅ New user created successfully");
+            } else {
+              console.warn("⚠️ Could not create user profile:", createError);
+            }
+          } catch (createError) {
+            console.warn(
+              "⚠️ Users table not accessible, using session data only"
+            );
+          }
         } else {
-          console.log("✅ New user created successfully");
-          authStore.set({
-            session,
-            user: newUser as AppUser,
-            loading: false,
-            initialized: true,
-          });
+          console.warn("⚠️ Error loading user profile:", error);
         }
-      } else if (error) {
-        authStore.set({
-          session,
-          user: null,
-          loading: false,
-          initialized: true,
-        });
-      } else {
-        console.log("✅ Existing user loaded successfully");
-        authStore.set({
-          session,
-          user: profile as AppUser,
-          loading: false,
-          initialized: true,
-        });
+      } catch (dbError) {
+        console.warn("⚠️ Database not accessible, using session data only");
       }
-    } catch (error) {
+
+      // Create a basic user object from session data if profile is not available
+      if (!profile) {
+        profile = {
+          id: session.user.id,
+          email: session.user.email || "",
+          role: role,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        } as AppUser;
+      }
+
       authStore.set({
-        session: null,
-        user: null,
+        session,
+        user: profile,
+        loading: false,
+        initialized: true,
+      });
+
+      console.log("✅ Auth state updated successfully");
+    } catch (error) {
+      console.error("❌ Error updating auth state:", error);
+      // Fallback to basic session data
+      authStore.set({
+        session,
+        user: {
+          id: session.user.id,
+          email: session.user.email || "",
+          role: "Student",
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        } as AppUser,
         loading: false,
         initialized: true,
       });

@@ -38,72 +38,70 @@
   // Auth is already initialized in root layout
   // No need to initialize here
 
-
-
   const navigationItems = [
     {
       label: "Dashboard",
-      href: "/dashboard",
+      href: "/app/dashboard",
       icon: Home,
       roles: ["Admin", "Collaborator", "Student"],
     },
     {
       label: "Modules",
-      href: "/modules",
+      href: "/app/modules",
       icon: BookOpen,
       roles: ["Admin", "Collaborator"],
     },
     {
       label: "Units",
-      href: "/units",
+      href: "/app/units",
       icon: Layers3,
       roles: ["Admin", "Collaborator"],
     },
     {
       label: "Lessons",
-      href: "/lessons",
+      href: "/app/lessons",
       icon: FileText,
       roles: ["Admin", "Collaborator"],
     },
     {
       label: "Files",
-      href: "/files",
+      href: "/app/files",
       icon: Upload,
       roles: ["Admin", "Collaborator"],
     },
     {
       label: "Datasets",
-      href: "/datasets",
+      href: "/app/datasets",
       icon: Database,
       roles: ["Admin", "Collaborator"],
     },
     {
       label: "Personas",
-      href: "/personas",
+      href: "/app/personas",
       icon: Users,
       roles: ["Admin", "Collaborator"],
     },
     {
       label: "Models",
-      href: "/models",
+      href: "/app/models",
       icon: Cpu,
       roles: ["Admin", "Collaborator"],
     },
     {
       label: "AI Agents",
-      href: "/agents",
+      href: "/app/agents",
       icon: Bot,
       roles: ["Admin", "Collaborator"],
     },
     {
       label: "Chat",
-      href: "/chat",
+      href: "/app/chat",
       icon: MessageSquare,
       roles: ["Admin", "Collaborator", "Student"],
     },
     {
       label: "Workbench",
-      href: "/workbench",
+      href: "/app/workbench",
       icon: Wrench,
       roles: ["Admin", "Collaborator"],
     },
@@ -112,13 +110,13 @@
   const adminItems = [
     {
       label: "Users",
-      href: "/admin/users",
+      href: "/app/admin/users",
       icon: Users,
       roles: ["Admin"],
     },
     {
       label: "Settings",
-      href: "/admin/settings",
+      href: "/app/admin/settings",
       icon: Settings,
       roles: ["Admin"],
     },
@@ -133,8 +131,8 @@
   }
 
   function isActive(href: string): boolean {
-    if (href === "/dashboard") {
-      return currentPath === "/dashboard" || currentPath === "/";
+    if (href === "/app/dashboard") {
+      return currentPath === "/app/dashboard" || currentPath === "/";
     }
     return currentPath.startsWith(href);
   }

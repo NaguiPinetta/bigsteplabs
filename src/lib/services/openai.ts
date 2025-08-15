@@ -37,10 +37,9 @@ export async function callOpenAI(
   messages: ChatMessage[],
   model: string = "gpt-3.5-turbo",
   temperature: number = 0.7,
-  maxTokens: number = 1000
+  maxTokens: number = 1000,
+  apiKey?: string
 ): Promise<OpenAIResponse> {
-  const apiKey = import.meta.env.VITE_OPENAI_API_KEY;
-
   if (!apiKey) {
     throw new Error(
       "OpenAI API key not configured. Please set VITE_OPENAI_API_KEY in your environment variables."
@@ -130,10 +129,13 @@ export async function buildAgentContext(
     } else if (
       agent.persona &&
       typeof agent.persona === "object" &&
-      "name" in agent.persona
+      "name" in agent.persona &&
+      "system_prompt" in agent.persona
     ) {
-      systemPrompt += `Persona: ${agent.persona.name}\n`;
-      systemPrompt += `Instructions: ${agent.persona.system_prompt}\n\n`;
+      systemPrompt += `Persona: ${(agent.persona as any).name}\n`;
+      systemPrompt += `Instructions: ${
+        (agent.persona as any).system_prompt
+      }\n\n`;
     }
 
     // Add agent description
@@ -435,16 +437,35 @@ export async function generateAIResponse(
       recentMessages
     );
 
-    // Get agent model configuration
+    // Get agent model configuration including API key
     const { data: agent } = await supabase
       .from("agents")
       .select(
         `
-        model:models(name, provider, engine, temperature, max_tokens)
+        model:models(
+          name, 
+          provider, 
+          engine, 
+          temperature, 
+          max_tokens, 
+          api_key_id
+        )
       `
       )
       .eq("id", agentId)
       .single();
+
+    // Get the API key separately to avoid complex nested queries
+    let apiKey: string | undefined;
+    if (agent?.model && (agent.model as any).api_key_id) {
+      const { data: apiKeyData } = await supabase
+        .from("api_keys")
+        .select("api_key, provider")
+        .eq("id", (agent.model as any).api_key_id)
+        .single();
+
+      apiKey = apiKeyData?.api_key;
+    }
 
     // Prepare messages for OpenAI
     const messages: ChatMessage[] = [
@@ -465,14 +486,13 @@ export async function generateAIResponse(
     let maxTokens = 1000;
 
     if (agent?.model) {
-      if (Array.isArray(agent.model) && agent.model.length > 0) {
-        model = agent.model[0].engine || "gpt-3.5-turbo";
-        temperature = agent.model[0].temperature || 0.7;
-        maxTokens = agent.model[0].max_tokens || 1000;
-      } else if (typeof agent.model === "object" && "engine" in agent.model) {
-        model = agent.model.engine || "gpt-3.5-turbo";
-        temperature = agent.model.temperature || 0.7;
-        maxTokens = agent.model.max_tokens || 1000;
+      const modelData = Array.isArray(agent.model)
+        ? agent.model[0]
+        : agent.model;
+      if (modelData) {
+        model = modelData.engine || "gpt-3.5-turbo";
+        temperature = modelData.temperature || 0.7;
+        maxTokens = modelData.max_tokens || 1000;
       }
     }
 
@@ -482,10 +502,17 @@ export async function generateAIResponse(
       maxTokens,
       messageCount: messages.length,
       agentModel: agent?.model,
+      hasApiKey: !!apiKey,
     });
 
-    // Call OpenAI
-    const response = await callOpenAI(messages, model, temperature, maxTokens);
+    // Call OpenAI with the API key from the database
+    const response = await callOpenAI(
+      messages,
+      model,
+      temperature,
+      maxTokens,
+      apiKey
+    );
 
     console.log({
       contentLength: response.content.length,

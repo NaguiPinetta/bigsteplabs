@@ -12,9 +12,9 @@
     // If user is not authenticated, redirect to login
     // If user is authenticated but not admin, redirect to dashboard
     if (!$authStore.user) {
-      goto("/auth/login");
+      goto("/app/auth/login");
     } else {
-      goto("/dashboard");
+      goto("/app/dashboard");
     }
   }
 
@@ -23,9 +23,9 @@
       // If user is not authenticated, redirect to login
       // If user is authenticated but not admin, redirect to dashboard
       if (!$authStore.user) {
-        goto("/auth/login");
+        goto("/app/auth/login");
       } else {
-        goto("/dashboard");
+        goto("/app/dashboard");
       }
     }
   });
@@ -44,13 +44,13 @@
       </p>
       <div class="space-y-3">
         <a
-          href="/auth/login"
+          href="/app/auth/login"
           class="inline-flex items-center px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors"
         >
           Sign In
         </a>
         <div class="text-sm text-muted-foreground">
-          or <a href="/dashboard" class="text-primary hover:underline"
+          or <a href="/app/dashboard" class="text-primary hover:underline"
             >go to dashboard</a
           >
         </div>

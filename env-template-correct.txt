@@ -1,0 +1,34 @@
+# =====================================================
+# BIGSTEP LABS ENVIRONMENT CONFIGURATION
+# =====================================================
+
+# Supabase Configuration (Client-side - PUBLIC_ prefix required)
+PUBLIC_SUPABASE_URL=https://your-project-ref.supabase.co
+PUBLIC_SUPABASE_ANON_KEY=your-supabase-anon-key
+
+# Application Base URL (Client-side - PUBLIC_ prefix required)
+PUBLIC_APP_BASE_URL=http://localhost:5173
+
+# Server-side only (DO NOT expose to client)
+SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
+
+# OpenAI Configuration (if using OpenAI models)
+PUBLIC_OPENAI_API_KEY=your-openai-api-key
+
+# Application Configuration
+PUBLIC_APP_NAME=BigStep Labs
+PUBLIC_APP_VERSION=1.0.0
+
+# Development Admin Credentials (remove in production)
+PUBLIC_ADMIN_EMAIL=admin@example.com
+PUBLIC_ADMIN_PASSWORD=supersecret
+
+# =====================================================
+# IMPORTANT NOTES:
+# =====================================================
+# 1. All client-side variables MUST start with PUBLIC_
+# 2. Server-side variables should NOT have PUBLIC_ prefix
+# 3. Copy this file to .env and fill in your actual values
+# 4. Never commit .env to version control
+# 5. PUBLIC_APP_BASE_URL should be http://localhost:5173 for local dev
+# =====================================================

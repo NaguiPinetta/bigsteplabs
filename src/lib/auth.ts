@@ -1,20 +1,21 @@
 import { supabase } from "./supabase";
 import { browser } from "$app/environment";
+import { PUBLIC_APP_BASE_URL } from "$env/static/public";
 import type { Session } from "@supabase/supabase-js";
 
 // Helper function to get the correct redirect URL based on environment
 function getRedirectUrl(redirectTo?: string): string {
   const baseUrl = window.location.origin;
-  const callbackPath = "/auth/callback";
+  const callbackPath = "/app/auth/callback";
 
   // Ensure we have a valid base URL
   if (!baseUrl || baseUrl === "null") {
     console.warn("Invalid base URL detected, using fallback");
     return redirectTo
-      ? `https://your-production-domain.com${callbackPath}?next=${encodeURIComponent(
+      ? `${PUBLIC_APP_BASE_URL}${callbackPath}?next=${encodeURIComponent(
           redirectTo
         )}`
-      : `https://your-production-domain.com${callbackPath}`;
+      : `${PUBLIC_APP_BASE_URL}${callbackPath}`;
   }
 
   if (redirectTo) {
@@ -52,7 +53,6 @@ interface AuthResult {
  */
 export async function handleMagicLinkAuth(): Promise<AuthResult> {
   try {
-
     // Check for hash fragment (older Supabase versions)
     const hashParams = new URLSearchParams(window.location.hash.substring(1));
     const accessToken = hashParams.get("access_token");
@@ -138,7 +138,6 @@ async function handleAccessTokenAuth(
   refreshToken: string
 ): Promise<AuthResult> {
   try {
-
     // Set the session manually
     const { data, error } = await supabase.auth.setSession({
       access_token: accessToken,
@@ -209,7 +208,6 @@ async function handleAccessTokenAuth(
  */
 async function handleCodeAuth(code: string): Promise<AuthResult> {
   try {
-
     const { data, error } = await supabase.auth.exchangeCodeForSession(code);
 
     if (error) {
@@ -266,7 +264,6 @@ async function handleCodeAuth(code: string): Promise<AuthResult> {
  */
 export async function ensureUserProfile(session: Session): Promise<AuthResult> {
   try {
-
     // Check if user profile exists
     const { data: existingUser, error: fetchError } = await supabase
       .from("users")
@@ -309,7 +306,6 @@ export async function ensureUserProfile(session: Session): Promise<AuthResult> {
           },
         };
       }
-
 
       // Remove user from allowlist if they were allowlisted
       if (allowlistEntry) {
@@ -359,7 +355,6 @@ export async function sendMagicLink(
   redirectTo?: string
 ): Promise<AuthResult> {
   try {
-
     // Detect mobile device
     const isMobile =
       /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
@@ -371,18 +366,18 @@ export async function sendMagicLink(
     if (window.location.origin.includes("localhost")) {
       // Force localhost redirect
       callbackUrl = redirectTo
-        ? `http://localhost:5173/auth/callback?next=${encodeURIComponent(
+        ? `${PUBLIC_APP_BASE_URL}/app/auth/callback?next=${encodeURIComponent(
             redirectTo
           )}`
-        : `http://localhost:5173/auth/callback`;
+        : `${PUBLIC_APP_BASE_URL}/app/auth/callback`;
     } else {
-      // Use production redirect with mobile consideration
-      const baseUrl = window.location.origin;
+      // Use PUBLIC_APP_BASE_URL for consistent redirects
       callbackUrl = redirectTo
-        ? `${baseUrl}/auth/callback?next=${encodeURIComponent(redirectTo)}`
-        : `${baseUrl}/auth/callback`;
+        ? `${PUBLIC_APP_BASE_URL}/app/auth/callback?next=${encodeURIComponent(
+            redirectTo
+          )}`
+        : `${PUBLIC_APP_BASE_URL}/app/auth/callback`;
     }
-
 
     // Allow user creation for magic links - the allowlist check will be handled in the auth callback
     const { error } = await supabase.auth.signInWithOtp({
@@ -424,7 +419,6 @@ export async function sendMagicLink(
  */
 export async function signOut(redirectTo?: string): Promise<void> {
   try {
-
     // Clear any stored session data first
     if (typeof window !== "undefined") {
       // Clear any auth-related localStorage
@@ -469,7 +463,7 @@ export async function signOut(redirectTo?: string): Promise<void> {
       // Continue with local cleanup even if Supabase fails
     }
 
-    const redirectUrl = redirectTo || "/auth/login";
+    const redirectUrl = redirectTo || "/app/auth/login";
 
     // Use window.location for hard redirect to ensure complete session cleanup
     if (typeof window !== "undefined") {
@@ -480,7 +474,7 @@ export async function signOut(redirectTo?: string): Promise<void> {
     console.error("❌ Sign out error:", error);
     // Force redirect even if everything fails
     if (typeof window !== "undefined") {
-      window.location.replace(redirectTo || "/auth/login");
+      window.location.replace(redirectTo || "/app/auth/login");
     }
   }
 }
@@ -517,11 +511,10 @@ export async function isAuthenticated(): Promise<boolean> {
 
 export async function redirectAuthenticatedUser(): Promise<void> {
   try {
-
     // Check if we're already on the login page to prevent loops
     if (
       typeof window !== "undefined" &&
-      window.location.pathname === "/auth/login"
+      window.location.pathname === "/app/auth/login"
     ) {
       return;
     }
@@ -537,10 +530,9 @@ export async function redirectAuthenticatedUser(): Promise<void> {
     });
 
     if (session) {
-
       // Use replace to prevent back button issues
       if (typeof window !== "undefined") {
-        window.location.replace("/dashboard");
+        window.location.replace("/app/dashboard");
       }
     } else {
       // Don't redirect to login if we're already on login page
@@ -557,7 +549,7 @@ export async function redirectUnauthenticatedUser(): Promise<void> {
       data: { session },
     } = await supabase.auth.getSession();
     if (!session) {
-      window.location.href = "/auth/login";
+      window.location.href = "/app/auth/login";
     }
   } catch (error) {
     console.error("❌ Redirect check failed:", error);

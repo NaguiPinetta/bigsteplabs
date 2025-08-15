@@ -562,6 +562,145 @@ export interface Database {
           updated_at?: string;
         };
       };
+      // Vitrine tables for marketing site
+      prospects: {
+        Row: {
+          id: string;
+          name: string;
+          email: string;
+          phone: string | null;
+          interest: string;
+          message: string | null;
+          status: string;
+          source: string;
+          metadata: any;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          name: string;
+          email: string;
+          phone?: string | null;
+          interest: string;
+          message?: string | null;
+          status?: string;
+          source?: string;
+          metadata?: any;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          name?: string;
+          email?: string;
+          phone?: string | null;
+          interest?: string;
+          message?: string | null;
+          status?: string;
+          source?: string;
+          metadata?: any;
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
+      courses_public: {
+        Row: {
+          id: string;
+          name: string;
+          slug: string;
+          short_description: string;
+          long_description: string | null;
+          cta_text: string;
+          hero_image_url: string | null;
+          features: any;
+          duration: string | null;
+          level: string | null;
+          price: string | null;
+          color_scheme: string;
+          is_active: boolean;
+          order_index: number;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          name: string;
+          slug: string;
+          short_description: string;
+          long_description?: string | null;
+          cta_text?: string;
+          hero_image_url?: string | null;
+          features?: any;
+          duration?: string | null;
+          level?: string | null;
+          price?: string | null;
+          color_scheme?: string;
+          is_active?: boolean;
+          order_index?: number;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          name?: string;
+          slug?: string;
+          short_description?: string;
+          long_description?: string | null;
+          cta_text?: string;
+          hero_image_url?: string | null;
+          features?: any;
+          duration?: string | null;
+          level?: string | null;
+          price?: string | null;
+          color_scheme?: string;
+          is_active?: boolean;
+          order_index?: number;
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
+      course_materials: {
+        Row: {
+          id: string;
+          course_id: string;
+          title: string;
+          description: string | null;
+          material_type: string;
+          file_url: string | null;
+          external_url: string | null;
+          order_index: number;
+          is_required: boolean;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          course_id: string;
+          title: string;
+          description?: string | null;
+          material_type?: string;
+          file_url?: string | null;
+          external_url?: string | null;
+          order_index?: number;
+          is_required?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          course_id?: string;
+          title?: string;
+          description?: string | null;
+          material_type?: string;
+          file_url?: string | null;
+          external_url?: string | null;
+          order_index?: number;
+          is_required?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
       // Deprecated: content table (migrated to lessons)
       content: {
         Row: {
@@ -646,6 +785,37 @@ export type Lesson = Database["public"]["Tables"]["lessons"]["Row"];
 export type LessonInsert = Database["public"]["Tables"]["lessons"]["Insert"];
 export type LessonUpdate = Database["public"]["Tables"]["lessons"]["Update"];
 
+// Vitrine types
+export type Prospect = Database["public"]["Tables"]["prospects"]["Row"];
+export type ProspectInsert = Database["public"]["Tables"]["prospects"]["Insert"];
+export type ProspectUpdate = Database["public"]["Tables"]["prospects"]["Update"];
+
+export interface CoursePublic {
+  id: string;
+  name: string;
+  slug: string;
+  short_description: string;
+  long_description: string;
+  cta_text: string;
+  hero_image_url: string;
+  flag_image_url?: string;
+  features: string[];
+  duration: string;
+  level: string;
+  price: string;
+  color_scheme: string;
+  is_active: boolean;
+  order_index: number;
+  created_at: string;
+  updated_at: string;
+}
+export type CoursePublicInsert = Database["public"]["Tables"]["courses_public"]["Insert"];
+export type CoursePublicUpdate = Database["public"]["Tables"]["courses_public"]["Update"];
+
+export type CourseMaterial = Database["public"]["Tables"]["course_materials"]["Row"];
+export type CourseMaterialInsert = Database["public"]["Tables"]["course_materials"]["Insert"];
+export type CourseMaterialUpdate = Database["public"]["Tables"]["course_materials"]["Update"];
+
 export interface LessonWithRelations extends Lesson {
   module?: {
     id: string;
@@ -661,6 +831,10 @@ export interface LessonWithRelations extends Lesson {
     description: string | null;
     is_active: boolean;
   };
+}
+
+export interface CourseWithMaterials extends CoursePublic {
+  materials?: CourseMaterial[];
 }
 
 // Extended types for joined data

@@ -1,10 +1,11 @@
 import type { RequestHandler } from "@sveltejs/kit";
 import { supabaseAdmin } from "$lib/server/supabase-admin";
+import { OPENAI_API_KEY } from "$env/static/private";
 
 // Test endpoint to check OpenAI API key
 export const GET: RequestHandler = async () => {
   try {
-    const openaiApiKey = import.meta.env.VITE_OPENAI_API_KEY;
+    const openaiApiKey = OPENAI_API_KEY;
 
     if (!openaiApiKey) {
       return new Response(
@@ -123,7 +124,7 @@ export const POST: RequestHandler = async ({ request }) => {
     }
 
     // Check for OpenAI API key
-    const openaiApiKey = import.meta.env.VITE_OPENAI_API_KEY;
+    const openaiApiKey = OPENAI_API_KEY;
     if (!openaiApiKey) {
       console.error("❌ OpenAI API key not configured");
       return new Response(
@@ -146,8 +147,6 @@ export const POST: RequestHandler = async ({ request }) => {
         }
       );
     }
-
-
 
     // Get agent's language configuration
     let whisperLanguage = "en"; // Default to English
@@ -204,8 +203,6 @@ export const POST: RequestHandler = async ({ request }) => {
         body: openaiFormData,
       }
     );
-
-
 
     if (!openaiResponse.ok) {
       let errorData;
@@ -277,8 +274,6 @@ export const POST: RequestHandler = async ({ request }) => {
 
     const transcribedText = transcriptionData.text;
 
-
-
     // Enhanced detection and handling of problematic transcriptions
     let finalTranscribedText = transcribedText;
 
@@ -311,8 +306,6 @@ export const POST: RequestHandler = async ({ request }) => {
         .replace(/Amara\.org/gi, "")
         .replace(/\s+/g, " ")
         .trim();
-
-
 
       // If the cleaned text is too short, it might be invalid
       if (finalTranscribedText.length < 5) {

@@ -89,92 +89,172 @@
     console.log("🔄 Dashboard: Loading stats...");
 
     try {
-      // Get modules count
-      console.log("🔄 Dashboard: Loading modules count...");
-      const { count: totalModules } = await supabase
-        .from("modules")
-        .select("*", { count: "exact", head: true });
-
-      const { count: publishedModules } = await supabase
-        .from("modules")
-        .select("*", { count: "exact", head: true })
-        .eq("is_published", true);
-
-      // Get units count
-      console.log("🔄 Dashboard: Loading units count...");
-      const { count: totalUnits } = await supabase
-        .from("units")
-        .select("*", { count: "exact", head: true });
-
-      const { count: publishedUnits } = await supabase
-        .from("units")
-        .select("*", { count: "exact", head: true })
-        .eq("is_published", true);
-
-      // Get content count
-      console.log("🔄 Dashboard: Loading content count...");
-      const { count: totalContent } = await supabase
-        .from("content")
-        .select("*", { count: "exact", head: true });
-
-      // Get users count (admin only)
+      // Initialize stats with default values
+      let totalModules = 0;
+      let publishedModules = 0;
+      let totalUnits = 0;
+      let publishedUnits = 0;
+      let totalContent = 0;
       let totalUsers = 0;
-      if (isAdmin()) {
-        console.log("🔄 Dashboard: Loading users count...");
-        const { count } = await supabase
-          .from("users")
+      let totalChatSessions = 0;
+
+      try {
+        // Get modules count
+        console.log("🔄 Dashboard: Loading modules count...");
+        const { count: modulesCount, error: modulesError } = await supabase
+          .from("modules")
           .select("*", { count: "exact", head: true });
-        totalUsers = count || 0;
+
+        if (!modulesError) {
+          totalModules = modulesCount || 0;
+
+          const { count: publishedCount, error: publishedError } =
+            await supabase
+              .from("modules")
+              .select("*", { count: "exact", head: true })
+              .eq("is_published", true);
+
+          if (!publishedError) {
+            publishedModules = publishedCount || 0;
+          }
+        }
+      } catch (error) {
+        console.warn("⚠️ Dashboard: Modules table not accessible:", error);
       }
 
-      // Get chat sessions count
-      console.log("🔄 Dashboard: Loading chat sessions count...");
-      const { count: totalChatSessions } = await supabase
-        .from("chat_sessions")
-        .select("*", { count: "exact", head: true });
+      try {
+        // Get units count
+        console.log("🔄 Dashboard: Loading units count...");
+        const { count: unitsCount, error: unitsError } = await supabase
+          .from("units")
+          .select("*", { count: "exact", head: true });
+
+        if (!unitsError) {
+          totalUnits = unitsCount || 0;
+
+          const { count: publishedUnitsCount, error: publishedUnitsError } =
+            await supabase
+              .from("units")
+              .select("*", { count: "exact", head: true })
+              .eq("is_published", true);
+
+          if (!publishedUnitsError) {
+            publishedUnits = publishedUnitsCount || 0;
+          }
+        }
+      } catch (error) {
+        console.warn("⚠️ Dashboard: Units table not accessible:", error);
+      }
+
+      try {
+        // Get content count
+        console.log("🔄 Dashboard: Loading content count...");
+        const { count: contentCount, error: contentError } = await supabase
+          .from("content")
+          .select("*", { count: "exact", head: true });
+
+        if (!contentError) {
+          totalContent = contentCount || 0;
+        }
+      } catch (error) {
+        console.warn("⚠️ Dashboard: Content table not accessible:", error);
+      }
+
+      // Get users count (admin only)
+      if (isAdmin()) {
+        try {
+          console.log("🔄 Dashboard: Loading users count...");
+          const { count, error: usersError } = await supabase
+            .from("users")
+            .select("*", { count: "exact", head: true });
+
+          if (!usersError) {
+            totalUsers = count || 0;
+          }
+        } catch (error) {
+          console.warn("⚠️ Dashboard: Users table not accessible:", error);
+        }
+      }
+
+      try {
+        // Get chat sessions count
+        console.log("🔄 Dashboard: Loading chat sessions count...");
+        const { count: chatCount, error: chatError } = await supabase
+          .from("chat_sessions")
+          .select("*", { count: "exact", head: true });
+
+        if (!chatError) {
+          totalChatSessions = chatCount || 0;
+        }
+      } catch (error) {
+        console.warn(
+          "⚠️ Dashboard: Chat sessions table not accessible:",
+          error
+        );
+      }
 
       stats = {
-        totalModules: totalModules || 0,
-        publishedModules: publishedModules || 0,
-        totalUnits: totalUnits || 0,
-        publishedUnits: publishedUnits || 0,
-        totalContent: totalContent || 0,
+        totalModules,
+        publishedModules,
+        totalUnits,
+        publishedUnits,
+        totalContent,
         totalUsers,
-        totalChatSessions: totalChatSessions || 0,
+        totalChatSessions,
       };
 
       console.log("🔄 Dashboard: Stats loaded successfully:", stats);
     } catch (error) {
       console.error("❌ Dashboard: Error loading stats:", error);
-      throw error;
+      // Don't throw error, just log it and continue with default values
     }
   }
 
   async function loadRecentModules() {
-    const { data } = await supabase
-      .from("modules")
-      .select("*")
-      .order("created_at", { ascending: false })
-      .limit(5);
+    try {
+      const { data, error } = await supabase
+        .from("modules")
+        .select("*")
+        .order("created_at", { ascending: false })
+        .limit(5);
 
-    recentModules = data || [];
+      if (!error) {
+        recentModules = data || [];
+      } else {
+        console.warn("⚠️ Dashboard: Could not load recent modules:", error);
+        recentModules = [];
+      }
+    } catch (error) {
+      console.warn("⚠️ Dashboard: Modules table not accessible:", error);
+      recentModules = [];
+    }
   }
 
   async function loadRecentActivity() {
-    // Get recent chat sessions
-    const { data: recentChats } = await supabase
-      .from("chat_sessions")
-      .select(
+    try {
+      // Get recent chat sessions
+      const { data: recentChats, error } = await supabase
+        .from("chat_sessions")
+        .select(
+          `
+          *,
+          user:users(email),
+          agent:agents(name)
         `
-        *,
-        user:users(email),
-        agent:agents(name)
-      `
-      )
-      .order("created_at", { ascending: false })
-      .limit(5);
+        )
+        .order("created_at", { ascending: false })
+        .limit(5);
 
-    recentActivity = recentChats || [];
+      if (!error) {
+        recentActivity = recentChats || [];
+      } else {
+        console.warn("⚠️ Dashboard: Could not load recent activity:", error);
+        recentActivity = [];
+      }
+    } catch (error) {
+      console.warn("⚠️ Dashboard: Chat sessions table not accessible:", error);
+      recentActivity = [];
+    }
   }
 
   function formatDate(dateString: string): string {

@@ -2,6 +2,7 @@
   import { supabase } from "$lib/supabase";
   import Button from "$lib/components/ui/button.svelte";
   import Card from "$lib/components/ui/card.svelte";
+  import { PUBLIC_APP_BASE_URL } from "$env/static/public";
 
   let email = "jdpinetta@gmail.com";
   let status = "";
@@ -15,7 +16,7 @@
       const { error: magicError } = await supabase.auth.signInWithOtp({
         email,
         options: {
-          emailRedirectTo: `${window.location.origin}/auth/callback`,
+          emailRedirectTo: `${PUBLIC_APP_BASE_URL}/app/auth/callback`,
         },
       });
 

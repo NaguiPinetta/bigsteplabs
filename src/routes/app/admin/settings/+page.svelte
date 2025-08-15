@@ -65,10 +65,10 @@
 
   let activeTab = "general";
   let saveStatus = "";
-  let errors = {};
+  let errors: Record<string, string> = {};
 
   $: user = $authStore.user;
-  $: canAccess = isAdmin(user);
+  $: canAccess = isAdmin();
 
   const tabs = [
     { id: "general", label: "General", icon: Settings },
@@ -201,7 +201,8 @@
     } catch (error) {
       console.error("Failed to sync models:", error);
       modelSyncStatus = "error";
-      alert(`Failed to sync models: ${error.message}`);
+      const message = error instanceof Error ? error.message : "Unknown error";
+      alert(`Failed to sync models: ${message}`);
     } finally {
       loadingModels = false;
       setTimeout(() => {
