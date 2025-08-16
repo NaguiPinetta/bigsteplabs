@@ -45,11 +45,29 @@ export default {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
         },
+        // New vitrine design tokens
+        bg:        '#F7F8FA',
+        surface:   '#FFFFFF',
+        textHi:    '#0B0F14',
+        textLo:    '#334155',
+        textInvHi: '#F8FAFC',
+        textInvLo: '#CBD5E1',
+        brand:     '#E53935',
+        brandHover:'#D32F2F',
+        brandRing: '#FFCDD2',
+        info:      '#3B82F6',
+        success:   '#22C55E',
+        muted:     '#E5E7EB'
       },
       borderRadius: {
         lg: "var(--radius)",
         md: "calc(var(--radius) - 2px)",
         sm: "calc(var(--radius) - 4px)",
+        xl2: '1rem'
+      },
+      boxShadow: {
+        soft: '0 8px 24px rgba(2, 6, 23, 0.08)',
+        lift: '0 12px 28px rgba(2, 6, 23, 0.12)'
       },
       typography: {
         DEFAULT: {

@@ -188,10 +188,8 @@
     <div class="w-full max-w-md space-y-8">
       <!-- Title -->
       <div class="text-center mb-6">
-        <h1 class="text-2xl font-bold text-foreground">Welcome Back</h1>
-        <p class="text-muted-foreground mt-2">
-          Sign in to your BigStepLabs account
-        </p>
+        <h1 class="text-2xl font-bold text-gray-900">Welcome Back</h1>
+        <p class="text-gray-600 mt-2">Sign in to your BigStepLabs account</p>
       </div>
 
       <!-- Back to Home Button -->
@@ -200,7 +198,7 @@
           variant="outline"
           size="sm"
           on:click={() => goto("/")}
-          class="w-full"
+          class="w-full border-gray-300 text-gray-700 hover:bg-gray-50"
         >
           ← Back to BigStepLabs Home
         </Button>
@@ -210,10 +208,10 @@
       {#if message}
         <div
           class="rounded-md p-4 {messageType === 'error'
-            ? 'bg-destructive/15 border border-destructive/20 text-destructive'
+            ? 'bg-red-50 border border-red-200 text-red-700'
             : messageType === 'success'
-              ? 'bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 text-green-700 dark:text-green-300'
-              : 'bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300'}"
+              ? 'bg-green-50 border border-green-200 text-green-700'
+              : 'bg-blue-50 border border-blue-200 text-blue-700'}"
         >
           <p class="text-sm">
             {message}
@@ -222,13 +220,13 @@
       {/if}
 
       <!-- Authentication Method Toggle -->
-      <div class="flex space-x-1 bg-muted p-1 rounded-lg">
+      <div class="flex space-x-1 bg-gray-100 p-1 rounded-lg">
         <button
           type="button"
           class="flex-1 py-2 px-3 text-sm font-medium rounded-md transition-colors {loginMethod ===
           'magic'
-            ? 'bg-background text-foreground shadow-sm'
-            : 'text-muted-foreground hover:text-foreground'}"
+            ? 'bg-white text-gray-900 shadow-sm'
+            : 'text-gray-600 hover:text-gray-900'}"
           on:click={() => (loginMethod = "magic")}
         >
           <Mail class="w-4 h-4 inline mr-2" />
@@ -238,8 +236,8 @@
           type="button"
           class="flex-1 py-2 px-3 text-sm font-medium rounded-md transition-colors {loginMethod ===
           'password'
-            ? 'bg-background text-foreground shadow-sm'
-            : 'text-muted-foreground hover:text-foreground'}"
+            ? 'bg-white text-gray-900 shadow-sm'
+            : 'text-gray-600 hover:text-gray-900'}"
           on:click={() => (loginMethod = "password")}
         >
           <Shield class="w-4 h-4 inline mr-2" />
@@ -249,8 +247,8 @@
           type="button"
           class="flex-1 py-2 px-3 text-sm font-medium rounded-md transition-colors {loginMethod ===
           'signup'
-            ? 'bg-background text-foreground shadow-sm'
-            : 'text-muted-foreground hover:text-foreground'}"
+            ? 'bg-white text-gray-900 shadow-sm'
+            : 'text-gray-600 hover:text-gray-900'}"
           on:click={() => (loginMethod = "signup")}
         >
           <Users class="w-4 h-4 inline mr-2" />
@@ -264,7 +262,7 @@
           <div>
             <label
               for="email"
-              class="block text-sm font-medium text-foreground mb-2"
+              class="block text-sm font-medium text-gray-700 mb-2"
             >
               Email address
             </label>
@@ -283,7 +281,7 @@
 
           <Button
             type="submit"
-            class="w-full bg-red-600 hover:bg-red-700 disabled:bg-red-400"
+            class="w-full bg-red-600 hover:bg-red-700 disabled:bg-red-400 text-white"
             disabled={loading || !email}
           >
             {#if loading}
@@ -303,7 +301,7 @@
           <div>
             <label
               for="email-password"
-              class="block text-sm font-medium text-foreground mb-2"
+              class="block text-sm font-medium text-gray-700 mb-2"
             >
               Email address
             </label>
@@ -320,7 +318,7 @@
           <div>
             <label
               for="password"
-              class="block text-sm font-medium text-foreground mb-2"
+              class="block text-sm font-medium text-gray-700 mb-2"
             >
               Password
             </label>
@@ -338,7 +336,7 @@
               />
               <button
                 type="button"
-                class="absolute inset-y-0 right-0 flex items-center pr-3 text-muted-foreground hover:text-foreground"
+                class="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-500 hover:text-gray-700"
                 on:click={togglePasswordVisibility}
               >
                 {#if showPassword}
@@ -352,7 +350,7 @@
 
           <Button
             type="submit"
-            class="w-full bg-red-600 hover:bg-red-700 disabled:bg-red-400"
+            class="w-full bg-red-600 hover:bg-red-700 disabled:bg-red-400 text-white"
             disabled={loading || !email || !password}
           >
             {#if loading}
@@ -372,7 +370,7 @@
           <div>
             <label
               for="email-signup"
-              class="block text-sm font-medium text-foreground mb-2"
+              class="block text-sm font-medium text-gray-700 mb-2"
             >
               Email address
             </label>
@@ -389,7 +387,7 @@
           <div>
             <label
               for="password-signup"
-              class="block text-sm font-medium text-foreground mb-2"
+              class="block text-sm font-medium text-gray-700 mb-2"
             >
               Password
             </label>
@@ -398,16 +396,13 @@
                 id="password-signup"
                 type={showPassword ? "text" : "password"}
                 bind:value={password}
-                placeholder="Enter your password (min. 6 characters)"
+                placeholder="Enter your password"
                 disabled={loading}
-                on:keydown={(e) =>
-                  (e as unknown as KeyboardEvent).key === "Enter" &&
-                  handleSignUp()}
                 required
               />
               <button
                 type="button"
-                class="absolute inset-y-0 right-0 flex items-center pr-3 text-muted-foreground hover:text-foreground"
+                class="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-500 hover:text-gray-700"
                 on:click={togglePasswordVisibility}
               >
                 {#if showPassword}
@@ -421,8 +416,8 @@
 
           <Button
             type="submit"
-            class="w-full bg-green-600 hover:bg-green-700 disabled:bg-green-400"
-            disabled={loading || !email || !password || password.length < 6}
+            class="w-full bg-red-600 hover:bg-red-700 disabled:bg-red-400 text-white"
+            disabled={loading || !email || !password}
           >
             {#if loading}
               <Loader2 class="mr-2 h-4 w-4 animate-spin" />
@@ -437,33 +432,35 @@
 
       <!-- Footer -->
       <div class="text-center">
-        <div class="text-sm text-muted-foreground">
+        <div class="text-sm text-gray-600">
           By signing in, you agree to our{" "}
-          <a href="/terms" class="text-primary hover:underline"
+          <a
+            href="/terms"
+            class="text-red-600 hover:text-red-700 hover:underline"
             >Terms of Service</a
           >
           {" "}and{" "}
-          <a href="/privacy" class="text-primary hover:underline"
+          <a
+            href="/privacy"
+            class="text-red-600 hover:text-red-700 hover:underline"
             >Privacy Policy</a
           >
         </div>
 
         <!-- Dashboard link for authenticated users -->
-        <div class="mt-4 pt-4 border-t border-border">
-          <p class="text-sm text-muted-foreground mb-2">
-            Already have an account?
-          </p>
+        <div class="mt-4 pt-4 border-t border-gray-200">
+          <p class="text-sm text-gray-600 mb-2">Already have an account?</p>
           {#if $authStore.user}
             <Button
               variant="outline"
               size="sm"
               on:click={() => goto("/app/dashboard")}
-              class="w-full"
+              class="w-full border-gray-300 text-gray-700 hover:bg-gray-50"
             >
               Go to Dashboard
             </Button>
           {:else}
-            <p class="text-sm text-muted-foreground">
+            <p class="text-sm text-gray-600">
               Sign in above to access your dashboard
             </p>
           {/if}
