@@ -498,7 +498,6 @@
       const audioBlob = new Blob(audioChunks[lessonId], {
         type: "audio/webm",
       });
-      
 
       if (audioBlob.size < 1000) {
         throw new Error("Audio recording too small - may not contain speech");
@@ -515,15 +514,12 @@
         setTimeout(() => reject(new Error("Audio loading timeout")), 5000);
       });
 
-
       URL.revokeObjectURL(testUrl);
 
       // Send to transcription API
       const formData = new FormData();
       formData.append("file", audioBlob, "recording.webm");
       formData.append("sessionId", activeChatSessions[lessonId]);
-
-
 
       // Get the agent ID from the lesson data
       let agentId = "";
@@ -537,14 +533,10 @@
       }
       formData.append("agentId", agentId);
 
-
-
       const response = await fetch("/api/whisper-transcribe", {
         method: "POST",
         body: formData,
       });
-
-
 
       if (!response.ok) {
         const errorText = await response.text();
@@ -556,16 +548,13 @@
 
       const result = await response.json();
 
-
       if (result.text && result.text.trim()) {
         // Insert transcribed text into the input
         newMessageText[lessonId] = result.text.trim();
 
-
         // Store audio URL for later use
         if (result.audioUrl) {
           currentAudioUrl[lessonId] = result.audioUrl;
-
         } else {
           console.warn("⚠️ No audio URL returned from transcription API");
         }
@@ -621,7 +610,6 @@
   }
 
   async function handleUpdateModule() {
-
     if (!user) {
       return;
     }
@@ -635,14 +623,11 @@
       return;
     }
 
-
-
     const result = await updateModule(editModule.id, {
       title: editModule.title.trim(),
       description: editModule.description.trim() || "No description provided",
       is_published: editModule.is_published,
     });
-
 
     if (result.data) {
       editDialogOpen = false;
@@ -839,7 +824,7 @@
   <div class="flex items-center justify-between mb-6">
     <div>
       <h1 class="text-3xl font-bold text-foreground">Learning Modules</h1>
-      <p class="text-muted-foreground">
+      <p class="text-foreground/70">
         Create and organize your course content into structured modules
       </p>
     </div>
@@ -866,9 +851,9 @@
     </Card>
   {:else if modules.length === 0}
     <Card class="p-8 text-center">
-      <BookOpen class="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+      <BookOpen class="w-12 h-12 text-foreground/40 mx-auto mb-4" />
       <h3 class="text-lg font-semibold mb-2">No modules yet</h3>
-      <p class="text-muted-foreground mb-4">
+      <p class="text-foreground/70 mb-4">
         {canManage
           ? "Create your first module to get started"
           : "No modules are available yet"}
@@ -903,7 +888,7 @@
                 <!-- Drag Handle -->
                 {#if canManage}
                   <div
-                    class="cursor-grab active:cursor-grabbing text-muted-foreground hover:text-foreground"
+                    class="cursor-grab active:cursor-grabbing text-foreground/60 hover:text-foreground"
                   >
                     <GripVertical class="w-4 h-4" />
                   </div>
@@ -932,13 +917,13 @@
                     </span>
                   </div>
 
-                  <p class="text-sm text-muted-foreground mb-3">
+                  <p class="text-sm text-foreground/70 mb-3">
                     {module.description || "No description provided"}
                   </p>
 
                   <!-- Module Stats -->
                   <div
-                    class="flex items-center gap-4 text-sm text-muted-foreground"
+                    class="flex items-center gap-4 text-sm text-foreground/60"
                   >
                     <div class="flex items-center gap-1">
                       <Layers class="w-4 h-4" />
@@ -982,7 +967,7 @@
                 <div class="flex items-center gap-1">
                   <button
                     on:click={() => handleTogglePublication(module.id)}
-                    class="p-2 hover:bg-accent rounded-md text-muted-foreground hover:text-foreground"
+                    class="p-2 hover:bg-accent rounded-md text-foreground/60 hover:text-foreground"
                     title={module.is_published ? "Unpublish" : "Publish"}
                   >
                     {#if module.is_published}
@@ -993,28 +978,28 @@
                   </button>
                   <button
                     on:click={() => handleDuplicateModule(module.id)}
-                    class="p-2 hover:bg-accent rounded-md text-muted-foreground hover:text-foreground"
+                    class="p-2 hover:bg-accent rounded-md text-foreground/60 hover:text-foreground"
                     title="Duplicate module"
                   >
                     <Copy class="w-4 h-4" />
                   </button>
                   <button
                     on:click={() => openViewDialog(module)}
-                    class="p-2 hover:bg-accent rounded-md text-muted-foreground hover:text-foreground"
+                    class="p-2 hover:bg-accent rounded-md text-foreground/60 hover:text-foreground"
                     title="View module"
                   >
                     <Eye class="w-4 h-4" />
                   </button>
                   <button
                     on:click={() => openEditDialog(module)}
-                    class="p-2 hover:bg-accent rounded-md text-muted-foreground hover:text-foreground"
+                    class="p-2 hover:bg-accent rounded-md text-foreground/60 hover:text-foreground"
                     title="Edit module"
                   >
                     <Edit class="w-4 h-4" />
                   </button>
                   <button
                     on:click={() => openDeleteDialog(module)}
-                    class="p-2 hover:bg-accent rounded-md text-muted-foreground hover:text-foreground text-destructive"
+                    class="p-2 hover:bg-accent rounded-md text-foreground/60 hover:text-foreground text-destructive"
                     title="Delete module"
                   >
                     <Trash2 class="w-4 h-4" />
@@ -1028,7 +1013,7 @@
               <div class="flex items-center justify-between">
                 <button
                   on:click={() => toggleModule(module.id)}
-                  class="flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+                  class="flex items-center gap-2 text-sm font-medium text-foreground/60 hover:text-foreground transition-colors"
                 >
                   {#if expandedModules[module.id]}
                     <ChevronDown class="w-4 h-4" />
@@ -1077,7 +1062,7 @@
                             <!-- Drag Handle -->
                             {#if canManage}
                               <div
-                                class="cursor-grab active:cursor-grabbing text-muted-foreground hover:text-foreground"
+                                class="cursor-grab active:cursor-grabbing text-foreground/60 hover:text-foreground"
                               >
                                 <GripVertical class="w-4 h-4" />
                               </div>
@@ -1137,14 +1122,14 @@
                             <div class="flex items-center gap-1">
                               <button
                                 on:click={() => openEditDialog(unit)}
-                                class="p-1 hover:bg-accent rounded-md text-muted-foreground hover:text-foreground"
+                                class="p-1 hover:bg-accent rounded-md text-foreground/60 hover:text-foreground"
                                 title="Edit unit"
                               >
                                 <Edit class="w-3 h-3" />
                               </button>
                               <button
                                 on:click={() => openDeleteDialog(unit)}
-                                class="p-1 hover:bg-accent rounded-md text-muted-foreground hover:text-foreground text-destructive"
+                                class="p-1 hover:bg-accent rounded-md text-foreground/60 hover:text-foreground text-destructive"
                                 title="Delete unit"
                               >
                                 <Trash2 class="w-3 h-3" />
@@ -1158,7 +1143,7 @@
                           <div class="flex items-center justify-between">
                             <button
                               on:click={() => toggleUnit(unit.id)}
-                              class="flex items-center gap-2 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
+                              class="flex items-center gap-2 text-xs font-medium text-foreground/60 hover:text-foreground transition-colors"
                             >
                               {#if expandedUnits[unit.id]}
                                 <ChevronDown class="w-3 h-3" />
@@ -1227,7 +1212,7 @@
                                         <!-- Drag Handle -->
                                         {#if canManage}
                                           <div
-                                            class="cursor-grab active:cursor-grabbing text-muted-foreground hover:text-foreground"
+                                            class="cursor-grab active:cursor-grabbing text-foreground/60 hover:text-foreground"
                                           >
                                             <GripVertical class="w-3 h-3" />
                                           </div>
@@ -1310,7 +1295,7 @@
                                           <button
                                             on:click={() =>
                                               openEditDialog(lesson)}
-                                            class="p-1 hover:bg-accent rounded-md text-muted-foreground hover:text-foreground"
+                                            class="p-1 hover:bg-accent rounded-md text-foreground/60 hover:text-foreground"
                                             title="Edit lesson"
                                           >
                                             <Edit class="w-3 h-3" />
@@ -1318,7 +1303,7 @@
                                           <button
                                             on:click={() =>
                                               openDeleteDialog(lesson)}
-                                            class="p-1 hover:bg-accent rounded-md text-muted-foreground hover:text-foreground text-destructive"
+                                            class="p-1 hover:bg-accent rounded-md text-foreground/60 hover:text-foreground text-destructive"
                                             title="Delete lesson"
                                           >
                                             <Trash2 class="w-3 h-3" />
@@ -1777,7 +1762,7 @@
     {/if}
 
     <div>
-      <label for="title" class="block text-sm font-medium mb-2"
+      <label for="title" class="block text-sm font-medium text-foreground mb-2"
         >Module Title *</label
       >
       <Input
@@ -1789,7 +1774,9 @@
     </div>
 
     <div>
-      <label for="description" class="block text-sm font-medium mb-2"
+      <label
+        for="description"
+        class="block text-sm font-medium text-foreground mb-2"
         >Description</label
       >
       <Textarea
@@ -1805,9 +1792,13 @@
         type="checkbox"
         id="published"
         bind:checked={newModule.is_published}
-        class="rounded border-input"
+        class="rounded border-input bg-background text-primary focus:ring-primary focus:ring-offset-background"
       />
-      <label for="published" class="text-sm font-medium">
+      <label
+        for="published"
+        class="text-sm font-medium cursor-pointer"
+        style="color: hsl(0 0% 98%) !important;"
+      >
         Publish immediately (students can access this module)
       </label>
     </div>
@@ -1848,14 +1839,18 @@
     {/if}
 
     <div>
-      <label for="edit-title" class="block text-sm font-medium mb-2"
+      <label
+        for="edit-title"
+        class="block text-sm font-medium text-foreground mb-2"
         >Module Title *</label
       >
       <Input id="edit-title" bind:value={editModule.title} required />
     </div>
 
     <div>
-      <label for="edit-description" class="block text-sm font-medium mb-2"
+      <label
+        for="edit-description"
+        class="block text-sm font-medium text-foreground mb-2"
         >Description</label
       >
       <Textarea
@@ -1870,9 +1865,13 @@
         type="checkbox"
         id="edit-published"
         bind:checked={editModule.is_published}
-        class="rounded border-input"
+        class="rounded border-input bg-background text-primary focus:ring-primary focus:ring-offset-background"
       />
-      <label for="edit-published" class="text-sm font-medium">
+      <label
+        for="edit-published"
+        class="text-sm font-medium cursor-pointer"
+        style="color: hsl(0 0% 98%) !important;"
+      >
         Published (students can access this module)
       </label>
     </div>

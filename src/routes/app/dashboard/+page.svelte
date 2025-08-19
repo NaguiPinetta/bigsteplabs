@@ -316,7 +316,9 @@
         </div>
         <div class="text-right">
           <p class="text-sm text-muted-foreground">Last login</p>
-          <p class="text-sm font-medium">{formatDate(user.updated_at)}</p>
+          <p class="text-sm font-medium">
+            {user.updated_at ? formatDate(user.updated_at) : "N/A"}
+          </p>
         </div>
       </div>
     </Card>
@@ -450,21 +452,23 @@
         </div>
 
         {#if recentModules.length === 0}
-          <p class="text-muted-foreground text-sm">No modules created yet.</p>
+          <p class="text-foreground/60 text-sm">No modules created yet.</p>
         {:else}
           <div class="space-y-3">
             {#each recentModules as module}
               <div
-                class="flex items-center justify-between p-3 bg-muted rounded-md"
+                class="flex items-center justify-between p-3 bg-accent/50 border border-border rounded-md"
               >
                 <div class="flex items-center space-x-3">
                   <svelte:component
                     this={getStatusIcon(module)}
-                    class="w-4 h-4 text-muted-foreground"
+                    class="w-4 h-4 text-foreground/60"
                   />
                   <div>
-                    <p class="font-medium text-sm">{module.title}</p>
-                    <p class="text-xs text-muted-foreground">
+                    <p class="font-medium text-sm text-foreground">
+                      {module.title}
+                    </p>
+                    <p class="text-xs text-foreground/60">
                       {formatDate(module.created_at)}
                     </p>
                   </div>
@@ -495,14 +499,16 @@
         </div>
 
         {#if recentActivity.length === 0}
-          <p class="text-muted-foreground text-sm">No recent activity.</p>
+          <p class="text-foreground/60 text-sm">No recent activity.</p>
         {:else}
           <div class="space-y-3">
             {#each recentActivity as activity}
-              <div class="flex items-center space-x-3 p-3 bg-muted rounded-md">
-                <MessageSquare class="w-4 h-4 text-muted-foreground" />
+              <div
+                class="flex items-center space-x-3 p-3 bg-accent/50 border border-border rounded-md"
+              >
+                <MessageSquare class="w-4 h-4 text-foreground/60" />
                 <div class="flex-1">
-                  <p class="text-sm">
+                  <p class="text-sm text-foreground">
                     <span class="font-medium"
                       >{activity.user?.email || "Unknown"}</span
                     >
@@ -512,7 +518,7 @@
                       >
                     {/if}
                   </p>
-                  <p class="text-xs text-muted-foreground">
+                  <p class="text-xs text-foreground/60">
                     {formatDate(activity.created_at)}
                   </p>
                 </div>

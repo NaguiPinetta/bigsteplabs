@@ -271,7 +271,7 @@
         "Organize units within modules to create a logical learning flow",
         "Set realistic estimated durations to help students plan their study time",
         "Use descriptive titles and descriptions for better content organization",
-        "Create units in draft mode before publishing to students"
+        "Create units in draft mode before publishing to students",
       ]}
     />
   {/if}
@@ -281,7 +281,9 @@
 <Dialog bind:open={createDialogOpen} title="Create New Unit">
   <div class="space-y-4">
     <div>
-      <label for="unit-title" class="block text-sm font-medium mb-2"
+      <label
+        for="unit-title"
+        class="block text-sm font-medium text-foreground mb-2"
         >Unit Title *</label
       >
       <Input
@@ -293,8 +295,9 @@
     </div>
 
     <div>
-      <label for="unit-module" class="block text-sm font-medium mb-2"
-        >Module *</label
+      <label
+        for="unit-module"
+        class="block text-sm font-medium text-foreground mb-2">Module *</label
       >
       <Select
         id="unit-module"
@@ -305,7 +308,9 @@
     </div>
 
     <div>
-      <label for="unit-description" class="block text-sm font-medium mb-2"
+      <label
+        for="unit-description"
+        class="block text-sm font-medium text-foreground mb-2"
         >Description</label
       >
       <Textarea
@@ -317,7 +322,9 @@
     </div>
 
     <div>
-      <label for="estimated-duration" class="block text-sm font-medium mb-2"
+      <label
+        for="estimated-duration"
+        class="block text-sm font-medium text-foreground mb-2"
         >Estimated Duration (minutes)</label
       >
       <input
@@ -357,13 +364,14 @@
         <p class="text-foreground font-medium">
           Are you sure you want to delete this unit?
         </p>
-        <p class="text-sm text-muted-foreground mt-1">
-          This action cannot be undone. All content and progress associated with this unit will be permanently deleted.
+        <p class="text-sm text-foreground/70 mt-1">
+          This action cannot be undone. All content and progress associated with
+          this unit will be permanently deleted.
         </p>
         {#if unitToDelete}
           <div class="mt-3 p-3 bg-muted rounded-lg">
             <p class="text-sm font-medium">{unitToDelete.title}</p>
-            <p class="text-xs text-muted-foreground">
+            <p class="text-xs text-foreground/60">
               Module: {getModuleName(unitToDelete.module_id)}
             </p>
           </div>

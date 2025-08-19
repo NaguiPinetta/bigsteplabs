@@ -234,9 +234,9 @@
             ? 'justify-center'
             : 'space-x-2'} px-3 py-2"
         >
-          <Loader2 class="w-5 h-5 animate-spin text-muted-foreground" />
+          <Loader2 class="w-5 h-5 animate-spin text-foreground/60" />
           {#if !collapsed}
-            <span class="text-sm text-muted-foreground">Loading...</span>
+            <span class="text-sm text-foreground/60">Loading...</span>
           {/if}
         </div>
       {:else}
@@ -250,7 +250,7 @@
 							${
                 isActive(item.href)
                   ? "bg-primary text-primary-foreground"
-                  : "text-muted-foreground hover:text-foreground hover:bg-accent"
+                  : "text-foreground hover:text-foreground hover:bg-accent"
               }
 							${collapsed ? "justify-center" : ""}
 						`}
@@ -274,7 +274,7 @@
             {#if !collapsed}
               <div class="px-3 mb-2">
                 <span
-                  class="text-xs font-semibold text-muted-foreground uppercase tracking-wider"
+                  class="text-xs font-semibold text-foreground/70 uppercase tracking-wider"
                 >
                   Administration
                 </span>
@@ -292,7 +292,7 @@
 									${
                     isActive(item.href)
                       ? "bg-primary text-primary-foreground"
-                      : "text-muted-foreground hover:text-foreground hover:bg-accent"
+                      : "text-foreground hover:text-foreground hover:bg-accent"
                   }
 									${collapsed ? "justify-center" : ""}
 								`}

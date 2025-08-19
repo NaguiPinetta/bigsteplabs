@@ -183,7 +183,7 @@
 <div class="mb-8 flex items-center justify-between">
   <div>
     <h1 class="text-2xl font-bold text-foreground">AI Agent Workbench</h1>
-    <p class="text-muted-foreground">
+    <p class="text-foreground/70">
       Test, compare, and analyze your AI agents' performance
     </p>
   </div>
@@ -212,7 +212,7 @@
   {#if !isAdminUser}
     <Card class="p-8 text-center">
       <h2 class="text-xl font-semibold mb-2">Admin Access Required</h2>
-      <p class="text-muted-foreground">
+      <p class="text-foreground/70">
         The AI Workbench is only available to system administrators.
       </p>
     </Card>

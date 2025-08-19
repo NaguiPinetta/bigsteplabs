@@ -162,16 +162,20 @@
             </div>
           {:else if user}
             <div class="hidden sm:flex items-center space-x-2 text-sm">
-              <span class="text-muted-foreground">Welcome,</span>
-              <span class="font-medium">{user.email?.split("@")[0]}</span>
-              <span class="text-xs bg-secondary px-2 py-1 rounded-full">
+              <span class="text-foreground/70">Welcome,</span>
+              <span class="font-medium text-foreground"
+                >{user.email?.split("@")[0]}</span
+              >
+              <span
+                class="text-xs bg-secondary px-2 py-1 rounded-full text-secondary-foreground"
+              >
                 {user.role}
               </span>
             </div>
 
             <button
               on:click={handleSignOut}
-              class="flex items-center space-x-2 px-3 py-2 text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-accent rounded-md transition-colors"
+              class="flex items-center space-x-2 px-3 py-2 text-sm font-medium text-foreground/80 hover:text-foreground hover:bg-accent rounded-md transition-colors"
               title="Sign Out"
             >
               <LogOut class="w-4 h-4" />

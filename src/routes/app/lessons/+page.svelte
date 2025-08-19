@@ -401,7 +401,7 @@
   <div class="flex items-center justify-between mb-6">
     <div>
       <h1 class="text-3xl font-bold">Lessons</h1>
-      <p class="text-muted-foreground">
+      <p style="color: hsl(0 0% 85%) !important;">
         Manage Notion-based lessons for your learning platform
       </p>
     </div>
@@ -478,7 +478,7 @@
       </Card>
     {:else if filteredLessons.length === 0}
       <Card class="p-6">
-        <div class="text-center text-muted-foreground">
+        <div class="text-center text-foreground/60">
           <FileText class="w-12 h-12 mx-auto mb-4 opacity-50" />
           <h3 class="text-lg font-semibold mb-2">No lessons found</h3>
           <p class="mb-4">
@@ -589,7 +589,9 @@
 <Dialog bind:open={createDialogOpen} title="Create New Lesson">
   <div class="space-y-4">
     <div>
-      <label for="title" class="block text-sm font-medium mb-1">Title</label>
+      <label for="title" class="block text-sm font-medium text-foreground mb-1"
+        >Title</label
+      >
       <Input
         id="title"
         bind:value={newLesson.title}
@@ -600,7 +602,9 @@
 
     {#if newLesson.content_type === "embedded"}
       <div>
-        <label for="notion_url" class="block text-sm font-medium mb-1"
+        <label
+          for="notion_url"
+          class="block text-sm font-medium text-foreground mb-1"
           >Notion URL</label
         >
         <Input
@@ -633,7 +637,9 @@
       </div>
 
       <div>
-        <label for="embed_url" class="block text-sm font-medium mb-1"
+        <label
+          for="embed_url"
+          class="block text-sm font-medium text-foreground mb-1"
           >Embed URL</label
         >
         <div class="flex items-center gap-2">
@@ -667,7 +673,9 @@
     {/if}
 
     <div>
-      <label for="content_type" class="block text-sm font-medium mb-1"
+      <label
+        for="content_type"
+        class="block text-sm font-medium text-foreground mb-1"
         >Content Type</label
       >
       <Select bind:value={newLesson.content_type} id="content_type">
@@ -683,7 +691,10 @@
 
     {#if newLesson.content_type === "agent_chat"}
       <div>
-        <label for="agent" class="block text-sm font-medium mb-1">Agent</label>
+        <label
+          for="agent"
+          class="block text-sm font-medium text-foreground mb-1">Agent</label
+        >
         <Select bind:value={newLesson.agent_id} id="agent">
           <option value="">Select an Agent</option>
           {#each agents as agent}
@@ -699,7 +710,9 @@
 
     <div class="grid grid-cols-2 gap-4">
       <div>
-        <label for="module" class="block text-sm font-medium mb-1">Module</label
+        <label
+          for="module"
+          class="block text-sm font-medium text-foreground mb-1">Module</label
         >
         <Select bind:value={newLesson.module_id} id="module">
           <option value="">No Module</option>
@@ -710,7 +723,9 @@
       </div>
 
       <div>
-        <label for="unit" class="block text-sm font-medium mb-1">Unit</label>
+        <label for="unit" class="block text-sm font-medium text-foreground mb-1"
+          >Unit</label
+        >
         <Select bind:value={newLesson.unit_id} id="unit">
           <option value="">No Unit</option>
           {#each units as unit}
@@ -743,9 +758,6 @@
         Create Lesson
       {/if}
     </Button>
-    <Button variant="outline" on:click={testButtonClick} size="sm">
-      Test Create
-    </Button>
   </div>
 </Dialog>
 
@@ -753,8 +765,9 @@
 <Dialog bind:open={editDialogOpen} title="Edit Lesson">
   <div class="space-y-4">
     <div>
-      <label for="edit-title" class="block text-sm font-medium mb-1"
-        >Title</label
+      <label
+        for="edit-title"
+        class="block text-sm font-medium text-foreground mb-1">Title</label
       >
       <Input
         id="edit-title"
@@ -765,7 +778,9 @@
     </div>
 
     <div>
-      <label for="edit-content_type" class="block text-sm font-medium mb-1"
+      <label
+        for="edit-content_type"
+        class="block text-sm font-medium text-foreground mb-1"
         >Content Type</label
       >
       <Select bind:value={editLesson.content_type} id="edit-content_type">
@@ -781,8 +796,9 @@
 
     {#if editLesson.content_type === "agent_chat"}
       <div>
-        <label for="edit-agent" class="block text-sm font-medium mb-1"
-          >Agent</label
+        <label
+          for="edit-agent"
+          class="block text-sm font-medium text-foreground mb-1">Agent</label
         >
         <Select bind:value={editLesson.agent_id} id="edit-agent">
           <option value="">Select an Agent</option>
@@ -799,7 +815,9 @@
 
     {#if editLesson.content_type === "embedded"}
       <div>
-        <label for="edit-notion_url" class="block text-sm font-medium mb-1"
+        <label
+          for="edit-notion_url"
+          class="block text-sm font-medium text-foreground mb-1"
           >Notion URL</label
         >
         <Input
@@ -833,8 +851,9 @@
     {/if}
 
     <div>
-      <label for="edit-embed_url" class="block text-sm font-medium mb-1"
-        >Embed URL</label
+      <label
+        for="edit-embed_url"
+        class="block text-sm font-medium text-foreground mb-1">Embed URL</label
       >
       <div class="flex items-center gap-2">
         <Input
@@ -864,8 +883,9 @@
 
     <div class="grid grid-cols-2 gap-4">
       <div>
-        <label for="edit-module" class="block text-sm font-medium mb-1"
-          >Module</label
+        <label
+          for="edit-module"
+          class="block text-sm font-medium text-foreground mb-1">Module</label
         >
         <Select bind:value={editLesson.module_id} id="edit-module">
           <option value="">No Module</option>
@@ -876,8 +896,9 @@
       </div>
 
       <div>
-        <label for="edit-unit" class="block text-sm font-medium mb-1"
-          >Unit</label
+        <label
+          for="edit-unit"
+          class="block text-sm font-medium text-foreground mb-1">Unit</label
         >
         <Select bind:value={editLesson.unit_id} id="edit-unit">
           <option value="">No Unit</option>

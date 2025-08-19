@@ -87,7 +87,6 @@
   $: user = $authStore.user;
   $: canManage = $canManageContent;
 
-
   $: state = $modelsStore;
   $: models = state.models || []; // Ensure models is always an array
   $: selectedModel = state.selectedModel;
@@ -796,7 +795,7 @@
 
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
       <div>
-        <label for="name" class="block text-sm font-medium mb-2"
+        <label for="name" class="block text-sm font-medium text-foreground mb-2"
           >Model Name *</label
         >
         <Input
@@ -808,7 +807,9 @@
       </div>
 
       <div>
-        <label for="provider" class="block text-sm font-medium mb-2"
+        <label
+          for="provider"
+          class="block text-sm font-medium text-foreground mb-2"
           >Provider *</label
         >
         <Select
@@ -822,7 +823,9 @@
 
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
       <div>
-        <label for="engine" class="block text-sm font-medium mb-2"
+        <label
+          for="engine"
+          class="block text-sm font-medium text-foreground mb-2"
           >Engine/Model ID *</label
         >
         <Input
@@ -839,7 +842,9 @@
       </div>
 
       <div>
-        <label for="api-key" class="block text-sm font-medium mb-2"
+        <label
+          for="api-key"
+          class="block text-sm font-medium text-foreground mb-2"
           >API Key *</label
         >
         <div class="flex space-x-2">
@@ -875,7 +880,9 @@
     </div>
 
     <div>
-      <label for="api-endpoint" class="block text-sm font-medium mb-2"
+      <label
+        for="api-endpoint"
+        class="block text-sm font-medium text-foreground mb-2"
         >API Endpoint (Optional)</label
       >
       <Input
@@ -899,7 +906,9 @@
 
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
       <div>
-        <label for="max-tokens" class="block text-sm font-medium mb-2"
+        <label
+          for="max-tokens"
+          class="block text-sm font-medium text-foreground mb-2"
           >Max Tokens</label
         >
         <Input
@@ -915,7 +924,9 @@
       </div>
 
       <div>
-        <label for="temperature" class="block text-sm font-medium mb-2"
+        <label
+          for="temperature"
+          class="block text-sm font-medium text-foreground mb-2"
           >Temperature</label
         >
         <Input
@@ -933,7 +944,9 @@
     </div>
 
     <div>
-      <label for="description" class="block text-sm font-medium mb-2"
+      <label
+        for="description"
+        class="block text-sm font-medium text-foreground mb-2"
         >Description</label
       >
       <Textarea
@@ -984,14 +997,18 @@
 
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
       <div>
-        <label for="edit-name" class="block text-sm font-medium mb-2"
+        <label
+          for="edit-name"
+          class="block text-sm font-medium text-foreground mb-2"
           >Model Name *</label
         >
         <Input id="edit-name" bind:value={editModel.name} required />
       </div>
 
       <div>
-        <label for="edit-provider" class="block text-sm font-medium mb-2"
+        <label
+          for="edit-provider"
+          class="block text-sm font-medium text-foreground mb-2"
           >Provider *</label
         >
         <Select
@@ -1005,7 +1022,9 @@
 
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
       <div>
-        <label for="edit-engine" class="block text-sm font-medium mb-2"
+        <label
+          for="edit-engine"
+          class="block text-sm font-medium text-foreground mb-2"
           >Engine/Model ID *</label
         >
         <Input id="edit-engine" bind:value={editModel.engine} required />
@@ -1019,7 +1038,9 @@
       </div>
 
       <div>
-        <label for="edit-api-key" class="block text-sm font-medium mb-2"
+        <label
+          for="edit-api-key"
+          class="block text-sm font-medium text-foreground mb-2"
           >API Key *</label
         >
         <Input
@@ -1032,7 +1053,9 @@
     </div>
 
     <div>
-      <label for="edit-api-endpoint" class="block text-sm font-medium mb-2"
+      <label
+        for="edit-api-endpoint"
+        class="block text-sm font-medium text-foreground mb-2"
         >API Endpoint (Optional)</label
       >
       <Input id="edit-api-endpoint" bind:value={editModel.api_endpoint} />
@@ -1040,7 +1063,9 @@
 
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
       <div>
-        <label for="edit-max-tokens" class="block text-sm font-medium mb-2"
+        <label
+          for="edit-max-tokens"
+          class="block text-sm font-medium text-foreground mb-2"
           >Max Tokens</label
         >
         <Input
@@ -1053,7 +1078,9 @@
       </div>
 
       <div>
-        <label for="edit-temperature" class="block text-sm font-medium mb-2"
+        <label
+          for="edit-temperature"
+          class="block text-sm font-medium text-foreground mb-2"
           >Temperature</label
         >
         <Input
@@ -1068,7 +1095,9 @@
     </div>
 
     <div>
-      <label for="edit-description" class="block text-sm font-medium mb-2"
+      <label
+        for="edit-description"
+        class="block text-sm font-medium text-foreground mb-2"
         >Description</label
       >
       <Textarea

@@ -611,7 +611,7 @@
         "Choose appropriate personas to define your agent's personality and expertise",
         "Select models based on your performance and cost requirements",
         "Configure voice recognition language to match your target audience",
-        "Test agents thoroughly before deploying them to students"
+        "Test agents thoroughly before deploying them to students",
       ]}
     />
   {/if}
@@ -695,7 +695,7 @@
 
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
       <div>
-        <label for="name" class="block text-sm font-medium mb-2"
+        <label for="name" class="block text-sm font-medium text-foreground mb-2"
           >Agent Name *</label
         >
         <Input
@@ -707,7 +707,9 @@
       </div>
 
       <div>
-        <label for="status" class="block text-sm font-medium mb-2">Status</label
+        <label
+          for="status"
+          class="block text-sm font-medium text-foreground mb-2">Status</label
         >
         <Select
           id="status"
@@ -718,7 +720,9 @@
     </div>
 
     <div>
-      <label for="description" class="block text-sm font-medium mb-2"
+      <label
+        for="description"
+        class="block text-sm font-medium text-foreground mb-2"
         >Description</label
       >
       <Textarea
@@ -731,7 +735,9 @@
 
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
       <div>
-        <label for="persona" class="block text-sm font-medium mb-2"
+        <label
+          for="persona"
+          class="block text-sm font-medium text-foreground mb-2"
           >Persona *</label
         >
         <Select
@@ -746,7 +752,9 @@
       </div>
 
       <div>
-        <label for="model" class="block text-sm font-medium mb-2"
+        <label
+          for="model"
+          class="block text-sm font-medium text-foreground mb-2"
           >AI Model *</label
         >
         <Select
@@ -762,7 +770,9 @@
     </div>
 
     <div>
-      <label for="dataset" class="block text-sm font-medium mb-2"
+      <label
+        for="dataset"
+        class="block text-sm font-medium text-foreground mb-2"
         >Knowledge Dataset</label
       >
       <Select
@@ -777,7 +787,9 @@
     </div>
 
     <div>
-      <label for="whisper-language" class="block text-sm font-medium mb-2"
+      <label
+        for="whisper-language"
+        class="block text-sm font-medium text-foreground mb-2"
         >Voice Recognition Language</label
       >
       <Select
@@ -833,15 +845,18 @@
 
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
       <div>
-        <label for="edit-name" class="block text-sm font-medium mb-2"
+        <label
+          for="edit-name"
+          class="block text-sm font-medium text-foreground mb-2"
           >Agent Name *</label
         >
         <Input id="edit-name" bind:value={editAgent.name} required />
       </div>
 
       <div>
-        <label for="edit-status" class="block text-sm font-medium mb-2"
-          >Status</label
+        <label
+          for="edit-status"
+          class="block text-sm font-medium text-foreground mb-2">Status</label
         >
         <Select
           id="edit-status"
@@ -852,7 +867,9 @@
     </div>
 
     <div>
-      <label for="edit-description" class="block text-sm font-medium mb-2"
+      <label
+        for="edit-description"
+        class="block text-sm font-medium text-foreground mb-2"
         >Description</label
       >
       <Textarea
@@ -864,7 +881,9 @@
 
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
       <div>
-        <label for="edit-persona" class="block text-sm font-medium mb-2"
+        <label
+          for="edit-persona"
+          class="block text-sm font-medium text-foreground mb-2"
           >Persona *</label
         >
         <Select
@@ -1137,12 +1156,12 @@
 <Dialog bind:open={deleteDialogOpen} title="Confirm Deletion" size="sm">
   <div class="space-y-4">
     <p class="text-muted-foreground">
-      Are you sure you want to delete the agent "<strong>{agentToDelete?.name}</strong>"? This action cannot be undone.
+      Are you sure you want to delete the agent "<strong
+        >{agentToDelete?.name}</strong
+      >"? This action cannot be undone.
     </p>
     <div class="flex justify-end space-x-2">
-      <Button variant="outline" on:click={cancelDeleteAgent}>
-        Cancel
-      </Button>
+      <Button variant="outline" on:click={cancelDeleteAgent}>Cancel</Button>
       <Button variant="destructive" on:click={confirmDeleteAgent}>
         Delete
       </Button>

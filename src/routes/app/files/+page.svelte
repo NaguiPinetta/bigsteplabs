@@ -248,7 +248,7 @@
 >
   <div>
     <h1 class="text-xl lg:text-2xl font-bold text-foreground">File Manager</h1>
-    <p class="text-sm lg:text-base text-muted-foreground">
+    <p class="text-sm lg:text-base text-foreground/70">
       Upload, organize, and manage your course files and learning materials
     </p>
   </div>
@@ -275,7 +275,7 @@
   {#if !canManage}
     <Card class="p-8 text-center">
       <h2 class="text-xl font-semibold mb-2">Access Restricted</h2>
-      <p class="text-muted-foreground">
+      <p class="text-foreground/70">
         You need Admin or Collaborator privileges to manage files.
       </p>
     </Card>

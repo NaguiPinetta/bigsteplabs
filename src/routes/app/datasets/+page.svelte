@@ -307,10 +307,6 @@
       ? content.substring(0, maxLength) + "..."
       : content;
   }
-
-
-
-
 </script>
 
 <svelte:head>
@@ -425,8 +421,6 @@
               >
                 <Trash2 class="w-4 h-4" />
               </button>
-
-
             </div>
           </div>
 
@@ -470,7 +464,7 @@
 <Dialog bind:open={createDialogOpen} title="Create New Dataset">
   <div class="space-y-4">
     <div>
-      <label for="name" class="block text-sm font-medium mb-2"
+      <label for="name" class="block text-sm font-medium text-foreground mb-2"
         >Dataset Name *</label
       >
       <Input
@@ -482,7 +476,9 @@
     </div>
 
     <div>
-      <label for="description" class="block text-sm font-medium mb-2"
+      <label
+        for="description"
+        class="block text-sm font-medium text-foreground mb-2"
         >Description</label
       >
       <Textarea
@@ -495,7 +491,9 @@
 
     <!-- Content Type Selection -->
     <div>
-      <label class="block text-sm font-medium mb-2">Content Type *</label>
+      <label class="block text-sm font-medium text-foreground mb-2"
+        >Content Type *</label
+      >
       <div class="flex space-x-4">
         <label class="flex items-center space-x-2 cursor-pointer">
           <input
@@ -521,7 +519,9 @@
     {#if newDataset.contentType === "file"}
       <!-- File Upload Section -->
       <div>
-        <label for="file-upload" class="block text-sm font-medium mb-2"
+        <label
+          for="file-upload"
+          class="block text-sm font-medium text-foreground mb-2"
           >Upload File</label
         >
         <input
@@ -538,7 +538,9 @@
     {:else if newDataset.contentType === "text"}
       <!-- Direct Text Input Section -->
       <div>
-        <label class="block text-sm font-medium mb-2">Text Format</label>
+        <label class="block text-sm font-medium text-foreground mb-2"
+          >Text Format</label
+        >
         <select
           bind:value={newDataset.textFormat}
           class="w-full px-3 py-2 border border-input bg-background rounded-md"
@@ -550,7 +552,9 @@
       </div>
 
       <div>
-        <label for="text-content" class="block text-sm font-medium mb-2"
+        <label
+          for="text-content"
+          class="block text-sm font-medium text-foreground mb-2"
           >Content *</label
         >
         <Textarea
@@ -624,14 +628,18 @@
 <Dialog bind:open={editDialogOpen} title="Edit Dataset">
   <div class="space-y-4">
     <div>
-      <label for="edit-name" class="block text-sm font-medium mb-2"
+      <label
+        for="edit-name"
+        class="block text-sm font-medium text-foreground mb-2"
         >Dataset Name *</label
       >
       <Input id="edit-name" bind:value={editDataset.name} required />
     </div>
 
     <div>
-      <label for="edit-description" class="block text-sm font-medium mb-2"
+      <label
+        for="edit-description"
+        class="block text-sm font-medium text-foreground mb-2"
         >Description</label
       >
       <Textarea
@@ -663,7 +671,9 @@
       <!-- Chunking Settings -->
       <div class="grid grid-cols-2 gap-4">
         <div>
-          <label for="chunk-size" class="block text-sm font-medium mb-2"
+          <label
+            for="chunk-size"
+            class="block text-sm font-medium text-foreground mb-2"
             >Chunk Size</label
           >
           <Input
@@ -675,7 +685,9 @@
         </div>
 
         <div>
-          <label for="overlap" class="block text-sm font-medium mb-2"
+          <label
+            for="overlap"
+            class="block text-sm font-medium text-foreground mb-2"
             >Overlap</label
           >
           <Input id="overlap" type="number" bind:value={chunkInput.overlap} />
@@ -687,7 +699,9 @@
 
       <!-- Text Input -->
       <div>
-        <label for="content" class="block text-sm font-medium mb-2"
+        <label
+          for="content"
+          class="block text-sm font-medium text-foreground mb-2"
           >Text Content</label
         >
         <Textarea
@@ -707,7 +721,9 @@
 
       <!-- File Upload -->
       <div>
-        <span class="block text-sm font-medium mb-2">Upload File</span>
+        <span class="block text-sm font-medium text-foreground mb-2"
+          >Upload File</span
+        >
         <FileUpload
           accept=".txt,.md,.csv"
           maxSize={5 * 1024 * 1024}

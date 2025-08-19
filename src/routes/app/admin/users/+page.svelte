@@ -8,21 +8,21 @@
   import Dialog from "$lib/components/ui/dialog.svelte";
   import Input from "$lib/components/ui/input.svelte";
   import Select from "$lib/components/ui/select.svelte";
-     import {
-     Users,
-     Plus,
-     Edit,
-     Trash2,
-     Shield,
-     User,
-     UserCheck,
-     AlertCircle,
-     Search,
-     Filter,
-     Loader2,
-     Mail,
-     BookOpen,
-   } from "lucide-svelte";
+  import {
+    Users,
+    Plus,
+    Edit,
+    Trash2,
+    Shield,
+    User,
+    UserCheck,
+    AlertCircle,
+    Search,
+    Filter,
+    Loader2,
+    Mail,
+    BookOpen,
+  } from "lucide-svelte";
 
   let users: any[] = [];
   let filteredUsers = users;
@@ -157,8 +157,6 @@
         throw allowlistError;
       }
 
-
-
       // Reload users to show the new allowlisted user
       await loadUsers();
 
@@ -195,8 +193,6 @@
         return;
       }
 
-
-
       const response = await fetch("/api/admin/create-user", {
         method: "POST",
         headers: {
@@ -214,8 +210,6 @@
       if (!response.ok) {
         throw new Error(result.error || "Failed to create user");
       }
-
-
 
       // Reload users to show the new user
       await loadUsers();
@@ -259,8 +253,6 @@
           error = "Password must be at least 8 characters long";
           return;
         }
-
-
 
         const response = await fetch("/api/admin/update-user", {
           method: "POST",
@@ -316,7 +308,6 @@
           .eq("id", userToDelete.id);
 
         if (deleteError) throw deleteError;
-
       } else {
         // Delete existing user
         const { error: deleteError } = await supabase
@@ -325,7 +316,6 @@
           .eq("id", userToDelete.id);
 
         if (deleteError) throw deleteError;
-
       }
 
       // Store email before clearing userToDelete
@@ -338,9 +328,7 @@
       userToDelete = null;
 
       // Show success message
-      toastStore.success(
-        `${deletedEmail} has been deleted successfully.`
-      );
+      toastStore.success(`${deletedEmail} has been deleted successfully.`);
     } catch (err) {
       console.error("❌ Error deleting user:", err);
       error = err instanceof Error ? err.message : "Failed to delete user";
@@ -440,7 +428,9 @@
     moduleAssignmentDialogOpen = true;
 
     try {
-      const response = await fetch(`/api/admin/user-module-assignments?userId=${user.id}`);
+      const response = await fetch(
+        `/api/admin/user-module-assignments?userId=${user.id}`
+      );
       const data = await response.json();
 
       if (data.success) {
@@ -507,9 +497,7 @@
   <Card class="p-8 text-center">
     <AlertCircle class="w-16 h-16 text-destructive mx-auto mb-4" />
     <h2 class="text-xl font-semibold mb-2">Access Denied</h2>
-    <p class="text-muted-foreground">
-      You need Admin privileges to manage users.
-    </p>
+    <p class="text-foreground/70">You need Admin privileges to manage users.</p>
   </Card>
 {:else}
   <!-- Page Header -->
@@ -520,7 +508,7 @@
       <h1 class="text-xl lg:text-2xl font-bold text-foreground">
         User Management
       </h1>
-      <p class="text-sm lg:text-base text-muted-foreground">
+      <p class="text-sm lg:text-base text-foreground/70">
         Manage user accounts, roles, and allowlist access
       </p>
     </div>
@@ -536,7 +524,7 @@
       <div class="flex-1">
         <div class="relative">
           <Search
-            class="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4"
+            class="absolute left-3 top-1/2 transform -translate-y-1/2 text-foreground/60 w-4 h-4"
           />
           <Input
             bind:value={searchQuery}
@@ -559,27 +547,27 @@
         <thead class="bg-muted/50">
           <tr>
             <th
-              class="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider"
+              class="px-6 py-3 text-left text-xs font-medium text-foreground/70 uppercase tracking-wider"
             >
               User
             </th>
             <th
-              class="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider"
+              class="px-6 py-3 text-left text-xs font-medium text-foreground/70 uppercase tracking-wider"
             >
               Role
             </th>
             <th
-              class="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider"
+              class="px-6 py-3 text-left text-xs font-medium text-foreground/70 uppercase tracking-wider"
             >
               Created
             </th>
             <th
-              class="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider"
+              class="px-6 py-3 text-left text-xs font-medium text-foreground/70 uppercase tracking-wider"
             >
               Last Login
             </th>
             <th
-              class="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider"
+              class="px-6 py-3 text-left text-xs font-medium text-foreground/70 uppercase tracking-wider"
             >
               Status
             </th>
@@ -667,34 +655,34 @@
                 <td
                   class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium"
                 >
-                                     <div class="flex items-center justify-end space-x-2">
-                     <Button
-                       variant="ghost"
-                       size="sm"
-                       on:click={() => openEditDialog(user)}
-                       disabled={!user.canEdit}
-                     >
-                       <Edit class="w-4 h-4" />
-                     </Button>
-                     <Button
-                       variant="ghost"
-                       size="sm"
-                       on:click={() => openModuleAssignmentDialog(user)}
-                       disabled={!user.canEdit}
-                     >
-                       <BookOpen class="w-4 h-4" />
-                     </Button>
-                     {#if user.email !== "jdpinetta@gmail.com"}
-                       <Button
-                         variant="ghost"
-                         size="sm"
-                         on:click={() => openDeleteDialog(user)}
-                         class="text-destructive hover:text-destructive"
-                       >
-                         <Trash2 class="w-4 h-4" />
-                       </Button>
-                     {/if}
-                   </div>
+                  <div class="flex items-center justify-end space-x-2">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      on:click={() => openEditDialog(user)}
+                      disabled={!user.canEdit}
+                    >
+                      <Edit class="w-4 h-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      on:click={() => openModuleAssignmentDialog(user)}
+                      disabled={!user.canEdit}
+                    >
+                      <BookOpen class="w-4 h-4" />
+                    </Button>
+                    {#if user.email !== "jdpinetta@gmail.com"}
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        on:click={() => openDeleteDialog(user)}
+                        class="text-destructive hover:text-destructive"
+                      >
+                        <Trash2 class="w-4 h-4" />
+                      </Button>
+                    {/if}
+                  </div>
                 </td>
               </tr>
             {/each}
@@ -997,7 +985,7 @@
             type="checkbox"
             id="send-invite"
             bind:checked={newUser.addToAllowlist}
-            class="rounded border-input"
+            class="rounded border-input bg-background text-primary focus:ring-primary focus:ring-offset-background"
           />
           <label for="send-invite" class="text-sm font-medium">
             Allow this user to sign up directly
@@ -1119,72 +1107,87 @@
       <Button variant="outline" on:click={() => (deleteDialogOpen = false)}>
         Cancel
       </Button>
-             <Button variant="destructive" on:click={deleteUser}>Delete User</Button>
-     </div>
-   </Dialog>
+      <Button variant="destructive" on:click={deleteUser}>Delete User</Button>
+    </div>
+  </Dialog>
 
-   <!-- Module Assignment Dialog -->
-   <Dialog bind:open={moduleAssignmentDialogOpen} title="Assign Modules to User">
-     {#if selectedUserForModules}
-       <div class="space-y-4">
-         <div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-md p-4">
-           <div class="flex">
-             <BookOpen class="w-5 h-5 text-blue-600 dark:text-blue-400 flex-shrink-0" />
-             <div class="ml-3">
-               <h4 class="text-sm font-medium text-blue-800 dark:text-blue-200">
-                 Module Access Control
-               </h4>
-               <p class="mt-1 text-sm text-blue-700 dark:text-blue-300">
-                 Select which modules <strong>{selectedUserForModules.email}</strong> can access. 
-                 Students will only see assigned modules in their dashboard.
-               </p>
-             </div>
-           </div>
-         </div>
+  <!-- Module Assignment Dialog -->
+  <Dialog bind:open={moduleAssignmentDialogOpen} title="Assign Modules to User">
+    {#if selectedUserForModules}
+      <div class="space-y-4">
+        <div
+          class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-md p-4"
+        >
+          <div class="flex">
+            <BookOpen
+              class="w-5 h-5 text-blue-600 dark:text-blue-400 flex-shrink-0"
+            />
+            <div class="ml-3">
+              <h4 class="text-sm font-medium text-blue-800 dark:text-blue-200">
+                Module Access Control
+              </h4>
+              <p class="mt-1 text-sm text-blue-700 dark:text-blue-300">
+                Select which modules <strong
+                  >{selectedUserForModules.email}</strong
+                > can access. Students will only see assigned modules in their dashboard.
+              </p>
+            </div>
+          </div>
+        </div>
 
-         {#if moduleAssignmentLoading}
-           <div class="flex items-center justify-center py-8">
-             <Loader2 class="w-6 h-6 text-primary animate-spin" />
-             <span class="ml-2">Loading modules...</span>
-           </div>
-         {:else}
-           <div class="space-y-3">
-             <label class="block text-sm font-medium">Available Modules</label>
-             {#each availableModules as module}
-               <div class="flex items-center space-x-3 p-3 border rounded-md hover:bg-muted/25">
-                 <input
-                   type="checkbox"
-                   id={`module-${module.id}`}
-                   bind:group={assignedModuleIds}
-                   value={module.id}
-                   class="rounded border-input"
-                 />
-                 <label for={`module-${module.id}`} class="flex-1 cursor-pointer">
-                   <div class="font-medium">{module.title}</div>
-                   {#if module.description}
-                     <div class="text-sm text-muted-foreground">{module.description}</div>
-                   {/if}
-                 </label>
-               </div>
-             {/each}
-           </div>
-         {/if}
-       </div>
-     {/if}
+        {#if moduleAssignmentLoading}
+          <div class="flex items-center justify-center py-8">
+            <Loader2 class="w-6 h-6 text-primary animate-spin" />
+            <span class="ml-2">Loading modules...</span>
+          </div>
+        {:else}
+          <div class="space-y-3">
+            <label class="block text-sm font-medium">Available Modules</label>
+            {#each availableModules as module}
+              <div
+                class="flex items-center space-x-3 p-3 border rounded-md hover:bg-muted/25"
+              >
+                <input
+                  type="checkbox"
+                  id={`module-${module.id}`}
+                  bind:group={assignedModuleIds}
+                  value={module.id}
+                  class="rounded border-input bg-background text-primary focus:ring-primary focus:ring-offset-background"
+                />
+                <label
+                  for={`module-${module.id}`}
+                  class="flex-1 cursor-pointer"
+                >
+                  <div class="font-medium">{module.title}</div>
+                  {#if module.description}
+                    <div class="text-sm text-muted-foreground">
+                      {module.description}
+                    </div>
+                  {/if}
+                </label>
+              </div>
+            {/each}
+          </div>
+        {/if}
+      </div>
+    {/if}
 
-     <div slot="footer" class="flex justify-end space-x-2">
-       <Button variant="outline" on:click={() => (moduleAssignmentDialogOpen = false)}>
-         Cancel
-       </Button>
-       <Button 
-         on:click={saveModuleAssignments}
-         disabled={moduleAssignmentLoading}
-       >
-         {#if moduleAssignmentLoading}
-           <Loader2 class="w-4 h-4 mr-2 animate-spin" />
-         {/if}
-         Save Assignments
-       </Button>
-     </div>
-   </Dialog>
- {/if}
+    <div slot="footer" class="flex justify-end space-x-2">
+      <Button
+        variant="outline"
+        on:click={() => (moduleAssignmentDialogOpen = false)}
+      >
+        Cancel
+      </Button>
+      <Button
+        on:click={saveModuleAssignments}
+        disabled={moduleAssignmentLoading}
+      >
+        {#if moduleAssignmentLoading}
+          <Loader2 class="w-4 h-4 mr-2 animate-spin" />
+        {/if}
+        Save Assignments
+      </Button>
+    </div>
+  </Dialog>
+{/if}

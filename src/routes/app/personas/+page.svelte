@@ -427,7 +427,7 @@
     {/if}
 
     <div>
-      <label for="name" class="block text-sm font-medium mb-2"
+      <label for="name" class="block text-sm font-medium text-foreground mb-2"
         >Persona Name *</label
       >
       <Input
@@ -435,12 +435,13 @@
         bind:value={newPersona.name}
         placeholder="e.g., Friendly Tutor, Grammar Expert"
         required
-
       />
     </div>
 
     <div>
-      <label for="description" class="block text-sm font-medium mb-2"
+      <label
+        for="description"
+        class="block text-sm font-medium text-foreground mb-2"
         >Description</label
       >
       <Textarea
@@ -452,7 +453,9 @@
     </div>
 
     <div>
-      <label for="system-prompt" class="block text-sm font-medium mb-2"
+      <label
+        for="system-prompt"
+        class="block text-sm font-medium text-foreground mb-2"
         >System Prompt *</label
       >
       <Textarea
@@ -461,9 +464,8 @@
         placeholder="Define how this AI persona should behave, respond, and interact with students..."
         rows={8}
         class="font-mono text-sm"
-
       />
-      <div class="flex justify-between text-xs text-muted-foreground mt-1">
+      <div class="flex justify-between text-xs text-foreground/60 mt-1">
         <span>This defines how the AI will behave and respond</span>
         <span>{newPersona.system_prompt.length}/4000 characters</span>
       </div>
@@ -511,14 +513,18 @@
     {/if}
 
     <div>
-      <label for="edit-name" class="block text-sm font-medium mb-2"
+      <label
+        for="edit-name"
+        class="block text-sm font-medium text-foreground mb-2"
         >Persona Name *</label
       >
       <Input id="edit-name" bind:value={editPersona.name} required />
     </div>
 
     <div>
-      <label for="edit-description" class="block text-sm font-medium mb-2"
+      <label
+        for="edit-description"
+        class="block text-sm font-medium text-foreground mb-2"
         >Description</label
       >
       <Textarea
@@ -529,7 +535,9 @@
     </div>
 
     <div>
-      <label for="edit-system-prompt" class="block text-sm font-medium mb-2"
+      <label
+        for="edit-system-prompt"
+        class="block text-sm font-medium text-foreground mb-2"
         >System Prompt *</label
       >
       <Textarea

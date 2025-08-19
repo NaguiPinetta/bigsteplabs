@@ -363,7 +363,7 @@
               type="checkbox"
               id="allow-registration"
               bind:checked={settings.authentication.allowRegistration}
-              class="rounded border-input"
+              class="rounded border-input bg-background text-primary focus:ring-primary focus:ring-offset-background"
             />
             <label for="allow-registration" class="text-sm font-medium">
               Allow public user registration
@@ -375,7 +375,7 @@
               type="checkbox"
               id="require-email-verification"
               bind:checked={settings.authentication.requireEmailVerification}
-              class="rounded border-input"
+              class="rounded border-input bg-background text-primary focus:ring-primary focus:ring-offset-background"
             />
             <label for="require-email-verification" class="text-sm font-medium">
               Require email verification for new accounts
@@ -387,7 +387,7 @@
               type="checkbox"
               id="enable-magic-link"
               bind:checked={settings.authentication.enableMagicLink}
-              class="rounded border-input"
+              class="rounded border-input bg-background text-primary focus:ring-primary focus:ring-offset-background"
             />
             <label for="enable-magic-link" class="text-sm font-medium">
               Enable magic link authentication
@@ -660,7 +660,7 @@
               type="checkbox"
               id="enable-assistants"
               bind:checked={settings.ai.enableAssistants}
-              class="rounded border-input"
+              class="rounded border-input bg-background text-primary focus:ring-primary focus:ring-offset-background"
             />
             <label for="enable-assistants" class="text-sm font-medium">
               Enable AI assistants for students
